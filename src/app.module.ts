@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from './auth/auth.module';
+import { AccessesModule } from './accesses/accesses.module';
 import { ClientsModule } from './clients/clients.module';
 import { CompaniesModule } from './companies/companies.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
-import { validateEnv } from './config/env.validation';
+import { validateEnv, type EnvVars } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { DatabaseModule } from './database/database.module';
@@ -23,6 +25,14 @@ import { StorageModule } from './storage/storage.module';
       isGlobal: true,
       validate: validateEnv,
     }),
+    MongooseModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService<EnvVars, true>) => ({
+        uri: configService.get('MONGODB_URI', { infer: true }),
+        dbName: configService.get('MONGODB_DB_NAME', { infer: true }),
+      }),
+      inject: [ConfigService],
+    }),
     DatabaseModule,
     StorageModule,
     PermissionsModule,
@@ -32,6 +42,7 @@ import { StorageModule } from './storage/storage.module';
     ReadersModule,
     RegistrationsModule,
     CompanyUsersModule,
+    AccessesModule,
     MeModule,
     HealthModule,
   ],

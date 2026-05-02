@@ -14,6 +14,7 @@ import {
   type ReaderCredentialsCipher,
 } from '../common/crypto/reader-credentials.cipher';
 import { DatabaseService } from '../database/database.service';
+import { AccessesService } from '../accesses/accesses.service';
 import type { ReaderBrand, ReaderEventStreamRow } from '../database/queries/readers.queries';
 import * as readersQueries from '../database/queries/readers.queries';
 import type {
@@ -32,7 +33,9 @@ import {
 type ReaderStreamContext = {
   id: string;
   name: string;
+  clientId: string;
   clientName: string;
+  companyId: string;
   brand: ReaderBrand;
   host: string;
   username: string;
@@ -56,7 +59,9 @@ function toStreamContext(
     return {
       id: row.id,
       name: row.name,
+      clientId: row.clientId,
       clientName: row.clientName,
+      companyId: row.companyId,
       brand: row.brand,
       host: hostFromIpPort(row.ip, row.port),
       username: row.username.trim(),
@@ -90,6 +95,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly database: DatabaseService,
     private readonly configService: ConfigService<EnvVars, true>,
+    private readonly accessesService: AccessesService,
   ) {
     const key = this.configService.get('READER_ENCRYPTION_KEY', { infer: true });
     this.cipher = createReaderCredentialsCipher(key);
@@ -594,7 +600,13 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    void event;
+    void this.accessesService
+      .recordDoorFacePulseIfApplicable(event, ctx)
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `[FaceListener] Persistência de acesso falhou: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
   }
 
   private scheduleReconnect(readerId: string, delayMs: number): void {

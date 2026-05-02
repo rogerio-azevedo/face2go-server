@@ -1,0 +1,1 @@
+ALTER TABLE "clients" ADD COLUMN IF NOT EXISTS "timezone" varchar(100) DEFAULT 'UTC' NOT NULL;

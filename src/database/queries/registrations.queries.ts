@@ -341,3 +341,24 @@ export async function listApprovedRegistrationsPendingDeviceSync(
     )
     .orderBy(desc(registrations.submittedAt));
 }
+
+/** Nome do cadastro aprovado associado ao face_id do leitor (por cliente). */
+export async function findApprovedRegistrationNameByFaceId(
+  db: AppDb,
+  clientId: string,
+  faceId: number,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ name: registrations.name })
+    .from(registrations)
+    .where(
+      and(
+        eq(registrations.clientId, clientId),
+        eq(registrations.faceId, faceId),
+        eq(registrations.status, 'approved'),
+      ),
+    )
+    .limit(1);
+  const n = row?.name?.trim();
+  return n || null;
+}

@@ -75,6 +75,7 @@ export class ClientsService {
       phone: parsed.data.phone,
       email: parsed.data.email,
       logoUrl: parsed.data.logoUrl,
+      timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
     });
   }
@@ -96,6 +97,7 @@ export class ClientsService {
       d.phone === undefined &&
       d.email === undefined &&
       d.logoUrl === undefined &&
+      d.timezoneOffsetMinutes === undefined &&
       d.isActive === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
@@ -111,6 +113,9 @@ export class ClientsService {
         ...(d.phone !== undefined ? { phone: d.phone } : {}),
         ...(d.email !== undefined ? { email: d.email } : {}),
         ...(d.logoUrl !== undefined ? { logoUrl: d.logoUrl } : {}),
+        ...(d.timezoneOffsetMinutes !== undefined
+          ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
+          : {}),
         ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
       },
     );

@@ -5,6 +5,7 @@ import {
   boolean,
   timestamp,
   text,
+  integer,
   pgEnum,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
@@ -39,6 +40,11 @@ export const clients = pgTable(
     email: varchar('email', { length: 255 }),
     logoUrl: varchar('logo_url', { length: 500 }),
     isActive: boolean('is_active').default(true).notNull(),
+    /**
+     * Diferença em minutos em relação ao UTC (UTC−4 → −240, UTC+3 → +180).
+     * Atalho aceito na API: |valor|≤14 tratado como horas inteiras.
+     */
+    timezoneOffsetMinutes: integer('timezone_offset_minutes').default(0).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

@@ -298,7 +298,9 @@ export function readerRowToPublic(row: typeof facialReaders.$inferSelect) {
 export type ReaderEventStreamRow = {
   id: string;
   name: string;
+  clientId: string;
   clientName: string;
+  companyId: string;
   brand: ReaderBrand;
   ip: string;
   port: number;
@@ -313,7 +315,9 @@ export async function listReadersForEventStream(
     .select({
       id: facialReaders.id,
       name: facialReaders.name,
+      clientId: facialReaders.clientId,
       clientName: clients.name,
+      companyId: clients.companyId,
       brand: facialReaders.brand,
       ip: facialReaders.ip,
       port: facialReaders.port,
@@ -345,7 +349,9 @@ export async function listReadersForEventStream(
     .map((r) => ({
       id: r.id,
       name: r.name,
+      clientId: r.clientId,
       clientName: r.clientName,
+      companyId: r.companyId,
       brand: (r.brand ?? 'intelbras') as ReaderBrand,
       ip: r.ip,
       port: r.port,
@@ -362,7 +368,9 @@ export async function getReaderForEventStreamById(
     .select({
       id: facialReaders.id,
       name: facialReaders.name,
+      clientId: facialReaders.clientId,
       clientName: clients.name,
+      companyId: clients.companyId,
       brand: facialReaders.brand,
       ip: facialReaders.ip,
       port: facialReaders.port,
@@ -394,7 +402,9 @@ export async function getReaderForEventStreamById(
   return {
     id: row.id,
     name: row.name,
+    clientId: row.clientId,
     clientName: row.clientName,
+    companyId: row.companyId,
     brand: (row.brand ?? 'intelbras') as ReaderBrand,
     ip: row.ip,
     port: row.port,

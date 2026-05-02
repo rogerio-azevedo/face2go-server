@@ -11,15 +11,35 @@ const optionalTrimmed = z
     return t === '' ? undefined : t;
   });
 
-export const CLIENT_TYPES = ['office', 'clinic', 'condominium', 'other'] as const;
+/** Minutos relativos ao UTC; |valor inteiro| ≤ 14 vira horas (ex.: -4 → −240). */
+export const TZ_OFFSET_ABS_MAX = 14 * 60;
 
-export const clientSchema = z.object({
+export function normalizeClientTimezoneOffset(raw: unknown): number {
+  if (raw === undefined || raw === null || raw === '')
+    throw new Error('INVALID_TZ_OFFSET');
+  const n =
+    typeof raw === 'number'
+      ? raw
+      : Number(String(raw).trim().replace(',', '.'));
+  if (!Number.isFinite(n) || !Number.isInteger(n))
+    throw new Error('INVALID_TZ_OFFSET');
+  let m = n;
+  if (Math.abs(m) <= 14) {
+    m *= 60;
+  }
+  if (!Number.isInteger(m) || m < -TZ_OFFSET_ABS_MAX || m > TZ_OFFSET_ABS_MAX) {
+    throw new Error('INVALID_TZ_OFFSET');
+  }
+  return m;
+}
+
+const baseClientShape = {
   name: z
     .string()
     .trim()
     .min(2, 'Nome deve ter pelo menos 2 caracteres')
     .max(255, 'Nome muito longo'),
-  type: z.enum(CLIENT_TYPES, {
+  type: z.enum(['office', 'clinic', 'condominium', 'other'] as const, {
     message: 'Selecione um tipo válido.',
   }),
   cnpj: optionalTrimmed.refine((val) => val === undefined || CNPJ_REGEX.test(val), {
@@ -38,8 +58,41 @@ export const clientSchema = z.object({
     },
   ),
   isActive: z.boolean(),
+};
+
+/** Campo obrigatório no create (omissão/no branco ⇒ 0 = UTC). */
+const timezoneOffsetCreate = z.preprocess((raw: unknown) => {
+  try {
+    if (raw === undefined || raw === null || raw === '') return 0;
+    return normalizeClientTimezoneOffset(raw);
+  } catch {
+    return Number.NaN;
+  }
+}, z.number().int().min(-TZ_OFFSET_ABS_MAX).max(TZ_OFFSET_ABS_MAX));
+
+/** No update, ausência do campo = não alterar. */
+const timezoneOffsetUpdate = z.preprocess((raw: unknown) => {
+  if (raw === undefined) return undefined;
+  try {
+    return normalizeClientTimezoneOffset(raw);
+  } catch {
+    return Number.NaN;
+  }
+}, z.number().int().min(-TZ_OFFSET_ABS_MAX).max(TZ_OFFSET_ABS_MAX).optional());
+
+export const clientSchemaForCreate = z.object({
+  ...baseClientShape,
+  timezoneOffsetMinutes: timezoneOffsetCreate,
 });
 
-export const createClientSchema = clientSchema;
+/** Alias do shape completo incluindo timezone (uso em formulários). */
+export const clientSchema = clientSchemaForCreate;
 
-export const updateClientSchema = clientSchema.partial();
+export const createClientSchema = clientSchemaForCreate;
+
+export const updateClientSchema = z
+  .object({
+    ...baseClientShape,
+    timezoneOffsetMinutes: timezoneOffsetUpdate,
+  })
+  .partial();
