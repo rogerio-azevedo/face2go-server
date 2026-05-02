@@ -93,6 +93,16 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 - Website - [https://nestjs.com](https://nestjs.com/)
 - Twitter - [@nestframework](https://twitter.com/nestframework)
 
+## Faciem — backend API
+
+Variáveis de ambiente: copie [`.env.example`](./.env.example) para `.env` e defina `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL` (URL do Next.js, ex.: `http://localhost:3000`). Em desenvolvimento o servidor usa `PORT` padrão **3001**.
+
+- **Migrations:** `pnpm db:migrate` (usa `drizzle-kit` na pasta [`drizzle/`](./drizzle)).
+- **Seed (super admin + catálogo de features):** `pnpm db:seed`
+- **Swagger:** com o servidor rodando, abra `/api/docs`.
+
+O frontend (`faciem-web`) deve apontar `NEXT_PUBLIC_API_URL` para esta API (ex.: `http://localhost:3001`).
+
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

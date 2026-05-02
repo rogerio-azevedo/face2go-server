@@ -1,0 +1,1 @@
+ALTER TABLE "company_users" ADD COLUMN "phone" varchar(30);

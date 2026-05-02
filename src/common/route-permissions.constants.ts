@@ -1,0 +1,8 @@
+import type { FeatureSlug } from './features.constants';
+
+/** Rotas da área empresa → feature necessária para `can_read`. */
+export const ROUTE_PERMISSIONS: Partial<Record<string, FeatureSlug>> = {
+  '/company/usuarios': 'users',
+  '/company/clientes': 'clients',
+  '/company/leitores': 'clients',
+};

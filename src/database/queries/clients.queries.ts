@@ -1,0 +1,230 @@
+import { and, asc, eq, ne } from 'drizzle-orm';
+
+import { slugifyName } from '../../common/utils/slugify';
+import type { AppDb } from '../database.types';
+import { clients } from '../schema';
+
+const SLUG_MAX = 100;
+
+export type ClientListRow = {
+  id: string;
+  companyId: string;
+  name: string;
+  slug: string | null;
+  type: string;
+  cnpj: string | null;
+  phone: string | null;
+  email: string | null;
+  logoUrl: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+async function isClientSlugTaken(
+  db: AppDb,
+  companyId: string,
+  slug: string | null | undefined,
+  excludeClientId?: string,
+): Promise<boolean> {
+  if (!slug) return false;
+
+  if (!excludeClientId) {
+    const rows = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.companyId, companyId), eq(clients.slug, slug)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  const rows = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(
+      and(
+        eq(clients.companyId, companyId),
+        eq(clients.slug, slug),
+        ne(clients.id, excludeClientId),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+async function ensureUniqueClientSlug(
+  db: AppDb,
+  companyId: string,
+  baseName: string,
+  excludeClientId?: string,
+): Promise<string> {
+  let candidate = slugifyName(baseName, SLUG_MAX);
+  if (!candidate || candidate === 'empresa') {
+    candidate = 'cliente';
+  }
+
+  if (!(await isClientSlugTaken(db, companyId, candidate, excludeClientId))) {
+    return candidate;
+  }
+
+  for (let i = 2; i < 1000; i++) {
+    const suffix = `-${i}`;
+    const truncated = slugifyName(baseName, SLUG_MAX - suffix.length);
+    candidate = `${truncated}${suffix}`;
+    if (!(await isClientSlugTaken(db, companyId, candidate, excludeClientId))) {
+      return candidate;
+    }
+  }
+
+  throw new Error('Não foi possível gerar um slug único para o cliente.');
+}
+
+export async function listClients(
+  db: AppDb,
+  companyId: string,
+): Promise<ClientListRow[]> {
+  const rows = await db
+    .select({
+      id: clients.id,
+      companyId: clients.companyId,
+      name: clients.name,
+      slug: clients.slug,
+      type: clients.type,
+      cnpj: clients.cnpj,
+      phone: clients.phone,
+      email: clients.email,
+      logoUrl: clients.logoUrl,
+      isActive: clients.isActive,
+      createdAt: clients.createdAt,
+      updatedAt: clients.updatedAt,
+    })
+    .from(clients)
+    .where(eq(clients.companyId, companyId))
+    .orderBy(asc(clients.name));
+
+  return rows.map((r) => ({
+    ...r,
+    type: r.type ?? 'other',
+  }));
+}
+
+export async function getClientById(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+) {
+  const [row] = await db
+    .select()
+    .from(clients)
+    .where(and(eq(clients.id, clientId), eq(clients.companyId, companyId)))
+    .limit(1);
+  return row;
+}
+
+export type ClientCreateInput = {
+  companyId: string;
+  name: string;
+  type: 'office' | 'clinic' | 'condominium' | 'other';
+  cnpj?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  logoUrl?: string | null;
+  isActive?: boolean;
+};
+
+export async function createClient(db: AppDb, input: ClientCreateInput) {
+  const slug = await ensureUniqueClientSlug(db, input.companyId, input.name);
+  const now = new Date();
+
+  const [row] = await db
+    .insert(clients)
+    .values({
+      companyId: input.companyId,
+      name: input.name,
+      slug,
+      type: input.type,
+      cnpj: input.cnpj ?? null,
+      phone: input.phone ?? null,
+      email: input.email ?? null,
+      logoUrl: input.logoUrl ?? null,
+      isActive: input.isActive ?? true,
+      updatedAt: now,
+    })
+    .returning();
+
+  return row;
+}
+
+export type ClientUpdateInput = Partial<{
+  name: string;
+  type: 'office' | 'clinic' | 'condominium' | 'other';
+  cnpj: string | null;
+  phone: string | null;
+  email: string | null;
+  logoUrl: string | null;
+  isActive: boolean;
+}>;
+
+export async function updateClient(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+  input: ClientUpdateInput,
+) {
+  const existing = await getClientById(db, clientId, companyId);
+  if (!existing) {
+    return undefined;
+  }
+
+  const setPayload: Partial<typeof clients.$inferInsert> = {};
+
+  if (input.name !== undefined) {
+    const newName = input.name.trim();
+    setPayload.name = newName;
+    if (newName !== (existing.name?.trim() ?? '')) {
+      setPayload.slug = await ensureUniqueClientSlug(
+        db,
+        companyId,
+        newName,
+        clientId,
+      );
+    }
+  }
+
+  if (input.type !== undefined) setPayload.type = input.type;
+  if (input.cnpj !== undefined) setPayload.cnpj = input.cnpj;
+  if (input.phone !== undefined) setPayload.phone = input.phone;
+  if (input.email !== undefined) setPayload.email = input.email;
+  if (input.logoUrl !== undefined) setPayload.logoUrl = input.logoUrl;
+  if (input.isActive !== undefined) setPayload.isActive = input.isActive;
+
+  if (Object.keys(setPayload).length === 0) {
+    return existing;
+  }
+
+  setPayload.updatedAt = new Date();
+
+  const [row] = await db
+    .update(clients)
+    .set(setPayload)
+    .where(and(eq(clients.id, clientId), eq(clients.companyId, companyId)))
+    .returning();
+
+  return row;
+}
+
+export async function setClientActive(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+  isActive: boolean,
+) {
+  const now = new Date();
+  const [row] = await db
+    .update(clients)
+    .set({ isActive, updatedAt: now })
+    .where(and(eq(clients.id, clientId), eq(clients.companyId, companyId)))
+    .returning();
+  return row;
+}
