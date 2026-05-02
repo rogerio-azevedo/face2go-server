@@ -14,6 +14,8 @@ import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { ReadersModule } from './readers/readers.module';
+import { RegistrationsModule } from './registrations/registrations.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -22,11 +24,13 @@ import { ReadersModule } from './readers/readers.module';
       validate: validateEnv,
     }),
     DatabaseModule,
+    StorageModule,
     PermissionsModule,
     AuthModule,
     CompaniesModule,
     ClientsModule,
     ReadersModule,
+    RegistrationsModule,
     CompanyUsersModule,
     MeModule,
     HealthModule,

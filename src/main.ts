@@ -3,10 +3,15 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
+import { json, urlencoded } from 'express';
+
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.use(json({ limit: '8mb' }));
+  app.use(urlencoded({ extended: true, limit: '8mb' }));
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
@@ -18,8 +23,14 @@ async function bootstrap() {
   );
 
   const configService = app.get(ConfigService);
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
+  /** Em dev reflete a origem (LAN no celular). `FACIEM_RELAX_CORS=1` força isso mesmo com NODE_ENV=production no .env local. */
+  const relaxCors =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.FACIEM_RELAX_CORS === '1';
+  const corsOrigin = relaxCors ? true : frontendUrl;
   app.enableCors({
-    origin: configService.get<string>('FRONTEND_URL'),
+    origin: corsOrigin,
     credentials: true,
   });
 

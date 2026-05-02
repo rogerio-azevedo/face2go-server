@@ -5,3 +5,4 @@ export * from './permissions';
 export * from './clients';
 export * from './readers';
 export * from './faces';
+export * from './registrations';

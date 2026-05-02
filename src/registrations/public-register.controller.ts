@@ -1,0 +1,47 @@
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import {
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+
+import { Public } from '../common/decorators/public.decorator';
+import { PublicRegistrationService } from './public-registration.service';
+
+@ApiTags('public-registration')
+@Controller('register')
+export class PublicRegisterController {
+  constructor(
+    private readonly publicRegistrationService: PublicRegistrationService,
+  ) {}
+
+  @Public()
+  @Get(':code')
+  @ApiOperation({ summary: 'Dados públicos do cliente para o formulário de cadastro' })
+  preview(@Param('code') code: string) {
+    return this.publicRegistrationService.getPreview(code);
+  }
+
+  @Public()
+  @Post(':code/presign-photo')
+  @ApiOperation({ summary: 'URL assinada para upload da foto (R2)' })
+  presign(@Param('code') code: string, @Body() body: unknown) {
+    return this.publicRegistrationService.presignPhoto(code, body);
+  }
+
+  @Public()
+  @Post(':code/upload-photo')
+  @ApiOperation({
+    summary:
+      'Enviar foto (base64) pelo servidor para o R2 — preferir em vez do presign no browser',
+  })
+  uploadPhoto(@Param('code') code: string, @Body() body: unknown) {
+    return this.publicRegistrationService.uploadPhoto(code, body);
+  }
+
+  @Public()
+  @Post(':code/submit')
+  @ApiOperation({ summary: 'Enviar cadastro (aguarda aprovação)' })
+  submit(@Param('code') code: string, @Body() body: unknown) {
+    return this.publicRegistrationService.submit(code, body);
+  }
+}
