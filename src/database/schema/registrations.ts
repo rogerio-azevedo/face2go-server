@@ -8,6 +8,7 @@ import {
   text,
   jsonb,
   pgEnum,
+  integer,
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth';
@@ -18,6 +19,19 @@ export const registrationStatusEnum = pgEnum('registration_status', [
   'approved',
   'rejected',
 ]);
+
+export const deviceSyncStatusEnum = pgEnum('device_sync_status', [
+  'pending_sync',
+  'synced',
+  'sync_failed',
+]);
+
+export const clientFaceCounters = pgTable('client_face_counters', {
+  clientId: uuid('client_id')
+    .primaryKey()
+    .references(() => clients.id, { onDelete: 'cascade' }),
+  lastFaceId: integer('last_face_id').notNull().default(0),
+});
 
 export const registrationLinks = pgTable('registration_links', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -62,6 +76,12 @@ export const registrations = pgTable('registrations', {
   approvedAt: timestamp('approved_at'),
   rejectionNotes: text('rejection_notes'),
   submittedAt: timestamp('submitted_at'),
+  /** ID numérico no leitor facial (único dentro do mesmo cliente). */
+  faceId: integer('face_id'),
+  /** Sincronização com leitores; nulo até haver foto e aprovação com sincronização. */
+  deviceSyncStatus: deviceSyncStatusEnum('device_sync_status'),
+  deviceSyncedAt: timestamp('device_synced_at'),
+  deviceSyncError: text('device_sync_error'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -95,3 +115,4 @@ export const registrationsRelations = relations(registrations, ({ one }) => ({
     references: [users.id],
   }),
 }));
+

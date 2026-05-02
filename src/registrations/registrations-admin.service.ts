@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { z } from 'zod';
@@ -13,6 +14,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import { DatabaseService } from '../database/database.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { FaceSyncService } from '../face-sync/face-sync.service';
 import { zodFirstMessage } from '../validation/zod-utils';
 
 const listQuerySchema = z.object({
@@ -25,10 +27,13 @@ const rejectBodySchema = z.object({
 
 @Injectable()
 export class RegistrationsAdminService {
+  private readonly logger = new Logger(RegistrationsAdminService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly permissionsService: PermissionsService,
     private readonly r2: R2StorageService,
+    private readonly faceSync: FaceSyncService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -101,6 +106,12 @@ export class RegistrationsAdminService {
       rejectionNotes: row.rejectionNotes,
       createdAt: row.createdAt,
       hasFacePhoto: Boolean(row.faceImageKey),
+      faceId: row.faceId ?? null,
+      deviceSyncStatus: row.deviceSyncStatus ?? null,
+      deviceSyncedAt: row.deviceSyncedAt
+        ? row.deviceSyncedAt.toISOString()
+        : null,
+      deviceSyncError: row.deviceSyncError ?? null,
     };
   }
 
@@ -199,7 +210,39 @@ export class RegistrationsAdminService {
         'Cadastro não encontrado ou já foi processado.',
       );
     }
-    return this.mapRow(updated);
+
+    let rowOut = updated;
+    if (updated.faceImageKey) {
+      const faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      const linked =
+        await registrationsQueries.setRegistrationFaceAfterApprove(
+          this.database.db,
+          registrationId,
+          clientId,
+          faceId,
+        );
+      if (!linked) {
+        throw new BadRequestException('Falha ao atribuir face_id ao cadastro.');
+      }
+      rowOut = linked;
+
+      void this.faceSync
+        .syncApprovedRegistration(registrationId, clientId)
+        .catch((err: unknown) => {
+          const msg =
+            err instanceof Error
+              ? err.message
+              : 'Erro ao sincronizar face com os leitores.';
+          this.logger.warn(
+            `sync pós-aprovação reg=${registrationId}: ${msg}`,
+          );
+        });
+    }
+
+    return this.mapRow(rowOut);
   }
 
   async rejectForCompanyUser(

@@ -37,7 +37,7 @@ async function main() {
   const db = drizzle(sql, { schema }) as AppDb;
 
   const email =
-    process.env.SUPER_ADMIN_EMAIL ?? 'admin@faciem.local';
+    process.env.SUPER_ADMIN_EMAIL ?? 'admin@face2go.local';
   const password =
     process.env.SUPER_ADMIN_PASSWORD ?? 'altere-esta-senha';
 

@@ -1,7 +1,8 @@
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, or, sql } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import {
+  clientFaceCounters,
   clients,
   registrationLinks,
   registrations,
@@ -233,4 +234,110 @@ export async function rejectRegistration(
     )
     .returning();
   return row;
+}
+
+/** Incrementa e retorna o próximo face_id por cliente (1, 2, …). Atômico no Postgres. */
+export async function bumpClientFaceCounter(
+  db: AppDb,
+  clientId: string,
+): Promise<number> {
+  const [row] = await db
+    .insert(clientFaceCounters)
+    .values({ clientId, lastFaceId: 1 })
+    .onConflictDoUpdate({
+      target: clientFaceCounters.clientId,
+      set: {
+        lastFaceId: sql`client_face_counters.last_face_id + 1`,
+      },
+    })
+    .returning({ lastFaceId: clientFaceCounters.lastFaceId });
+
+  if (!row) {
+    throw new Error('Contador face_id falhou.');
+  }
+  return row.lastFaceId;
+}
+
+export async function setRegistrationFaceAfterApprove(
+  db: AppDb,
+  registrationId: string,
+  clientId: string,
+  faceId: number,
+): Promise<RegistrationRow | undefined> {
+  const now = new Date();
+  const [row] = await db
+    .update(registrations)
+    .set({
+      faceId,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncedAt: null,
+      deviceSyncError: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(registrations.id, registrationId),
+        eq(registrations.clientId, clientId),
+        eq(registrations.status, 'approved'),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+export async function updateRegistrationDeviceSync(
+  db: AppDb,
+  registrationId: string,
+  clientId: string,
+  input: {
+    deviceSyncStatus: 'pending_sync' | 'synced' | 'sync_failed';
+    deviceSyncedAt?: Date | null;
+    deviceSyncError?: string | null;
+  },
+): Promise<RegistrationRow | undefined> {
+  const now = new Date();
+  const patch: Partial<typeof registrations.$inferInsert> = {
+    deviceSyncStatus: input.deviceSyncStatus,
+    updatedAt: now,
+  };
+  if ('deviceSyncedAt' in input) {
+    patch.deviceSyncedAt = input.deviceSyncedAt ?? null;
+  }
+  if ('deviceSyncError' in input) {
+    patch.deviceSyncError = input.deviceSyncError ?? null;
+  }
+  const [row] = await db
+    .update(registrations)
+    .set(patch)
+    .where(
+      and(
+        eq(registrations.id, registrationId),
+        eq(registrations.clientId, clientId),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+/** Aprovados com foto que ainda falta sync com leitor ou re-sync após erro. */
+export async function listApprovedRegistrationsPendingDeviceSync(
+  db: AppDb,
+  clientId: string,
+): Promise<RegistrationRow[]> {
+  return db
+    .select()
+    .from(registrations)
+    .where(
+      and(
+        eq(registrations.clientId, clientId),
+        eq(registrations.status, 'approved'),
+        isNotNull(registrations.faceImageKey),
+        isNotNull(registrations.faceId),
+        or(
+          eq(registrations.deviceSyncStatus, 'pending_sync'),
+          eq(registrations.deviceSyncStatus, 'sync_failed'),
+        ),
+      ),
+    )
+    .orderBy(desc(registrations.submittedAt));
 }

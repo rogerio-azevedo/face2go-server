@@ -113,4 +113,19 @@ export class R2StorageService {
       );
     }
   }
+
+  /** Download binário direto para sync com leitor. */
+  async getObjectBytes(key: string): Promise<{ buffer: Buffer; contentType?: string }> {
+    const resp = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    const body = resp.Body;
+    if (!body || typeof body === 'string') {
+      throw new BadRequestException('Objeto vazio ou inválido no R2.');
+    }
+    const buf = Buffer.from(await body.transformToByteArray());
+    const contentType =
+      resp.ContentType?.split(';')[0]?.trim().toLowerCase() ?? undefined;
+    return { buffer: buf, contentType };
+  }
 }

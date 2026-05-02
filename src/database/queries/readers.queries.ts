@@ -479,3 +479,45 @@ export async function listReadersForMonitorReport(
     createdAt: r.createdAt,
   }));
 }
+
+/** Leitores Intelbras ativos com credencial — envio da face (digest HTTP). */
+export type ReaderFaceSyncRow = {
+  id: string;
+  name: string;
+  ip: string;
+  port: number;
+  username: string;
+  passwordEncrypted: string;
+};
+
+export async function listReadersForFaceSyncByClient(
+  db: AppDb,
+  clientId: string,
+): Promise<ReaderFaceSyncRow[]> {
+  const rows = await db
+    .select({
+      id: facialReaders.id,
+      name: facialReaders.name,
+      ip: facialReaders.ip,
+      port: facialReaders.port,
+      username: facialReaders.username,
+      passwordEncrypted: facialReaders.passwordEncrypted,
+    })
+    .from(facialReaders)
+    .where(
+      and(
+        eq(facialReaders.clientId, clientId),
+        eq(facialReaders.isActive, true),
+        eq(facialReaders.brand, 'intelbras'),
+        isNotNull(facialReaders.username),
+        isNotNull(facialReaders.passwordEncrypted),
+      ),
+    );
+
+  return rows.filter(
+    (r) =>
+      r.username?.trim() &&
+      r.passwordEncrypted?.trim() &&
+      r.ip?.trim(),
+  ) as ReaderFaceSyncRow[];
+}

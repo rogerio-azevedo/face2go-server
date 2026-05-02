@@ -24,10 +24,10 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const frontendUrl = configService.get<string>('FRONTEND_URL');
-  /** Em dev reflete a origem (LAN no celular). `FACIEM_RELAX_CORS=1` força isso mesmo com NODE_ENV=production no .env local. */
+  /** Em dev reflete a origem (LAN no celular). `FACE2GO_RELAX_CORS=1` força isso mesmo com NODE_ENV=production no .env local. */
   const relaxCors =
     process.env.NODE_ENV !== 'production' ||
-    process.env.FACIEM_RELAX_CORS === '1';
+    process.env.FACE2GO_RELAX_CORS === '1';
   const corsOrigin = relaxCors ? true : frontendUrl;
   app.enableCors({
     origin: corsOrigin,
@@ -35,8 +35,8 @@ async function bootstrap() {
   });
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Faciem API')
-    .setDescription('Backend NestJS da plataforma Faciem')
+    .setTitle('Face2go API')
+    .setDescription('Backend NestJS da plataforma Face2go')
     .setVersion('1.0')
     .addBearerAuth()
     .build();

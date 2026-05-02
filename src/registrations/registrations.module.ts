@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
+import { FaceSyncModule } from '../face-sync/face-sync.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { StorageModule } from '../storage/storage.module';
 import { ClientRegistrationLinksController } from './client-registration-links.controller';
@@ -13,7 +14,12 @@ import { RegistrationLinksService } from './registration-links.service';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
 @Module({
-  imports: [DatabaseModule, PermissionsModule, StorageModule],
+  imports: [
+    DatabaseModule,
+    PermissionsModule,
+    StorageModule,
+    FaceSyncModule,
+  ],
   controllers: [
     ClientRegistrationLinksController,
     CompanyRegistrationLinksController,
