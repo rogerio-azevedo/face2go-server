@@ -7,6 +7,17 @@ export const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   FRONTEND_URL: z.string().url(),
   PORT: z.coerce.number().default(3001),
+  /** Chave AES-256 para credenciais de leitores (64 hex = 32 bytes). */
+  READER_ENCRYPTION_KEY: z
+    .string()
+    .regex(
+      /^[0-9a-fA-F]{64}$/,
+      'READER_ENCRYPTION_KEY deve ter exatamente 64 caracteres hexadecimais (32 bytes).',
+    ),
+  /** Códigos do eventManager Intelbras; padrão All. */
+  FACIAL_EVENT_CODES: z.string().optional(),
+  /** Log detalhado do stream (parse). Ex.: `1` para ativar. */
+  FACIAL_STREAM_VERBOSE: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import * as clientsQueries from './clients.queries';
@@ -18,6 +18,8 @@ export type ReaderListRow = {
   serialNumber: string | null;
   model: string | null;
   location: string | null;
+  username: string | null;
+  hasCredentials: boolean;
   isActive: boolean;
   lastSeenAt: Date | null;
   createdAt: Date;
@@ -50,6 +52,8 @@ export async function listReaders(
       serialNumber: facialReaders.serialNumber,
       model: facialReaders.model,
       location: facialReaders.location,
+      username: facialReaders.username,
+      passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
       lastSeenAt: facialReaders.lastSeenAt,
       createdAt: facialReaders.createdAt,
@@ -59,9 +63,14 @@ export async function listReaders(
     .where(and(...conditions))
     .orderBy(asc(clients.name), asc(facialReaders.name));
 
-  return rows.map((r) => ({
+  return rows.map(({ passwordEncrypted, ...r }) => ({
     ...r,
     brand: (r.brand ?? 'intelbras') as ReaderBrand,
+    hasCredentials: !!(
+      r.username?.trim() &&
+      passwordEncrypted != null &&
+      String(passwordEncrypted).trim() !== ''
+    ),
   }));
 }
 
@@ -83,6 +92,8 @@ export async function getReaderById(
       serialNumber: facialReaders.serialNumber,
       model: facialReaders.model,
       location: facialReaders.location,
+      username: facialReaders.username,
+      passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
       lastSeenAt: facialReaders.lastSeenAt,
       createdAt: facialReaders.createdAt,
@@ -96,9 +107,15 @@ export async function getReaderById(
 
   if (!row) return undefined;
 
+  const { passwordEncrypted, ...rest } = row;
   return {
-    ...row,
+    ...rest,
     brand: (row.brand ?? 'intelbras') as ReaderBrand,
+    hasCredentials: !!(
+      row.username?.trim() &&
+      passwordEncrypted != null &&
+      String(passwordEncrypted).trim() !== ''
+    ),
   };
 }
 
@@ -113,6 +130,8 @@ export type ReaderCreateInput = {
   serialNumber?: string | null;
   model?: string | null;
   location?: string | null;
+  username?: string | null;
+  passwordEncrypted?: string | null;
   isActive?: boolean;
 };
 
@@ -138,6 +157,8 @@ export async function createReader(db: AppDb, input: ReaderCreateInput) {
       serialNumber: input.serialNumber?.trim() || null,
       model: input.model?.trim() || null,
       location: input.location?.trim() || null,
+      username: input.username?.trim() || null,
+      passwordEncrypted: input.passwordEncrypted ?? null,
       isActive: input.isActive ?? true,
     })
     .returning();
@@ -155,6 +176,8 @@ export type ReaderUpdateInput = Partial<{
   serialNumber: string | null;
   model: string | null;
   location: string | null;
+  username: string | null;
+  passwordEncrypted: string | null;
   isActive: boolean;
 }>;
 
@@ -211,6 +234,15 @@ export async function updateReader(
         ? null
         : input.location.trim();
   }
+  if (input.username !== undefined) {
+    setPayload.username =
+      input.username === null || input.username === ''
+        ? null
+        : input.username.trim();
+  }
+  if (input.passwordEncrypted !== undefined) {
+    setPayload.passwordEncrypted = input.passwordEncrypted;
+  }
   if (input.isActive !== undefined) setPayload.isActive = input.isActive;
 
   if (Object.keys(setPayload).length === 0) {
@@ -244,4 +276,206 @@ export async function setReaderActive(
     .returning();
 
   return row;
+}
+
+/**
+ * Resposta segura pós create/update/returning (sem segredo; com `hasCredentials`).
+ */
+export function readerRowToPublic(row: typeof facialReaders.$inferSelect) {
+  const { passwordEncrypted, ...rest } = row;
+  return {
+    ...rest,
+    brand: (rest.brand ?? 'intelbras') as ReaderBrand,
+    hasCredentials: !!(
+      rest.username?.trim() &&
+      passwordEncrypted != null &&
+      String(passwordEncrypted).trim() !== ''
+    ),
+  };
+}
+
+/** Leitores Intelbras ativos com credenciais — conexão eventManager. */
+export type ReaderEventStreamRow = {
+  id: string;
+  name: string;
+  clientName: string;
+  brand: ReaderBrand;
+  ip: string;
+  port: number;
+  username: string;
+  passwordEncrypted: string;
+};
+
+export async function listReadersForEventStream(
+  db: AppDb,
+): Promise<ReaderEventStreamRow[]> {
+  const rows = await db
+    .select({
+      id: facialReaders.id,
+      name: facialReaders.name,
+      clientName: clients.name,
+      brand: facialReaders.brand,
+      ip: facialReaders.ip,
+      port: facialReaders.port,
+      username: facialReaders.username,
+      passwordEncrypted: facialReaders.passwordEncrypted,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(
+      and(
+        eq(facialReaders.isActive, true),
+        eq(facialReaders.brand, 'intelbras'),
+        isNotNull(facialReaders.username),
+        isNotNull(facialReaders.passwordEncrypted),
+      ),
+    )
+    .orderBy(asc(clients.name), asc(facialReaders.name));
+
+  return rows
+    .filter(
+      (r) =>
+        r.username != null &&
+        String(r.username).trim() !== '' &&
+        r.passwordEncrypted != null &&
+        String(r.passwordEncrypted).trim() !== '' &&
+        r.ip != null &&
+        String(r.ip).trim() !== '',
+    )
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      clientName: r.clientName,
+      brand: (r.brand ?? 'intelbras') as ReaderBrand,
+      ip: r.ip,
+      port: r.port,
+      username: r.username as string,
+      passwordEncrypted: r.passwordEncrypted as string,
+    }));
+}
+
+export async function getReaderForEventStreamById(
+  db: AppDb,
+  readerId: string,
+): Promise<ReaderEventStreamRow | undefined> {
+  const [row] = await db
+    .select({
+      id: facialReaders.id,
+      name: facialReaders.name,
+      clientName: clients.name,
+      brand: facialReaders.brand,
+      ip: facialReaders.ip,
+      port: facialReaders.port,
+      username: facialReaders.username,
+      passwordEncrypted: facialReaders.passwordEncrypted,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(
+      and(
+        eq(facialReaders.id, readerId),
+        eq(facialReaders.isActive, true),
+        eq(facialReaders.brand, 'intelbras'),
+        isNotNull(facialReaders.username),
+        isNotNull(facialReaders.passwordEncrypted),
+      ),
+    )
+    .limit(1);
+
+  if (!row) return undefined;
+  if (
+    !row.username?.trim() ||
+    !row.passwordEncrypted?.trim() ||
+    !row.ip?.trim()
+  ) {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    clientName: row.clientName,
+    brand: (row.brand ?? 'intelbras') as ReaderBrand,
+    ip: row.ip,
+    port: row.port,
+    username: row.username,
+    passwordEncrypted: row.passwordEncrypted,
+  };
+}
+
+export async function updateReaderLastSeenAt(
+  db: AppDb,
+  readerId: string,
+  at: Date,
+): Promise<void> {
+  await db
+    .update(facialReaders)
+    .set({ lastSeenAt: at })
+    .where(eq(facialReaders.id, readerId));
+}
+
+/** Dados para GET monitor/status (por empresa), sem segredos. */
+export type ReaderMonitorListRow = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  brand: ReaderBrand;
+  name: string;
+  ip: string;
+  port: number;
+  isActive: boolean;
+  username: string | null;
+  hasCredentials: boolean;
+  lastSeenAt: Date | null;
+  createdAt: Date;
+};
+
+export async function listReadersForMonitorReport(
+  db: AppDb,
+  companyId: string,
+  filterClientId?: string,
+): Promise<ReaderMonitorListRow[]> {
+  const conditions = [eq(clients.companyId, companyId)];
+  if (filterClientId) {
+    conditions.push(eq(facialReaders.clientId, filterClientId));
+  }
+
+  const rows = await db
+    .select({
+      id: facialReaders.id,
+      clientId: facialReaders.clientId,
+      clientName: clients.name,
+      brand: facialReaders.brand,
+      name: facialReaders.name,
+      ip: facialReaders.ip,
+      port: facialReaders.port,
+      isActive: facialReaders.isActive,
+      username: facialReaders.username,
+      passwordEncrypted: facialReaders.passwordEncrypted,
+      lastSeenAt: facialReaders.lastSeenAt,
+      createdAt: facialReaders.createdAt,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(and(...conditions))
+    .orderBy(asc(clients.name), asc(facialReaders.name));
+
+  return rows.map((r) => ({
+    id: r.id,
+    clientId: r.clientId,
+    clientName: r.clientName,
+    brand: (r.brand ?? 'intelbras') as ReaderBrand,
+    name: r.name,
+    ip: r.ip,
+    port: r.port,
+    isActive: r.isActive,
+    username: r.username ?? null,
+    hasCredentials: !!(
+      r.username?.trim() &&
+      r.passwordEncrypted != null &&
+      String(r.passwordEncrypted).trim() !== ''
+    ),
+    lastSeenAt: r.lastSeenAt,
+    createdAt: r.createdAt,
+  }));
 }

@@ -26,6 +26,18 @@ import { ReadersService } from './readers.service';
 export class ReadersController {
   constructor(private readonly readersService: ReadersService) {}
 
+  @Get('monitor/status')
+  @ApiOperation({
+    summary:
+      'Status de monitoramento (conexão stream eventManager / leitores Intelbras)',
+  })
+  monitorStatus(
+    @CurrentUser() user: JwtPayload,
+    @Query('clientId') clientId?: string,
+  ) {
+    return this.readersService.getMonitorStatus(user, clientId);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Listar leitores faciais da empresa' })
   list(

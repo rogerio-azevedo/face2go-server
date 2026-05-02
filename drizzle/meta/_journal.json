@@ -29,6 +29,13 @@
       "when": 1777684638504,
       "tag": "0003_bumpy_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777690836151,
+      "tag": "0004_reader_credentials",
+      "breakpoints": true
     }
   ]
 }
