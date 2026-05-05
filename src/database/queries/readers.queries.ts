@@ -119,6 +119,32 @@ export async function getReaderById(
   };
 }
 
+export async function getReaderWithCredentialsById(
+  db: AppDb,
+  readerId: string,
+  companyId: string,
+) {
+  const [row] = await db
+    .select({
+      id: facialReaders.id,
+      name: facialReaders.name,
+      ip: facialReaders.ip,
+      port: facialReaders.port,
+      username: facialReaders.username,
+      passwordEncrypted: facialReaders.passwordEncrypted,
+      brand: facialReaders.brand,
+      isActive: facialReaders.isActive,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(
+      and(eq(facialReaders.id, readerId), eq(clients.companyId, companyId)),
+    )
+    .limit(1);
+
+  return row;
+}
+
 export type ReaderCreateInput = {
   companyId: string;
   clientId: string;

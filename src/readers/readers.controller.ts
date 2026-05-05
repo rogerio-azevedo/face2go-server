@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -24,7 +26,24 @@ import { ReadersService } from './readers.service';
 @Roles('company_admin', 'company_operator')
 @Controller('readers')
 export class ReadersController {
-  constructor(private readonly readersService: ReadersService) {}
+  constructor(private readonly readersService: ReadersService) {
+    console.log('ReadersController inicializado');
+  }
+
+  @Get(':readerId/device-users')
+  @ApiOperation({
+    summary: 'Listar usuários cadastrados no dispositivo (direto da memória)',
+  })
+  getDeviceUsers(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const lim = limit ? parseInt(limit, 10) : 50;
+    const off = offset ? parseInt(offset, 10) : 0;
+    return this.readersService.getDeviceUsers(user, readerId, lim, off);
+  }
 
   @Get('monitor/status')
   @ApiOperation({
@@ -73,5 +92,30 @@ export class ReadersController {
     @Body() body: unknown,
   ) {
     return this.readersService.setActive(user, readerId, body);
+  }
+
+
+  @Delete(':readerId/device-users/:userId')
+  @ApiOperation({
+    summary: 'Remover um usuário da memória do dispositivo',
+  })
+  removeDeviceUser(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.readersService.removeDeviceUser(user, readerId, userId);
+  }
+
+  @Get(':readerId/device-users/:userId/face')
+  @ApiOperation({
+    summary: 'Obter a foto do rosto do usuário (direto do leitor)',
+  })
+  getDeviceUserFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.readersService.getDeviceUserFace(user, readerId, userId);
   }
 }

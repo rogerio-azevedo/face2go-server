@@ -131,14 +131,123 @@ export async function intelbrasUpsertFaceOnReader(
 
 export async function intelbrasRemoveUserFromReader(
   reader: PlainReaderCredential,
-  faceIdNumeric: number,
+  faceIdParam: number | string,
 ): Promise<void> {
   const auth = new AxiosDigestAuth({
     username: reader.username,
     password: reader.plainPassword,
   });
-  const faceId = String(faceIdNumeric);
+  const faceId = String(faceIdParam);
   const base = deviceUrl(reader);
   const url = `${base}/cgi-bin/AccessUser.cgi?action=removeMulti&UserIDList[0]=${faceId}`;
   await digestRequest(auth, { method: 'GET', url });
+}
+
+export type DeviceUser = {
+  UserID: string;
+  CardName: string;
+  CardNo: string;
+  ValidDateStart?: string;
+  ValidDateEnd?: string;
+};
+
+export type DeviceUsersListResult = {
+  found: number;
+  records: DeviceUser[];
+};
+
+export async function intelbrasGetDeviceUsers(
+  reader: PlainReaderCredential,
+  count: number,
+  offset: number,
+): Promise<DeviceUsersListResult> {
+  const auth = new AxiosDigestAuth({
+    username: reader.username,
+    password: reader.plainPassword,
+  });
+  const base = deviceUrl(reader);
+  const url = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=AccessControlCard&count=${count}&offset=${offset}`;
+  const response = await digestRequest(auth, { method: 'GET', url });
+
+  if (typeof response.data !== 'string') {
+    return { found: 0, records: [] };
+  }
+
+  const text = response.data;
+  let found = 0;
+  const recordsMap = new Map<string, Partial<DeviceUser>>();
+
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith('found=')) {
+      found = parseInt(trimmed.substring(6), 10) || 0;
+      continue;
+    }
+
+    const match = /^records\[(\d+)\]\.(.+?)=(.*)$/.exec(trimmed);
+    if (match) {
+      const index = match[1];
+      const key = match[2];
+      const value = match[3];
+
+      let record = recordsMap.get(index);
+      if (!record) {
+        record = {};
+        recordsMap.set(index, record);
+      }
+
+      if (key === 'UserID') record.UserID = value;
+      else if (key === 'CardName') record.CardName = value;
+      else if (key === 'CardNo') record.CardNo = value;
+      else if (key === 'ValidDateStart') record.ValidDateStart = value;
+      else if (key === 'ValidDateEnd') record.ValidDateEnd = value;
+    }
+  }
+
+  const records = Array.from(recordsMap.values()).map((r) => ({
+    UserID: r.UserID || '',
+    CardName: r.CardName || '',
+    CardNo: r.CardNo || '',
+    ValidDateStart: r.ValidDateStart,
+    ValidDateEnd: r.ValidDateEnd,
+  }));
+
+  return { found, records };
+}
+
+export async function intelbrasGetFaceImage(
+  reader: PlainReaderCredential,
+  userId: string,
+): Promise<{ photoBase64: string | null }> {
+  const auth = new AxiosDigestAuth({
+    username: reader.username,
+    password: reader.plainPassword,
+  });
+  const base = deviceUrl(reader);
+  const url = `${base}/cgi-bin/AccessFace.cgi?action=list&UserIDList[0]=${userId}`;
+  const response = await digestRequest(auth, { method: 'GET', url });
+
+  if (typeof response.data !== 'string') {
+    return { photoBase64: null };
+  }
+
+  const text = response.data;
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Procura por FaceDataList[0].PhotoData[0]=...
+    if (trimmed.includes('PhotoData[0]=')) {
+      const parts = trimmed.split('=');
+      if (parts.length >= 2) {
+        return { photoBase64: parts[1].trim() };
+      }
+    }
+  }
+
+  return { photoBase64: null };
 }

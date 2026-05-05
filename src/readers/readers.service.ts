@@ -14,6 +14,12 @@ import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
 import * as readersQueries from '../database/queries/readers.queries';
 import { FaceListenerService } from '../face-listener/face-listener.service';
+import {
+  intelbrasGetDeviceUsers,
+  intelbrasGetFaceImage,
+  intelbrasRemoveUserFromReader,
+  toPlainReaderCredential,
+} from '../face-sync/intelbras-device.client';
 import { PermissionsService } from '../permissions/permissions.service';
 import {
   createReaderSchema,
@@ -252,5 +258,200 @@ export class ReadersService {
     );
     if (!row) throw new NotFoundException('Leitor não encontrado.');
     return readersQueries.readerRowToPublic(row);
+  }
+
+  async getDeviceUsers(
+    user: JwtPayload,
+    readerId: string,
+    limit: number,
+    offset: number,
+  ) {
+    if (user.role !== 'company_admin' && user.role !== 'company_operator') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+    const companyId = this.ensureCompany(user);
+
+    if (user.role === 'company_operator') {
+      const ok = await this.permissionsService.evaluateCompanyFeatureAction(
+        user.role,
+        user.companyUserId,
+        'clients' as FeatureSlug,
+        'can_read',
+      );
+      if (!ok) {
+        throw new ForbiddenException('Sem permissão.');
+      }
+    }
+
+    const reader = await readersQueries.getReaderWithCredentialsById(
+      this.database.db,
+      readerId,
+      companyId,
+    );
+
+    if (!reader) {
+      throw new NotFoundException('Leitor não encontrado.');
+    }
+    if (!reader.isActive) {
+      throw new BadRequestException('O leitor está inativo.');
+    }
+    if (reader.brand !== 'intelbras') {
+      throw new BadRequestException('Marca não suportada para esta operação.');
+    }
+    if (!reader.username || !reader.passwordEncrypted) {
+      throw new BadRequestException('O leitor não possui credenciais salvas.');
+    }
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+    const plainPassword = cipher.decrypt(reader.passwordEncrypted);
+
+    const plainReader = toPlainReaderCredential(
+      {
+        id: reader.id,
+        name: reader.name,
+        ip: reader.ip,
+        port: reader.port,
+        username: reader.username,
+        passwordEncrypted: reader.passwordEncrypted,
+      },
+      plainPassword,
+    );
+
+    try {
+      return await intelbrasGetDeviceUsers(plainReader, limit, offset);
+    } catch (e: any) {
+      throw new BadRequestException(
+        'Falha ao comunicar com o leitor: ' + (e.message || 'Erro desconhecido'),
+      );
+    }
+  }
+
+  async removeDeviceUser(user: JwtPayload, readerId: string, userId: string) {
+    if (user.role !== 'company_admin' && user.role !== 'company_operator') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+    const companyId = this.ensureCompany(user);
+
+    if (user.role === 'company_operator') {
+      const ok = await this.permissionsService.evaluateCompanyFeatureAction(
+        user.role,
+        user.companyUserId,
+        'clients' as FeatureSlug,
+        'can_delete',
+      );
+      if (!ok) {
+        throw new ForbiddenException('Sem permissão.');
+      }
+    }
+
+    const reader = await readersQueries.getReaderWithCredentialsById(
+      this.database.db,
+      readerId,
+      companyId,
+    );
+
+    if (!reader) {
+      throw new NotFoundException('Leitor não encontrado.');
+    }
+    if (!reader.isActive) {
+      throw new BadRequestException('O leitor está inativo.');
+    }
+    if (reader.brand !== 'intelbras') {
+      throw new BadRequestException('Marca não suportada para esta operação.');
+    }
+    if (!reader.username || !reader.passwordEncrypted) {
+      throw new BadRequestException('O leitor não possui credenciais salvas.');
+    }
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+    const plainPassword = cipher.decrypt(reader.passwordEncrypted);
+
+    const plainReader = toPlainReaderCredential(
+      {
+        id: reader.id,
+        name: reader.name,
+        ip: reader.ip,
+        port: reader.port,
+        username: reader.username,
+        passwordEncrypted: reader.passwordEncrypted,
+      },
+      plainPassword,
+    );
+
+    try {
+      await intelbrasRemoveUserFromReader(plainReader, userId);
+      return { success: true };
+    } catch (e: any) {
+      throw new BadRequestException(
+        'Falha ao comunicar com o leitor: ' + (e.message || 'Erro desconhecido'),
+      );
+    }
+  }
+
+  async getDeviceUserFace(user: JwtPayload, readerId: string, userId: string) {
+    if (user.role !== 'company_admin' && user.role !== 'company_operator') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+    const companyId = this.ensureCompany(user);
+
+    if (user.role === 'company_operator') {
+      const ok = await this.permissionsService.evaluateCompanyFeatureAction(
+        user.role,
+        user.companyUserId,
+        'clients' as FeatureSlug,
+        'can_read',
+      );
+      if (!ok) {
+        throw new ForbiddenException('Sem permissão.');
+      }
+    }
+
+    const reader = await readersQueries.getReaderWithCredentialsById(
+      this.database.db,
+      readerId,
+      companyId,
+    );
+
+    if (!reader) {
+      throw new NotFoundException('Leitor não encontrado.');
+    }
+    if (!reader.isActive) {
+      throw new BadRequestException('O leitor está inativo.');
+    }
+    if (reader.brand !== 'intelbras') {
+      throw new BadRequestException('Marca não suportada para esta operação.');
+    }
+    if (!reader.username || !reader.passwordEncrypted) {
+      throw new BadRequestException('O leitor não possui credenciais salvas.');
+    }
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+    const plainPassword = cipher.decrypt(reader.passwordEncrypted);
+
+    const plainReader = toPlainReaderCredential(
+      {
+        id: reader.id,
+        name: reader.name,
+        ip: reader.ip,
+        port: reader.port,
+        username: reader.username,
+        passwordEncrypted: reader.passwordEncrypted,
+      },
+      plainPassword,
+    );
+
+    try {
+      return await intelbrasGetFaceImage(plainReader, userId);
+    } catch (e: any) {
+      throw new BadRequestException(
+        'Falha ao comunicar com o leitor: ' + (e.message || 'Erro desconhecido'),
+      );
+    }
   }
 }
