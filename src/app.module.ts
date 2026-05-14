@@ -14,10 +14,14 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
+import { ParentsModule } from './parents/parents.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { ReadersModule } from './readers/readers.module';
 import { RegistrationsModule } from './registrations/registrations.module';
+import { SchoolClassesModule } from './school-classes/school-classes.module';
+import { ShiftsModule } from './shifts/shifts.module';
 import { StorageModule } from './storage/storage.module';
+import { StudentsModule } from './students/students.module';
 
 @Module({
   imports: [
@@ -42,6 +46,10 @@ import { StorageModule } from './storage/storage.module';
     ReadersModule,
     RegistrationsModule,
     CompanyUsersModule,
+    SchoolClassesModule,
+    ShiftsModule,
+    StudentsModule,
+    ParentsModule,
     AccessesModule,
     MeModule,
     HealthModule,

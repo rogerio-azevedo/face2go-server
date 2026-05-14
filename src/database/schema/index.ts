@@ -6,3 +6,7 @@ export * from './clients';
 export * from './readers';
 export * from './faces';
 export * from './registrations';
+export * from './schools';
+export * from './students';
+export * from './parents';
+export * from './shifts';

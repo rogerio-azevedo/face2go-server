@@ -36,6 +36,49 @@ export class ClientsService {
     return companyId;
   }
 
+  /** Detalhe de um cliente (admin ou operador com `clients` + can_read). */
+  async getById(user: JwtPayload, clientId: string) {
+    const companyId = this.ensureCompany(user);
+    if (user.role === 'company_admin') {
+      const row = await clientsQueries.getClientById(
+        this.database.db,
+        clientId,
+        companyId,
+      );
+      if (!row) {
+        throw new NotFoundException('Cliente não encontrado.');
+      }
+      return {
+        ...row,
+        type: row.type ?? 'other',
+      };
+    }
+    if (user.role === 'company_operator') {
+      const ok = await this.permissionsService.evaluateCompanyFeatureAction(
+        user.role,
+        user.companyUserId,
+        'clients' as FeatureSlug,
+        'can_read',
+      );
+      if (!ok) {
+        throw new ForbiddenException('Sem permissão.');
+      }
+      const row = await clientsQueries.getClientById(
+        this.database.db,
+        clientId,
+        companyId,
+      );
+      if (!row) {
+        throw new NotFoundException('Cliente não encontrado.');
+      }
+      return {
+        ...row,
+        type: row.type ?? 'other',
+      };
+    }
+    throw new ForbiddenException('Sem permissão.');
+  }
+
   /** Lista clientes (admin ou operador com `clients` + can_read). */
   async list(user: JwtPayload) {
     const companyId = this.ensureCompany(user);

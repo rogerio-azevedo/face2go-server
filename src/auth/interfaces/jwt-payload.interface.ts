@@ -7,4 +7,6 @@ export interface JwtPayload {
   clientId?: string | null;
   companyUserId?: string | null;
   clientUserId?: string | null;
+  /** Responsável (escola); presente quando `role === 'parent'`. */
+  parentId?: string | null;
 }

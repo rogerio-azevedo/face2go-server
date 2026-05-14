@@ -17,6 +17,7 @@ export const clientTypeEnum = pgEnum('client_type', [
   'office',
   'clinic',
   'condominium',
+  'school',
   'other',
 ]);
 

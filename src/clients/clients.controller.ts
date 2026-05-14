@@ -31,6 +31,15 @@ export class ClientsController {
     return this.clientsService.list(user);
   }
 
+  @Get(':clientId')
+  @ApiOperation({ summary: 'Obter cliente por ID' })
+  getById(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientsService.getById(user, clientId);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Criar cliente (apenas admin da empresa)' })
   create(@CurrentUser() user: JwtPayload, @Body() body: unknown) {

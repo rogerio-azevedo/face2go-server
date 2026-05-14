@@ -13,6 +13,7 @@ import * as invitesQueries from '../database/queries/invites.queries';
 import {
   clientUsers,
   companyUsers,
+  parents,
   users,
 } from '../database/schema';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -28,6 +29,7 @@ export type AuthenticatedUser = {
   clientId?: string;
   companyUserId?: string;
   clientUserId?: string;
+  parentId?: string;
 };
 
 @Injectable()
@@ -47,6 +49,7 @@ export class AuthService {
       clientId: user.clientId ?? null,
       companyUserId: user.companyUserId ?? null,
       clientUserId: user.clientUserId ?? null,
+      parentId: user.parentId ?? null,
     };
   }
 
@@ -118,6 +121,28 @@ export class AuthService {
         role: clientLink.role,
         clientId: clientLink.clientId,
         clientUserId: clientLink.id,
+      };
+    }
+
+    const [parentLink] = await db
+      .select()
+      .from(parents)
+      .where(
+        and(
+          eq(parents.userId, userRow.id),
+          eq(parents.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    if (parentLink?.userId) {
+      return {
+        id: userRow.id,
+        email: userRow.email,
+        name: userRow.name ?? undefined,
+        role: 'parent',
+        clientId: parentLink.clientId,
+        parentId: parentLink.id,
       };
     }
 
@@ -214,6 +239,7 @@ export class AuthService {
       clientId: payload.clientId ?? undefined,
       companyUserId: payload.companyUserId ?? undefined,
       clientUserId: payload.clientUserId ?? undefined,
+      parentId: payload.parentId ?? undefined,
     };
   }
 }

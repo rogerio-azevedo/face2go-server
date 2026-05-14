@@ -124,10 +124,20 @@ export async function getClientById(
   return row;
 }
 
+/** Busca cliente apenas pelo ID (ex.: tenant cliente na área escola). */
+export async function getClientByIdOnly(db: AppDb, clientId: string) {
+  const [row] = await db
+    .select()
+    .from(clients)
+    .where(eq(clients.id, clientId))
+    .limit(1);
+  return row;
+}
+
 export type ClientCreateInput = {
   companyId: string;
   name: string;
-  type: 'office' | 'clinic' | 'condominium' | 'other';
+  type: 'office' | 'clinic' | 'condominium' | 'school' | 'other';
   cnpj?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -162,7 +172,7 @@ export async function createClient(db: AppDb, input: ClientCreateInput) {
 
 export type ClientUpdateInput = Partial<{
   name: string;
-  type: 'office' | 'clinic' | 'condominium' | 'other';
+  type: 'office' | 'clinic' | 'condominium' | 'school' | 'other';
   cnpj: string | null;
   phone: string | null;
   email: string | null;

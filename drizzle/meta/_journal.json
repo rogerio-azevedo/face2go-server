@@ -78,6 +78,27 @@
       "when": 1778200000000,
       "tag": "0010_reader_ip_hostname_length",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778729913624,
+      "tag": "0011_school_entities",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778733383359,
+      "tag": "0012_shifts",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778733946717,
+      "tag": "0013_school_class_shift_link",
+      "breakpoints": true
     }
   ]
 }

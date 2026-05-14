@@ -39,7 +39,7 @@ const baseClientShape = {
     .trim()
     .min(2, 'Nome deve ter pelo menos 2 caracteres')
     .max(255, 'Nome muito longo'),
-  type: z.enum(['office', 'clinic', 'condominium', 'other'] as const, {
+  type: z.enum(['office', 'clinic', 'condominium', 'school', 'other'] as const, {
     message: 'Selecione um tipo válido.',
   }),
   cnpj: optionalTrimmed.refine((val) => val === undefined || CNPJ_REGEX.test(val), {
