@@ -24,7 +24,8 @@ export const facialReaders = pgTable('facial_readers', {
   brand: readerBrandEnum('brand').notNull().default('intelbras'),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  ip: varchar('ip', { length: 45 }).notNull(),
+  /** IPv4, IPv6 ou hostname (DNS/DDNS); FQDN até 253 caracteres (RFC 1035). */
+  ip: varchar('ip', { length: 255 }).notNull(),
   port: integer('port').notNull().default(80),
   serialNumber: varchar('serial_number', { length: 120 }),
   model: varchar('model', { length: 120 }),

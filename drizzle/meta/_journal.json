@@ -71,6 +71,13 @@
       "when": 1778100000000,
       "tag": "0009_client_timezone_offset_minutes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778200000000,
+      "tag": "0010_reader_ip_hostname_length",
+      "breakpoints": true
     }
   ]
 }

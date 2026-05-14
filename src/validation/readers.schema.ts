@@ -3,6 +3,22 @@ import { z } from 'zod';
 const IP_REGEX =
   /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d{1,3})\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d{1,3})$|^\[?[0-9a-fA-F:.]+\]?$/;
 
+/** Hostname/DNS (ASCII); IPv4 não passa aqui se já validado por IP_REGEX antes. */
+function isValidHostname(host: string): boolean {
+  if (host.length > 253) return false;
+  const labels = host.split('.');
+  for (const label of labels) {
+    if (label.length === 0 || label.length > 63) return false;
+    if (!/^[a-zA-Z0-9-]+$/.test(label)) return false;
+    if (label.startsWith('-') || label.endsWith('-')) return false;
+  }
+  return labels.length >= 1;
+}
+
+function isIpOrHostname(v: string): boolean {
+  return IP_REGEX.test(v) || isValidHostname(v);
+}
+
 const optionalTrimmed = z
   .string()
   .optional()
@@ -26,9 +42,11 @@ export const readerSchema = z.object({
   ip: z
     .string()
     .trim()
-    .min(1, 'IP é obrigatório')
-    .max(45, 'IP muito longo')
-    .refine((v) => IP_REGEX.test(v), { message: 'IP inválido.' }),
+    .min(1, 'IP ou hostname é obrigatório')
+    .max(253, 'Endereço muito longo (máximo 253 caracteres).')
+    .refine((v) => isIpOrHostname(v), {
+      message: 'Informe um IP válido ou um hostname (DNS/DDNS).',
+    }),
   port: z.coerce
     .number({ message: 'Porta inválida.' })
     .int()
