@@ -6,12 +6,14 @@ import {
   boolean,
   timestamp,
   text,
+  integer,
   pgEnum,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth';
 import { clients } from './clients';
+import { deviceSyncStatusEnum } from './registrations';
 import { students } from './students';
 
 export const responsibleRelationshipTypeEnum = pgEnum(
@@ -28,6 +30,12 @@ export const responsibles = pgTable('responsibles', {
   name: varchar('name', { length: 255 }).notNull(),
   phone: varchar('phone', { length: 32 }),
   document: varchar('document', { length: 32 }),
+  /** Face ID no leitor (mesmo modelo que `students.face_id`), para histórico de acessos do responsável. */
+  faceId: integer('face_id'),
+  photoKey: text('photo_key'),
+  deviceSyncStatus: deviceSyncStatusEnum('device_sync_status'),
+  deviceSyncedAt: timestamp('device_synced_at'),
+  deviceSyncError: text('device_sync_error'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

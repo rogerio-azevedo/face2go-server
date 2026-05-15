@@ -15,7 +15,10 @@ import {
 } from '../common/crypto/reader-credentials.cipher';
 import { DatabaseService } from '../database/database.service';
 import { AccessesService } from '../accesses/accesses.service';
-import type { ReaderBrand, ReaderEventStreamRow } from '../database/queries/readers.queries';
+import type {
+  ReaderBrand,
+  ReaderEventStreamRow,
+} from '../database/queries/readers.queries';
 import * as readersQueries from '../database/queries/readers.queries';
 import type {
   ReaderListenerStatus,
@@ -26,7 +29,6 @@ import type {
 import {
   parseVideoEventLine,
   parseVideoEventPayload,
-  type VideoEvent,
 } from './video-stream.parser';
 
 /** Registro em memória para stream + digest (senha só em RAM). */
@@ -68,6 +70,10 @@ function toStreamContext(
       passwordPlain,
     };
   } catch (err) {
+    Logger.warn(
+      `[FaceListener] Senha inválida ou não descriptografável — leitor "${row.name}" (${row.id}) ignorado`,
+      err instanceof Error ? err.message : String(err),
+    );
     return undefined;
   }
 }
@@ -97,7 +103,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly accessesService: AccessesService,
   ) {
-    const key = this.configService.get('READER_ENCRYPTION_KEY', { infer: true });
+    const key = this.configService.get('READER_ENCRYPTION_KEY', {
+      infer: true,
+    });
+
     this.cipher = createReaderCredentialsCipher(key);
   }
 
@@ -282,7 +291,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
     for (const id of [...this.statuses.keys()]) {
       if (!validIds.has(id)) {
-        this.teardownReader(id, 'removido ou sem credenciais / inativo / não Intelbras');
+        this.teardownReader(
+          id,
+          'removido ou sem credenciais / inativo / não Intelbras',
+        );
       }
     }
 
@@ -637,7 +649,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     this.lastSeenDebounceTimers.set(readerId, timer);
   }
 
-  private updateStatus(readerId: string, partial: Partial<ReaderListenerStatus>) {
+  private updateStatus(
+    readerId: string,
+    partial: Partial<ReaderListenerStatus>,
+  ): void {
     const current = this.statuses.get(readerId);
     if (current) {
       this.statuses.set(readerId, { ...current, ...partial });

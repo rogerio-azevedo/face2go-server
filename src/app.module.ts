@@ -12,6 +12,7 @@ import { validateEnv, type EnvVars } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { DatabaseModule } from './database/database.module';
+import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
 import { ResponsibleDashboardModule } from './responsible-dashboard/responsible-dashboard.module';
@@ -54,6 +55,7 @@ import { StudentsModule } from './students/students.module';
     ResponsiblesModule,
     PickupAuthorizationsModule,
     ResponsibleDashboardModule,
+    FaceEnrollmentModule,
     AccessesModule,
     MeModule,
     HealthModule,

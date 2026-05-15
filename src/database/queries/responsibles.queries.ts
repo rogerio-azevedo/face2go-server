@@ -32,6 +32,39 @@ export async function listActiveResponsiblePeersExcept(
     .orderBy(asc(responsibles.name));
 }
 
+export async function getResponsibleFaceId(
+  db: AppDb,
+  responsibleId: string,
+  clientId: string,
+): Promise<number | null> {
+  const rows = await db
+    .select({ faceId: responsibles.faceId })
+    .from(responsibles)
+    .where(and(eq(responsibles.id, responsibleId), eq(responsibles.clientId, clientId)))
+    .limit(1);
+  const v = rows[0]?.faceId;
+  return v == null ? null : v;
+}
+
+export async function getResponsibleWithFaceStatus(
+  db: AppDb,
+  id: string,
+  clientId: string,
+) {
+  const rows = await db
+    .select({
+      photoKey: responsibles.photoKey,
+      faceId: responsibles.faceId,
+      deviceSyncStatus: responsibles.deviceSyncStatus,
+      deviceSyncedAt: responsibles.deviceSyncedAt,
+      deviceSyncError: responsibles.deviceSyncError,
+    })
+    .from(responsibles)
+    .where(and(eq(responsibles.id, id), eq(responsibles.clientId, clientId)))
+    .limit(1);
+  return rows[0];
+}
+
 export async function getResponsibleById(
   db: AppDb,
   id: string,
@@ -71,7 +104,15 @@ export async function updateResponsible(
   values: Partial<
     Pick<
       typeof responsibles.$inferInsert,
-      'name' | 'phone' | 'document' | 'isActive'
+      | 'name'
+      | 'phone'
+      | 'document'
+      | 'faceId'
+      | 'photoKey'
+      | 'deviceSyncStatus'
+      | 'deviceSyncedAt'
+      | 'deviceSyncError'
+      | 'isActive'
     >
   >,
 ) {
@@ -81,6 +122,24 @@ export async function updateResponsible(
     .where(and(eq(responsibles.id, id), eq(responsibles.clientId, clientId)))
     .returning();
   return rows[0];
+}
+
+export async function updateResponsibleFace(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  values: Partial<
+    Pick<
+      typeof responsibles.$inferInsert,
+      | 'photoKey'
+      | 'faceId'
+      | 'deviceSyncStatus'
+      | 'deviceSyncedAt'
+      | 'deviceSyncError'
+    >
+  >,
+) {
+  return updateResponsible(db, id, clientId, values);
 }
 
 export async function insertResponsibleStudentLink(

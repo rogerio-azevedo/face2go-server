@@ -25,6 +25,21 @@ export class ResponsibleDashboardController {
     return this.responsibleDashboardService.listChildren(user);
   }
 
+  @Get('me/accesses')
+  @ApiOperation({ summary: 'Histórico de acessos faciais do próprio responsável (face cadastrada na escola)' })
+  async listOwnAccesses(
+    @CurrentUser() user: JwtPayload,
+    @Query('page') pageStr?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(limitStr ?? '10', 10) || 10),
+    );
+    return this.responsibleDashboardService.listOwnAccesses(user, page, limit);
+  }
+
   @Get('other-responsibles')
   @ApiOperation({
     summary:

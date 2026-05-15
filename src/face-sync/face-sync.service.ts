@@ -147,6 +147,82 @@ export class FaceSyncService {
     return this.syncApprovedRegistration(registrationId, clientId);
   }
 
+  /**
+   * Envia uma imagem (buffer) para todos os leitores Intelbras ativos do cliente.
+   * Não persiste status em tabela; o chamador atualiza `device_sync_*`.
+   */
+  async syncPersonOnReaders(params: {
+    clientId: string;
+    faceId: number;
+    name: string;
+    imageBuffer: Buffer;
+    logContext?: string;
+  }): Promise<{
+    deviceSyncStatus: 'synced' | 'sync_failed';
+    deviceSyncError: string | null;
+  }> {
+    const { clientId, faceId, name, imageBuffer, logContext } = params;
+    const intelbrasReaders =
+      await readersQueries.listReadersForFaceSyncByClient(
+        this.database.db,
+        clientId,
+      );
+
+    if (intelbrasReaders.length === 0) {
+      return {
+        deviceSyncStatus: 'sync_failed',
+        deviceSyncError:
+          'Nenhum leitor Intelbras ativo com credenciais para este cliente.',
+      };
+    }
+
+    let base64: string;
+    try {
+      base64 = await imageBufferToReaderBase64Jpeg(imageBuffer);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : 'Falha ao obter/comprimir a foto.';
+      return { deviceSyncStatus: 'sync_failed', deviceSyncError: msg };
+    }
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+
+    const failures: string[] = [];
+    const logPrefix = logContext ? `${logContext} ` : '';
+
+    for (const r of intelbrasReaders) {
+      try {
+        const plain = toPlainReaderCredential(
+          r,
+          cipher.decrypt(r.passwordEncrypted),
+        );
+        await intelbrasUpsertFaceOnReader(
+          plain,
+          faceId,
+          name || 'USUARIO',
+          base64,
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        failures.push(`${r.name}: ${msg}`);
+        this.log.warn(
+          `Sync face ${logPrefix}reader=${r.name}: ${msg}`,
+        );
+      }
+    }
+
+    if (failures.length === intelbrasReaders.length) {
+      const err = failures.join(' | ');
+      return { deviceSyncStatus: 'sync_failed', deviceSyncError: err };
+    }
+
+    const warn =
+      failures.length > 0 ? `Parcial: ${failures.join(' | ')}` : null;
+    return { deviceSyncStatus: 'synced', deviceSyncError: warn };
+  }
+
   /** Sincroniza um cadastro aprovado (foto no R2) com todos os leitores Intelbras ativos do cliente. */
   async syncApprovedRegistration(
     registrationId: string,
@@ -174,12 +250,6 @@ export class FaceSyncService {
       );
     }
 
-    const intelbrasReaders =
-      await readersQueries.listReadersForFaceSyncByClient(
-        this.database.db,
-        clientId,
-      );
-
     await registrationsQueries.updateRegistrationDeviceSync(
       this.database.db,
       registrationId,
@@ -187,28 +257,10 @@ export class FaceSyncService {
       { deviceSyncStatus: 'pending_sync', deviceSyncedAt: null },
     );
 
-    if (intelbrasReaders.length === 0) {
-      await registrationsQueries.updateRegistrationDeviceSync(
-        this.database.db,
-        registrationId,
-        clientId,
-        {
-          deviceSyncStatus: 'sync_failed',
-          deviceSyncError:
-            'Nenhum leitor Intelbras ativo com credenciais para este cliente.',
-        },
-      );
-      return {
-        deviceSyncStatus: 'sync_failed',
-        deviceSyncError:
-          'Nenhum leitor Intelbras ativo com credenciais para este cliente.',
-      };
-    }
-
-    let base64: string;
+    let buffer: Buffer;
     try {
-      const { buffer } = await this.r2.getObjectBytes(row.faceImageKey);
-      base64 = await imageBufferToReaderBase64Jpeg(buffer);
+      const got = await this.r2.getObjectBytes(row.faceImageKey);
+      buffer = got.buffer;
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : 'Falha ao obter/comprimir a foto.';
@@ -221,58 +273,28 @@ export class FaceSyncService {
       return { deviceSyncStatus: 'sync_failed', deviceSyncError: msg };
     }
 
-    const cipher = createReaderCredentialsCipher(
-      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
-    );
-
-    const failures: string[] = [];
-    for (const r of intelbrasReaders) {
-      try {
-        const plain = toPlainReaderCredential(
-          r,
-          cipher.decrypt(r.passwordEncrypted),
-        );
-        await intelbrasUpsertFaceOnReader(
-          plain,
-          row.faceId,
-          row.name ?? 'USUARIO',
-          base64,
-        );
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        failures.push(`${r.name}: ${msg}`);
-        this.log.warn(
-          `Sync face reg=${registrationId} reader=${r.name}: ${msg}`,
-        );
-      }
-    }
-
-    if (failures.length === intelbrasReaders.length) {
-      const err = failures.join(' | ');
-      await registrationsQueries.updateRegistrationDeviceSync(
-        this.database.db,
-        registrationId,
+    const { deviceSyncStatus, deviceSyncError } =
+      await this.syncPersonOnReaders({
         clientId,
-        { deviceSyncStatus: 'sync_failed', deviceSyncError: err },
-      );
-      return { deviceSyncStatus: 'sync_failed', deviceSyncError: err };
-    }
+        faceId: row.faceId,
+        name: row.name ?? 'USUARIO',
+        imageBuffer: buffer,
+        logContext: `reg=${registrationId}`,
+      });
 
-    const warn =
-      failures.length > 0
-        ? `Parcial: ${failures.join(' | ')}`
-        : null;
     await registrationsQueries.updateRegistrationDeviceSync(
       this.database.db,
       registrationId,
       clientId,
       {
-        deviceSyncStatus: 'synced',
-        deviceSyncedAt: new Date(),
-        deviceSyncError: warn,
+        deviceSyncStatus,
+        deviceSyncedAt:
+          deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError,
       },
     );
-    return { deviceSyncStatus: 'synced', deviceSyncError: warn };
+
+    return { deviceSyncStatus, deviceSyncError };
   }
 
   async syncAllPendingForCompany(

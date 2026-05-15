@@ -44,7 +44,57 @@ export class ResponsibleDashboardService {
     private readonly accessModel: Model<FacialAccessDocument>,
     private readonly database: DatabaseService,
     private readonly r2Storage: R2StorageService,
-  ) {}
+  ) { }
+
+  private mapFacialDocsToDto(
+    docs: unknown[],
+  ): ResponsibleAccessHistoryItemDto[] {
+    return docs.map((raw) => {
+      const doc = raw as FacialAccessDocument & {
+        readerName?: string;
+        eventCode?: string;
+        eventAction?: string;
+        similarity?: number | null;
+        eventDate?: Date | null;
+        createdAt?: Date;
+      };
+      return {
+        readerName: doc.readerName ?? '',
+        eventCode: doc.eventCode ?? '',
+        eventAction: doc.eventAction ?? '',
+        similarity: doc.similarity ?? null,
+        eventDate: doc.eventDate ? doc.eventDate.toISOString() : null,
+        createdAt: doc.createdAt
+          ? doc.createdAt.toISOString()
+          : new Date().toISOString(),
+      };
+    });
+  }
+
+  private async paginateFacialAccessByUserId(
+    clientId: string,
+    faceUserId: number,
+    page: number,
+    limit: number,
+  ): Promise<{
+    items: ResponsibleAccessHistoryItemDto[];
+    total: number;
+  }> {
+    const filter = { clientId, userId: faceUserId };
+    const total = await this.accessModel.countDocuments(filter).exec();
+    const skip = (page - 1) * limit;
+
+    const docs = await this.accessModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec();
+
+    const items = this.mapFacialDocsToDto(docs);
+    return { items, total };
+  }
 
   private assertResponsibleScope(
     user: JwtPayload,
@@ -143,42 +193,44 @@ export class ResponsibleDashboardService {
       return { items: [], page, limit, total: 0 };
     }
 
-    const filter = {
+    const { items, total } = await this.paginateFacialAccessByUserId(
       clientId,
-      userId: student.faceId,
-    };
+      student.faceId,
+      page,
+      limit,
+    );
 
-    const total = await this.accessModel.countDocuments(filter).exec();
-    const skip = (page - 1) * limit;
+    return { items, page, limit, total };
+  }
 
-    const docs = await this.accessModel
-      .find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean()
-      .exec();
+  async listOwnAccesses(
+    user: JwtPayload,
+    page: number,
+    limit: number,
+  ): Promise<{
+    items: ResponsibleAccessHistoryItemDto[];
+    page: number;
+    limit: number;
+    total: number;
+  }> {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
 
-    const items: ResponsibleAccessHistoryItemDto[] = docs.map((raw) => {
-      const doc = raw as FacialAccessDocument & {
-        readerName?: string;
-        eventCode?: string;
-        eventAction?: string;
-        similarity?: number | null;
-        eventDate?: Date | null;
-        createdAt?: Date;
-      };
-      return {
-        readerName: doc.readerName ?? '',
-        eventCode: doc.eventCode ?? '',
-        eventAction: doc.eventAction ?? '',
-        similarity: doc.similarity ?? null,
-        eventDate: doc.eventDate ? doc.eventDate.toISOString() : null,
-        createdAt: doc.createdAt
-          ? doc.createdAt.toISOString()
-          : new Date().toISOString(),
-      };
-    });
+    const faceId =
+      await responsiblesQueries.getResponsibleFaceId(
+        this.database.db,
+        responsibleId,
+        clientId,
+      );
+    if (faceId == null) {
+      return { items: [], page, limit, total: 0 };
+    }
+
+    const { items, total } = await this.paginateFacialAccessByUserId(
+      clientId,
+      faceId,
+      page,
+      limit,
+    );
 
     return { items, page, limit, total };
   }

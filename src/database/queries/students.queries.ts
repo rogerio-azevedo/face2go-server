@@ -107,3 +107,21 @@ export async function updateStudent(
     .returning();
   return row;
 }
+
+export async function updateStudentFace(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  patch: Partial<
+    Pick<
+      typeof students.$inferInsert,
+      | 'photoKey'
+      | 'faceId'
+      | 'deviceSyncStatus'
+      | 'deviceSyncedAt'
+      | 'deviceSyncError'
+    >
+  >,
+) {
+  return updateStudent(db, id, clientId, patch);
+}
