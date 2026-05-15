@@ -5,4 +5,6 @@ export type ReaderStreamContextLike = {
   clientId: string;
   clientName: string;
   companyId: string;
+  /** `ip:port` do leitor — usado para completar `SnapPath` relativo. */
+  host?: string;
 };

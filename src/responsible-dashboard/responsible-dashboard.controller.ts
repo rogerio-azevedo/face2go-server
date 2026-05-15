@@ -1,4 +1,12 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Query,
+  Res,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -23,6 +31,22 @@ export class ResponsibleDashboardController {
   @ApiOperation({ summary: 'Listar filhos vinculados ao responsável (app)' })
   async listChildren(@CurrentUser() user: JwtPayload) {
     return this.responsibleDashboardService.listChildren(user);
+  }
+
+  @Get('accesses/snapshot')
+  @ApiOperation({
+    summary:
+      'Proxy da foto de captura do evento (URL deve ser de leitor Intelbras da escola)',
+  })
+  async accessSnapshot(
+    @CurrentUser() user: JwtPayload,
+    @Query('url') url: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { body, contentType } =
+      await this.responsibleDashboardService.proxyAccessSnapshot(user, url);
+    res.setHeader('Content-Type', contentType);
+    res.send(body);
   }
 
   @Get('me/accesses')

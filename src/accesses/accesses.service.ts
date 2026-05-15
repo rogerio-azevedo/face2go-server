@@ -16,6 +16,7 @@ import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
 import type { ReaderStreamContextLike } from './reader-stream-context.type';
 import { FacialAccess, type FacialAccessDocument } from './access.schema';
 import {
+  absolutizeReaderSnapshotPath,
   accessControlDataFromRecord,
   dateFromIntelbrasUtc,
   getStreamEventDedupKey,
@@ -36,6 +37,7 @@ export type AccessListItemDto = {
   similarity: number | null;
   eventDate: string | null;
   createdAt: string;
+  snapPath: string | null;
 };
 
 export type AccessListResponse = {
@@ -144,6 +146,26 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    this.logger.debug(
+      `[AccessesService] SnapPath(raw)=${data.SnapPath ? `"${String(data.SnapPath).slice(0, 120)}..."` : 'ausente'} faceId=${faceIdNum} reader=${ctx.name}`,
+    );
+
+    const snapTrimmed =
+      typeof data.SnapPath === 'string' && data.SnapPath.trim()
+        ? data.SnapPath.trim()
+        : null;
+    const snapStored = snapTrimmed
+      ? absolutizeReaderSnapshotPath(snapTrimmed, ctx.host)
+      : null;
+
+    if (!snapStored) {
+      this.logger.warn(
+        `[AccessesService] Nenhum caminho de foto no evento — keys=[${Object.keys(raw as Record<string, unknown>)
+          .sort()
+          .join(', ')}] reader="${ctx.name}"`,
+      );
+    }
+
     let personName: string | null = null;
     try {
       personName =
@@ -173,6 +195,7 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
         eventAction: String(event.action),
         similarity: similarityNum,
         eventDate: eventDate ?? null,
+        snapPath: snapStored,
       });
 
       this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
@@ -277,6 +300,9 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
         createdAt: d.createdAt
           ? d.createdAt.toISOString()
           : new Date().toISOString(),
+        snapPath:
+          (d as FacialAccessDocument & { snapPath?: string | null }).snapPath ??
+          null,
       };
     });
 

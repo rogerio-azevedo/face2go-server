@@ -38,6 +38,10 @@ export class FacialAccess {
 
   @Prop({ type: Date, default: null })
   eventDate: Date | null;
+
+  /** URL/path da captura enviada pelo leitor (Intelbras `SnapPath`). */
+  @Prop({ type: String, default: null })
+  snapPath: string | null;
 }
 
 export const FacialAccessSchema = SchemaFactory.createForClass(FacialAccess);

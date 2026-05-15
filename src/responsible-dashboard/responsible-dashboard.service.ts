@@ -1,15 +1,24 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
+import AxiosDigestAuth from '@mhoc/axios-digest-auth';
 import type { Model } from 'mongoose';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import type { FacialAccessDocument } from '../accesses/access.schema';
 import { FacialAccess } from '../accesses/access.schema';
+import {
+  createReaderCredentialsCipher,
+  type ReaderCredentialsCipher,
+} from '../common/crypto/reader-credentials.cipher';
+import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
+import * as readersQueries from '../database/queries/readers.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -35,16 +44,25 @@ export type ResponsibleAccessHistoryItemDto = {
   similarity: number | null;
   eventDate: string | null;
   createdAt: string;
+  snapPath: string | null;
 };
 
 @Injectable()
 export class ResponsibleDashboardService {
+  private readonly readerCipher: ReaderCredentialsCipher;
+
   constructor(
     @InjectModel(FacialAccess.name)
     private readonly accessModel: Model<FacialAccessDocument>,
     private readonly database: DatabaseService,
     private readonly r2Storage: R2StorageService,
-  ) { }
+    private readonly configService: ConfigService<EnvVars, true>,
+  ) {
+    const key = this.configService.get('READER_ENCRYPTION_KEY', {
+      infer: true,
+    });
+    this.readerCipher = createReaderCredentialsCipher(key);
+  }
 
   private mapFacialDocsToDto(
     docs: unknown[],
@@ -57,6 +75,7 @@ export class ResponsibleDashboardService {
         similarity?: number | null;
         eventDate?: Date | null;
         createdAt?: Date;
+        snapPath?: string | null;
       };
       return {
         readerName: doc.readerName ?? '',
@@ -67,6 +86,10 @@ export class ResponsibleDashboardService {
         createdAt: doc.createdAt
           ? doc.createdAt.toISOString()
           : new Date().toISOString(),
+        snapPath:
+          typeof doc.snapPath === 'string' && doc.snapPath.trim()
+            ? doc.snapPath.trim()
+            : null,
       };
     });
   }
@@ -243,5 +266,121 @@ export class ResponsibleDashboardService {
       clientId,
       responsibleId,
     );
+  }
+
+  /**
+   * Proxy seguro da foto do evento: só permite host que coincide com leitor Intelbras
+   * da mesma escola (`clientId`), usando Digest HTTP com credencial do leitor.
+   */
+  async proxyAccessSnapshot(
+    user: JwtPayload,
+    rawUrl: string,
+  ): Promise<{ body: Buffer; contentType: string }> {
+    const { clientId } = this.assertResponsibleScope(user);
+
+    const snapshotUrl = rawUrl?.trim() ?? '';
+    if (
+      !snapshotUrl.startsWith('http://') &&
+      !snapshotUrl.startsWith('https://')
+    ) {
+      throw new BadRequestException('Somente URLs http(s).');
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(snapshotUrl);
+    } catch {
+      throw new BadRequestException('URL malformada.');
+    }
+
+    if (parsed.username || parsed.password) {
+      throw new BadRequestException('URL não permitida.');
+    }
+
+    const hostLower = parsed.hostname.trim().toLowerCase();
+    const urlPort = parsed.port
+      ? parseInt(parsed.port, 10)
+      : parsed.protocol === 'https:'
+        ? 443
+        : 80;
+
+    const readers = await readersQueries.listReadersForFaceSyncByClient(
+      this.database.db,
+      clientId,
+    );
+
+    const byIp = readers.filter(
+      (r) => r.ip.trim().toLowerCase() === hostLower,
+    );
+    if (byIp.length === 0) {
+      throw new ForbiddenException(
+        'Origem da imagem não autorizada para esta escola.',
+      );
+    }
+
+    let matched =
+      byIp.find((r) => (r.port ?? 80) === urlPort) ?? null;
+    if (!matched && byIp.length === 1) {
+      matched = byIp[0];
+    }
+    if (!matched) {
+      throw new ForbiddenException(
+        'Nenhum leitor corresponde ao host/porta da URL.',
+      );
+    }
+
+    let plainPassword: string;
+    try {
+      plainPassword = this.readerCipher.decrypt(matched.passwordEncrypted);
+    } catch {
+      throw new ForbiddenException('Credencial do leitor indisponível.');
+    }
+
+    const auth = new AxiosDigestAuth({
+      username: matched.username.trim(),
+      password: plainPassword,
+    });
+
+    try {
+      const resp = (await auth.request({
+        method: 'GET',
+        url: snapshotUrl,
+        responseType: 'arraybuffer',
+        timeout: 20_000,
+        validateStatus: () => true,
+      })) as {
+        status?: number;
+        data?: ArrayBuffer;
+        headers?: Record<string, unknown>;
+      };
+
+      const status = resp.status ?? 0;
+      if (status < 200 || status >= 300) {
+        throw new ForbiddenException(`Leitor retornou HTTP ${status}.`);
+      }
+
+      const buf = Buffer.from(resp.data ?? new ArrayBuffer(0));
+      const rawCt = resp.headers?.['content-type'];
+      const contentType =
+        typeof rawCt === 'string'
+          ? rawCt.split(';')[0]?.trim() ?? 'image/jpeg'
+          : 'image/jpeg';
+
+      if (!contentType.startsWith('image/')) {
+        throw new ForbiddenException('Resposta não é uma imagem.');
+      }
+
+      return { body: buf, contentType };
+    } catch (err: unknown) {
+      if (
+        err instanceof BadRequestException ||
+        err instanceof ForbiddenException
+      ) {
+        throw err;
+      }
+      throw new ForbiddenException(
+        `Falha ao obter imagem: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 }
