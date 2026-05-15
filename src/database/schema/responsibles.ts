@@ -36,6 +36,8 @@ export const responsibles = pgTable('responsibles', {
   deviceSyncStatus: deviceSyncStatusEnum('device_sync_status'),
   deviceSyncedAt: timestamp('device_synced_at'),
   deviceSyncError: text('device_sync_error'),
+  /** Token Expo Push (app do responsável). */
+  pushToken: text('push_token'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

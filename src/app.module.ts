@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from './auth/auth.module';
@@ -15,6 +16,7 @@ import { DatabaseModule } from './database/database.module';
 import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { ResponsibleDashboardModule } from './responsible-dashboard/responsible-dashboard.module';
 import { ResponsiblesModule } from './responsibles/responsibles.module';
 import { PermissionsModule } from './permissions/permissions.module';
@@ -32,6 +34,7 @@ import { StudentsModule } from './students/students.module';
       isGlobal: true,
       validate: validateEnv,
     }),
+    EventEmitterModule.forRoot(),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService<EnvVars, true>) => ({
@@ -58,6 +61,7 @@ import { StudentsModule } from './students/students.module';
     FaceEnrollmentModule,
     AccessesModule,
     MeModule,
+    NotificationsModule,
     HealthModule,
   ],
   providers: [

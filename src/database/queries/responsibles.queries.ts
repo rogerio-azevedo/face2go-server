@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { responsibleStudents, responsibles, students } from '../schema';
@@ -89,6 +89,43 @@ export async function getResponsibleByUserId(db: AppDb, userId: string) {
 
 export type ResponsibleInsert = typeof responsibles.$inferInsert;
 
+export async function updateResponsiblePushTokenById(
+  db: AppDb,
+  responsibleId: string,
+  pushToken: string,
+) {
+  const [row] = await db
+    .update(responsibles)
+    .set({ pushToken, updatedAt: new Date() })
+    .where(eq(responsibles.id, responsibleId))
+    .returning({ id: responsibles.id });
+  return row;
+}
+
+export async function findResponsiblesWithPushTokenForStudent(
+  db: AppDb,
+  studentId: string,
+) {
+  return db
+    .select({
+      id: responsibles.id,
+      pushToken: responsibles.pushToken,
+    })
+    .from(responsibleStudents)
+    .innerJoin(
+      responsibles,
+      eq(responsibleStudents.responsibleId, responsibles.id),
+    )
+    .where(
+      and(
+        eq(responsibleStudents.studentId, studentId),
+        eq(responsibles.isActive, true),
+        isNotNull(responsibles.pushToken),
+        ne(responsibles.pushToken, ''),
+      ),
+    );
+}
+
 export async function insertResponsible(
   db: AppDb,
   values: ResponsibleInsert,
@@ -112,6 +149,7 @@ export async function updateResponsible(
       | 'deviceSyncStatus'
       | 'deviceSyncedAt'
       | 'deviceSyncError'
+      | 'pushToken'
       | 'isActive'
     >
   >,

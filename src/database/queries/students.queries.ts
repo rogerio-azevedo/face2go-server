@@ -38,6 +38,28 @@ export async function getStudentById(
   return row;
 }
 
+export async function findStudentByFaceIdAndClientId(
+  db: AppDb,
+  faceId: number,
+  clientId: string,
+) {
+  const [row] = await db
+    .select({
+      id: students.id,
+      name: students.name,
+    })
+    .from(students)
+    .where(
+      and(
+        eq(students.clientId, clientId),
+        eq(students.faceId, faceId),
+        eq(students.isActive, true),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
 export async function listStudentIdsForResponsible(
   db: AppDb,
   responsibleId: string,

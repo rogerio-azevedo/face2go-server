@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { and, eq } from 'drizzle-orm';
 import type { Model } from 'mongoose';
@@ -11,6 +12,7 @@ import type { Model } from 'mongoose';
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
+import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
 import type { ReaderStreamContextLike } from './reader-stream-context.type';
 import { FacialAccess, type FacialAccessDocument } from './access.schema';
 import {
@@ -56,6 +58,7 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
     @InjectModel(FacialAccess.name)
     private readonly accessModel: Model<FacialAccessDocument>,
     private readonly database: DatabaseService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   onModuleInit(): void {
@@ -158,7 +161,7 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
     const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);
 
     try {
-      await this.accessModel.create({
+      const doc = await this.accessModel.create({
         companyId: ctx.companyId,
         readerId: ctx.id,
         readerName: ctx.name,
@@ -169,6 +172,15 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
         eventCode: event.code,
         eventAction: String(event.action),
         similarity: similarityNum,
+        eventDate: eventDate ?? null,
+      });
+
+      this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
+        accessId: String(doc._id),
+        faceId: faceIdNum,
+        clientId: ctx.clientId,
+        personName,
+        readerName: ctx.name,
         eventDate: eventDate ?? null,
       });
     } catch (err: unknown) {
