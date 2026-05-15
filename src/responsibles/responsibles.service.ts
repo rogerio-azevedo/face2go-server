@@ -8,20 +8,20 @@ import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import * as parentsQueries from '../database/queries/parents.queries';
+import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import {
-  createParentSchema,
-  linkParentStudentSchema,
-  updateParentSchema,
-} from '../validation/parents.schema';
+  createResponsibleSchema,
+  linkResponsibleStudentSchema,
+  updateResponsibleSchema,
+} from '../validation/responsibles.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 
 @Injectable()
-export class ParentsService {
+export class ResponsiblesService {
   constructor(
     private readonly database: DatabaseService,
     private readonly schoolAccess: SchoolAccessService,
@@ -29,14 +29,17 @@ export class ParentsService {
 
   async list(user: JwtPayload, clientId: string) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    return parentsQueries.listParentsByClient(this.database.db, clientId);
+    return responsiblesQueries.listResponsiblesByClient(
+      this.database.db,
+      clientId,
+    );
   }
 
-  async getById(user: JwtPayload, clientId: string, parentId: string) {
+  async getById(user: JwtPayload, clientId: string, responsibleId: string) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    const row = await parentsQueries.getParentById(
+    const row = await responsiblesQueries.getResponsibleById(
       this.database.db,
-      parentId,
+      responsibleId,
       clientId,
     );
     if (!row) {
@@ -47,7 +50,7 @@ export class ParentsService {
 
   async create(user: JwtPayload, clientId: string, body: unknown) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    const parsed = createParentSchema.safeParse(body);
+    const parsed = createResponsibleSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
@@ -73,7 +76,7 @@ export class ParentsService {
         isActive: true,
       });
 
-      return parentsQueries.insertParent(this.database.db, {
+      return responsiblesQueries.insertResponsible(this.database.db, {
         clientId,
         userId,
         name: d.name,
@@ -92,11 +95,11 @@ export class ParentsService {
   async update(
     user: JwtPayload,
     clientId: string,
-    parentId: string,
+    responsibleId: string,
     body: unknown,
   ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    const parsed = updateParentSchema.safeParse(body);
+    const parsed = updateResponsibleSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
@@ -111,9 +114,9 @@ export class ParentsService {
       throw new BadRequestException('Nada para atualizar.');
     }
 
-    const existing = await parentsQueries.getParentById(
+    const existing = await responsiblesQueries.getResponsibleById(
       this.database.db,
-      parentId,
+      responsibleId,
       clientId,
     );
     if (!existing) {
@@ -133,9 +136,9 @@ export class ParentsService {
         .where(eq(users.id, existing.userId));
     }
 
-    const updated = await parentsQueries.updateParent(
+    const updated = await responsiblesQueries.updateResponsible(
       this.database.db,
-      parentId,
+      responsibleId,
       clientId,
       {
         ...(d.name !== undefined ? { name: d.name } : {}),
@@ -162,20 +165,20 @@ export class ParentsService {
   async listLinkedStudents(
     user: JwtPayload,
     clientId: string,
-    parentId: string,
+    responsibleId: string,
   ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    const parent = await parentsQueries.getParentById(
+    const responsible = await responsiblesQueries.getResponsibleById(
       this.database.db,
-      parentId,
+      responsibleId,
       clientId,
     );
-    if (!parent) {
+    if (!responsible) {
       throw new NotFoundException('Responsável não encontrado.');
     }
-    return parentsQueries.listParentStudentLinksWithStudents(
+    return responsiblesQueries.listResponsibleStudentLinksWithStudents(
       this.database.db,
-      parentId,
+      responsibleId,
       clientId,
     );
   }
@@ -183,22 +186,22 @@ export class ParentsService {
   async linkStudent(
     user: JwtPayload,
     clientId: string,
-    parentId: string,
+    responsibleId: string,
     body: unknown,
   ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    const parsed = linkParentStudentSchema.safeParse(body);
+    const parsed = linkResponsibleStudentSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
     const d = parsed.data;
 
-    const parent = await parentsQueries.getParentById(
+    const responsible = await responsiblesQueries.getResponsibleById(
       this.database.db,
-      parentId,
+      responsibleId,
       clientId,
     );
-    if (!parent) {
+    if (!responsible) {
       throw new NotFoundException('Responsável não encontrado.');
     }
 
@@ -212,12 +215,15 @@ export class ParentsService {
     }
 
     try {
-      return parentsQueries.insertParentStudentLink(this.database.db, {
-        parentId,
-        studentId: d.studentId,
-        relationshipType: d.relationshipType,
-        isAuthorizedPickup: d.isAuthorizedPickup,
-      });
+      return responsiblesQueries.insertResponsibleStudentLink(
+        this.database.db,
+        {
+          responsibleId,
+          studentId: d.studentId,
+          relationshipType: d.relationshipType,
+          isAuthorizedPickup: d.isAuthorizedPickup,
+        },
+      );
     } catch {
       throw new ConflictException(
         'Este vínculo já existe ou não pôde ser criado.',
@@ -228,21 +234,21 @@ export class ParentsService {
   async unlinkStudent(
     user: JwtPayload,
     clientId: string,
-    parentId: string,
+    responsibleId: string,
     studentId: string,
   ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    const parent = await parentsQueries.getParentById(
+    const responsible = await responsiblesQueries.getResponsibleById(
       this.database.db,
-      parentId,
+      responsibleId,
       clientId,
     );
-    if (!parent) {
+    if (!responsible) {
       throw new NotFoundException('Responsável não encontrado.');
     }
-    const removed = await parentsQueries.deleteParentStudentLink(
+    const removed = await responsiblesQueries.deleteResponsibleStudentLink(
       this.database.db,
-      parentId,
+      responsibleId,
       studentId,
     );
     if (!removed) {

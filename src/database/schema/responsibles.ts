@@ -14,16 +14,12 @@ import { users } from './auth';
 import { clients } from './clients';
 import { students } from './students';
 
-export const parentRelationshipTypeEnum = pgEnum('parent_relationship_type', [
-  'father',
-  'mother',
-  'grandfather',
-  'grandmother',
-  'guardian',
-  'other',
-]);
+export const responsibleRelationshipTypeEnum = pgEnum(
+  'responsible_relationship_type',
+  ['father', 'mother', 'grandfather', 'grandmother', 'guardian', 'other'],
+);
 
-export const parents = pgTable('parents', {
+export const responsibles = pgTable('responsibles', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: uuid('client_id')
     .notNull()
@@ -37,49 +33,55 @@ export const parents = pgTable('parents', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const parentStudents = pgTable(
-  'parent_students',
+export const responsibleStudents = pgTable(
+  'responsible_students',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    parentId: uuid('parent_id')
+    responsibleId: uuid('responsible_id')
       .notNull()
-      .references(() => parents.id, { onDelete: 'cascade' }),
+      .references(() => responsibles.id, { onDelete: 'cascade' }),
     studentId: uuid('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),
-    relationshipType: parentRelationshipTypeEnum('relationship_type')
+    relationshipType: responsibleRelationshipTypeEnum('relationship_type')
       .notNull()
       .default('other'),
     isAuthorizedPickup: boolean('is_authorized_pickup').default(true).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (t) => [
-    uniqueIndex('parent_students_parent_student_unique').on(
-      t.parentId,
+    uniqueIndex('responsible_students_responsible_student_unique').on(
+      t.responsibleId,
       t.studentId,
     ),
   ],
 );
 
-export const parentsRelations = relations(parents, ({ one, many }) => ({
-  client: one(clients, {
-    fields: [parents.clientId],
-    references: [clients.id],
+export const responsiblesRelations = relations(
+  responsibles,
+  ({ one, many }) => ({
+    client: one(clients, {
+      fields: [responsibles.clientId],
+      references: [clients.id],
+    }),
+    user: one(users, {
+      fields: [responsibles.userId],
+      references: [users.id],
+    }),
+    links: many(responsibleStudents),
   }),
-  user: one(users, {
-    fields: [parents.userId],
-    references: [users.id],
-  }),
-  links: many(parentStudents),
-}));
+);
 
-export const parentStudentsRelations = relations(parentStudents, ({ one }) => ({
-  parent: one(parents, {
-    fields: [parentStudents.parentId],
-    references: [parents.id],
+export const responsibleStudentsRelations = relations(
+  responsibleStudents,
+  ({ one }) => ({
+    responsible: one(responsibles, {
+      fields: [responsibleStudents.responsibleId],
+      references: [responsibles.id],
+    }),
+    student: one(students, {
+      fields: [responsibleStudents.studentId],
+      references: [students.id],
+    }),
   }),
-  student: one(students, {
-    fields: [parentStudents.studentId],
-    references: [students.id],
-  }),
-}));
+);

@@ -14,7 +14,8 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
-import { ParentsModule } from './parents/parents.module';
+import { ResponsibleDashboardModule } from './responsible-dashboard/responsible-dashboard.module';
+import { ResponsiblesModule } from './responsibles/responsibles.module';
 import { PermissionsModule } from './permissions/permissions.module';
 import { ReadersModule } from './readers/readers.module';
 import { RegistrationsModule } from './registrations/registrations.module';
@@ -49,7 +50,8 @@ import { StudentsModule } from './students/students.module';
     SchoolClassesModule,
     ShiftsModule,
     StudentsModule,
-    ParentsModule,
+    ResponsiblesModule,
+    ResponsibleDashboardModule,
     AccessesModule,
     MeModule,
     HealthModule,

@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { parentStudents, students } from '../schema';
+import { responsibleStudents, students } from '../schema';
 
 export async function listStudentsByClient(db: AppDb, clientId: string) {
   return db
@@ -38,23 +38,23 @@ export async function getStudentById(
   return row;
 }
 
-export async function listStudentIdsForParent(
+export async function listStudentIdsForResponsible(
   db: AppDb,
-  parentId: string,
+  responsibleId: string,
 ): Promise<string[]> {
   const rows = await db
-    .select({ studentId: parentStudents.studentId })
-    .from(parentStudents)
-    .where(eq(parentStudents.parentId, parentId));
+    .select({ studentId: responsibleStudents.studentId })
+    .from(responsibleStudents)
+    .where(eq(responsibleStudents.responsibleId, responsibleId));
   return rows.map((r) => r.studentId);
 }
 
-export async function listStudentsByParent(
+export async function listStudentsByResponsible(
   db: AppDb,
   clientId: string,
-  parentId: string,
+  responsibleId: string,
 ) {
-  const ids = await listStudentIdsForParent(db, parentId);
+  const ids = await listStudentIdsForResponsible(db, responsibleId);
   if (ids.length === 0) return [];
   return db
     .select()

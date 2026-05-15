@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const parentRelationshipSchema = z.enum([
+export const responsibleRelationshipSchema = z.enum([
   'father',
   'mother',
   'grandfather',
@@ -9,7 +9,7 @@ export const parentRelationshipSchema = z.enum([
   'other',
 ]);
 
-export const createParentSchema = z.object({
+export const createResponsibleSchema = z.object({
   email: z.email('E-mail inválido.'),
   password: z.string().min(8, 'Senha deve ter pelo menos 8 caracteres.').max(128),
   name: z.string().trim().min(1, 'Informe o nome.').max(255),
@@ -18,7 +18,7 @@ export const createParentSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
-export const updateParentSchema = z.object({
+export const updateResponsibleSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   phone: z.string().trim().max(32).nullable().optional(),
   document: z.string().trim().max(32).nullable().optional(),
@@ -30,8 +30,8 @@ export const updateParentSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export const linkParentStudentSchema = z.object({
+export const linkResponsibleStudentSchema = z.object({
   studentId: z.uuid(),
-  relationshipType: parentRelationshipSchema,
+  relationshipType: responsibleRelationshipSchema,
   isAuthorizedPickup: z.boolean().optional().default(true),
 });

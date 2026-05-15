@@ -8,5 +8,5 @@ export * from './faces';
 export * from './registrations';
 export * from './schools';
 export * from './students';
-export * from './parents';
+export * from './responsibles';
 export * from './shifts';
