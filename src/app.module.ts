@@ -17,6 +17,7 @@ import { MeModule } from './me/me.module';
 import { ResponsibleDashboardModule } from './responsible-dashboard/responsible-dashboard.module';
 import { ResponsiblesModule } from './responsibles/responsibles.module';
 import { PermissionsModule } from './permissions/permissions.module';
+import { PickupAuthorizationsModule } from './pickup-authorizations/pickup-authorizations.module';
 import { ReadersModule } from './readers/readers.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { SchoolClassesModule } from './school-classes/school-classes.module';
@@ -51,6 +52,7 @@ import { StudentsModule } from './students/students.module';
     ShiftsModule,
     StudentsModule,
     ResponsiblesModule,
+    PickupAuthorizationsModule,
     ResponsibleDashboardModule,
     AccessesModule,
     MeModule,

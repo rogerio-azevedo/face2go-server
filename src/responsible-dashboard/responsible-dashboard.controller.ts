@@ -25,6 +25,15 @@ export class ResponsibleDashboardController {
     return this.responsibleDashboardService.listChildren(user);
   }
 
+  @Get('other-responsibles')
+  @ApiOperation({
+    summary:
+      'Listar outros responsáveis da escola (para autorizar retirada por cadastrado)',
+  })
+  async listPeerResponsibles(@CurrentUser() user: JwtPayload) {
+    return this.responsibleDashboardService.listPeerResponsibles(user);
+  }
+
   @Get('children/:studentId/accesses')
   @ApiOperation({ summary: 'Histórico de acessos faciais do aluno vinculado' })
   async listAccesses(

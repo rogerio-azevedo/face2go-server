@@ -182,4 +182,14 @@ export class ResponsibleDashboardService {
 
     return { items, page, limit, total };
   }
+
+  /** Outros responsáveis ativos da mesma escola (ex.: autorizar retirada). */
+  async listPeerResponsibles(user: JwtPayload) {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    return responsiblesQueries.listActiveResponsiblePeersExcept(
+      this.database.db,
+      clientId,
+      responsibleId,
+    );
+  }
 }

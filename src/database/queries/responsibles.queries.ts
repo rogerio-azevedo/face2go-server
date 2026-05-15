@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { responsibleStudents, responsibles, students } from '../schema';
@@ -8,6 +8,27 @@ export async function listResponsiblesByClient(db: AppDb, clientId: string) {
     .select()
     .from(responsibles)
     .where(eq(responsibles.clientId, clientId))
+    .orderBy(asc(responsibles.name));
+}
+
+export async function listActiveResponsiblePeersExcept(
+  db: AppDb,
+  clientId: string,
+  excludeResponsibleId: string,
+) {
+  return db
+    .select({
+      id: responsibles.id,
+      name: responsibles.name,
+    })
+    .from(responsibles)
+    .where(
+      and(
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.isActive, true),
+        ne(responsibles.id, excludeResponsibleId),
+      ),
+    )
     .orderBy(asc(responsibles.name));
 }
 
