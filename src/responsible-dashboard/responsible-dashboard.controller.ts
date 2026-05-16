@@ -49,6 +49,52 @@ export class ResponsibleDashboardController {
     res.send(body);
   }
 
+  @Get('accesses/all')
+  @ApiOperation({
+    summary:
+      'Histórico de acessos de todo o núcleo (responsáveis e alunos com face no household)',
+  })
+  async listAllHouseholdAccesses(
+    @CurrentUser() user: JwtPayload,
+    @Query('page') pageStr?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(limitStr ?? '10', 10) || 10),
+    );
+    return this.responsibleDashboardService.listAllHouseholdAccesses(
+      user,
+      page,
+      limit,
+    );
+  }
+
+  @Get('accesses/peer/:responsibleId')
+  @ApiOperation({
+    summary:
+      'Histórico de acessos de um co-responsável do mesmo núcleo (mesmos alunos)',
+  })
+  async listHouseholdPeerAccesses(
+    @CurrentUser() user: JwtPayload,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+    @Query('page') pageStr?: string,
+    @Query('limit') limitStr?: string,
+  ) {
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const limit = Math.min(
+      50,
+      Math.max(1, parseInt(limitStr ?? '10', 10) || 10),
+    );
+    return this.responsibleDashboardService.listAccessesForHouseholdResponsible(
+      user,
+      responsibleId,
+      page,
+      limit,
+    );
+  }
+
   @Get('me/accesses')
   @ApiOperation({ summary: 'Histórico de acessos faciais do próprio responsável (face cadastrada na escola)' })
   async listOwnAccesses(

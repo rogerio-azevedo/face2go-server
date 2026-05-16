@@ -42,6 +42,10 @@ export class FacialAccess {
   /** URL/path da captura enviada pelo leitor (Intelbras `SnapPath`). */
   @Prop({ type: String, default: null })
   snapPath: string | null;
+
+  /** Chave no R2 da foto capturada (stream SnapManager). */
+  @Prop({ type: String, default: null })
+  snapR2Key: string | null;
 }
 
 export const FacialAccessSchema = SchemaFactory.createForClass(FacialAccess);

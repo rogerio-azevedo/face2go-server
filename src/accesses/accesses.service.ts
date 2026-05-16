@@ -7,21 +7,22 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { and, eq } from 'drizzle-orm';
+import { randomBytes } from 'node:crypto';
 import type { Model } from 'mongoose';
 
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
+import type { VideoEvent } from '../face-listener/video-stream.parser';
+import { R2StorageService } from '../storage/r2-storage.service';
 import type { ReaderStreamContextLike } from './reader-stream-context.type';
 import { FacialAccess, type FacialAccessDocument } from './access.schema';
 import {
-  absolutizeReaderSnapshotPath,
   accessControlDataFromRecord,
   dateFromIntelbrasUtc,
   getStreamEventDedupKey,
 } from './stream-event.util';
-import type { VideoEvent } from '../face-listener/video-stream.parser';
 
 export type AccessListItemDto = {
   id: string;
@@ -61,6 +62,7 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
     private readonly accessModel: Model<FacialAccessDocument>,
     private readonly database: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly r2Storage: R2StorageService,
   ) {}
 
   onModuleInit(): void {
@@ -147,24 +149,8 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.debug(
-      `[AccessesService] SnapPath(raw)=${data.SnapPath ? `"${String(data.SnapPath).slice(0, 120)}..."` : 'ausente'} faceId=${faceIdNum} reader=${ctx.name}`,
+      `[AccessesService] SnapPath="${data.SnapPath ?? 'ausente'}" faceId=${faceIdNum} reader=${ctx.name}`,
     );
-
-    const snapTrimmed =
-      typeof data.SnapPath === 'string' && data.SnapPath.trim()
-        ? data.SnapPath.trim()
-        : null;
-    const snapStored = snapTrimmed
-      ? absolutizeReaderSnapshotPath(snapTrimmed, ctx.host)
-      : null;
-
-    if (!snapStored) {
-      this.logger.warn(
-        `[AccessesService] Nenhum caminho de foto no evento — keys=[${Object.keys(raw as Record<string, unknown>)
-          .sort()
-          .join(', ')}] reader="${ctx.name}"`,
-      );
-    }
 
     let personName: string | null = null;
     try {
@@ -195,7 +181,10 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
         eventAction: String(event.action),
         similarity: similarityNum,
         eventDate: eventDate ?? null,
-        snapPath: snapStored,
+        snapPath:
+          typeof data.SnapPath === 'string' && data.SnapPath.trim()
+            ? data.SnapPath.trim()
+            : null,
       });
 
       this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
@@ -209,6 +198,136 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
     } catch (err: unknown) {
       this.logger.error(
         `Mongo create facial_access falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  /**
+   * Persiste acesso facial a partir do stream SnapManager (texto + JPEG inline),
+   * enviando a imagem para o R2 quando disponível.
+   */
+  async recordSnapManagerAccess(
+    event: VideoEvent,
+    ctx: ReaderStreamContextLike,
+    imageJpeg: Buffer | null,
+  ): Promise<void> {
+    const action = String(event.action).toLowerCase();
+    const code = event.code;
+    const isDoorFace = code === '_DoorFace_';
+    const isAccessControl = code === 'AccessControl';
+
+    if (!isDoorFace && !isAccessControl) {
+      return;
+    }
+    if (isDoorFace && action !== 'pulse') {
+      return;
+    }
+    if (isAccessControl && action !== 'pulse' && action !== 'start') {
+      return;
+    }
+
+    const raw = event.data;
+    if (!raw || typeof raw !== 'object') {
+      return;
+    }
+
+    const data = accessControlDataFromRecord(raw as Record<string, unknown>);
+    const userId = data.UserID;
+    if (userId === undefined || userId === null || String(userId) === '') {
+      return;
+    }
+    if (data.Status != null && data.Status !== 1) {
+      return;
+    }
+
+    const rawSim = data.Similarity;
+    const similarityNum =
+      typeof rawSim === 'number'
+        ? rawSim
+        : rawSim != null && String(rawSim).trim() !== ''
+          ? Number(rawSim)
+          : NaN;
+    if (!Number.isFinite(similarityNum) || similarityNum <= 0) {
+      return;
+    }
+
+    const streamKey = getStreamEventDedupKey(ctx.id, data);
+    if (streamKey !== null) {
+      if (this.processedEventKeys.has(streamKey)) {
+        return;
+      }
+      this.processedEventKeys.set(streamKey, Date.now());
+    }
+
+    const faceIdNum = Number(userId);
+    if (!Number.isFinite(faceIdNum)) {
+      return;
+    }
+
+    let snapR2Key: string | null = null;
+    if (imageJpeg && imageJpeg.length > 0) {
+      const key = `accesses/${ctx.companyId}/${Date.now()}-${faceIdNum}-${randomBytes(4).toString('hex')}.jpg`;
+      try {
+        await this.r2Storage.putObject(key, imageJpeg, 'image/jpeg');
+        snapR2Key = key;
+      } catch (err: unknown) {
+        this.logger.warn(
+          `[AccessesService] Upload snapshot R2 falhou (faceId=${faceIdNum}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    const snapPathDevice =
+      typeof data.SnapPath === 'string' && data.SnapPath.trim()
+        ? data.SnapPath.trim()
+        : null;
+    const snapPath = snapR2Key ? null : snapPathDevice;
+
+    let personName: string | null = null;
+    try {
+      personName =
+        await registrationsQueries.findApprovedRegistrationNameByFaceId(
+          this.database.db,
+          ctx.clientId,
+          faceIdNum,
+        );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Lookup personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);
+
+    try {
+      const doc = await this.accessModel.create({
+        companyId: ctx.companyId,
+        readerId: ctx.id,
+        readerName: ctx.name,
+        clientId: ctx.clientId,
+        clientName: ctx.clientName,
+        userId: faceIdNum,
+        personName,
+        eventCode: event.code,
+        eventAction: String(event.action),
+        similarity: similarityNum,
+        eventDate: eventDate ?? null,
+        snapPath,
+        snapR2Key,
+      });
+
+      this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
+        accessId: String(doc._id),
+        faceId: faceIdNum,
+        clientId: ctx.clientId,
+        personName,
+        readerName: ctx.name,
+        eventDate: eventDate ?? null,
+      });
+    } catch (err: unknown) {
+      this.logger.error(
+        `Mongo create facial_access (snap) falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw err;
     }

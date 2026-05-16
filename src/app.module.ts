@@ -27,6 +27,7 @@ import { SchoolClassesModule } from './school-classes/school-classes.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { StorageModule } from './storage/storage.module';
 import { StudentsModule } from './students/students.module';
+import { VehiclesModule } from './vehicles/vehicles.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { StudentsModule } from './students/students.module';
     StudentsModule,
     ResponsiblesModule,
     PickupAuthorizationsModule,
+    VehiclesModule,
     ResponsibleDashboardModule,
     FaceEnrollmentModule,
     AccessesModule,

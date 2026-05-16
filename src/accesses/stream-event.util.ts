@@ -30,97 +30,6 @@ function partInfoSequence(data: Record<string, unknown>): number | undefined {
   return typeof seq === 'number' ? seq : undefined;
 }
 
-function pickTrimmedString(v: unknown): string | null {
-  if (typeof v !== 'string') return null;
-  const s = v.trim();
-  return s.length > 0 ? s : null;
-}
-
-/**
- * Extrai URL ou caminho da captura do payload do evento (nomes variam por firmware Intelbras/Dahua).
- */
-export function extractSnapshotPathFromPayload(
-  data: Record<string, unknown>,
-): string | null {
-  const directKeys = [
-    'SnapPath',
-    'snapPath',
-    'PictureURL',
-    'PictureUrl',
-    'pictureURL',
-    'pictureUrl',
-    'FacePicURL',
-    'FacePictureURL',
-    'FaceSnapPath',
-    'SnapURL',
-    'snapURL',
-    'FaceImagePath',
-    'FaceImageURL',
-    'CapturePicPath',
-    'ImagePath',
-    'FacePicturePath',
-    'BackgroundImage',
-    'FaceBackgroundImage',
-  ];
-
-  for (const k of directKeys) {
-    const s = pickTrimmedString(data[k]);
-    if (s) return s;
-  }
-
-  const nestedContainers = [
-    'Picture',
-    'FacePictureInfo',
-    'SnapInfo',
-    'FaceSnap',
-    'FaceImage',
-    'FacePicture',
-  ];
-  const nestedKeys = [
-    'URL',
-    'Url',
-    'url',
-    'FilePath',
-    'filePath',
-    'Path',
-    'path',
-    'SnapPath',
-    'Address',
-    'File',
-  ];
-
-  for (const c of nestedContainers) {
-    const obj = data[c];
-    if (!obj || typeof obj !== 'object') continue;
-    const rec = obj as Record<string, unknown>;
-    for (const nk of nestedKeys) {
-      const s = pickTrimmedString(rec[nk]);
-      if (s) return s;
-    }
-  }
-
-  return null;
-}
-
-/** Caminho relativo do leitor → URL HTTP consumível pelo proxy (`http://host:port/...`). */
-export function absolutizeReaderSnapshotPath(
-  pathOrUrl: string,
-  readerHost: string | undefined,
-): string {
-  const t = pathOrUrl.trim();
-  if (!t || /^https?:\/\//i.test(t)) {
-    return t;
-  }
-  const h = readerHost?.trim();
-  if (!h) {
-    return t;
-  }
-  if (t.startsWith('/')) {
-    return `http://${h}${t}`;
-  }
-  return `http://${h}/${t}`;
-}
-
 export function accessControlDataFromRecord(
   data: Record<string, unknown>,
 ): AccessControlEventData {
@@ -151,16 +60,12 @@ export function accessControlDataFromRecord(
     Similarity: data.Similarity as number | undefined,
     Type: data.Type as string | undefined,
     UTC:
-      (data.UTC as number | undefined) ??
-      (data.RealUTC as number | undefined),
+      (data.UTC as number | undefined) ?? (data.RealUTC as number | undefined),
     UserID: data.UserID as string | number | undefined,
     UserType: data.UserType as number | undefined,
     FaceIndex: data.FaceIndex as number | undefined,
     FeatureId: data.FeatureId as number | undefined,
-    SnapPath:
-      extractSnapshotPathFromPayload(data) ??
-      pickTrimmedString(data.SnapPath) ??
-      undefined,
+    SnapPath: data.SnapPath as string | undefined,
     partSequence: partInfoSequence(data),
     recNo,
   };

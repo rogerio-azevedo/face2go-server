@@ -134,6 +134,13 @@
       "when": 1778880000000,
       "tag": "0018_responsibles_push_token",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778890000000,
+      "tag": "0019_vehicles",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,14 @@
-import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { responsibleStudents, responsibles, students } from '../schema';
+import {
+  responsibleStudents,
+  responsibles,
+  schoolClasses,
+  students,
+} from '../schema';
+
+import * as studentsQueries from './students.queries';
 
 export async function listResponsiblesByClient(db: AppDb, clientId: string) {
   return db
@@ -9,6 +16,104 @@ export async function listResponsiblesByClient(db: AppDb, clientId: string) {
     .from(responsibles)
     .where(eq(responsibles.clientId, clientId))
     .orderBy(asc(responsibles.name));
+}
+
+/** Responsáveis que compartilham pelo menos um aluno com `myResponsibleId` (inclui o próprio). */
+export async function listHouseholdResponsibleIds(
+  db: AppDb,
+  myResponsibleId: string,
+  clientId: string,
+): Promise<string[]> {
+  const studentIds = await studentsQueries.listStudentIdsForResponsible(
+    db,
+    myResponsibleId,
+  );
+  if (studentIds.length === 0) {
+    return [myResponsibleId];
+  }
+
+  const rows = await db
+    .select({ id: responsibleStudents.responsibleId })
+    .from(responsibleStudents)
+    .innerJoin(
+      responsibles,
+      eq(responsibleStudents.responsibleId, responsibles.id),
+    )
+    .where(
+      and(
+        inArray(responsibleStudents.studentId, studentIds),
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.isActive, true),
+      ),
+    );
+
+  const ids = [...new Set(rows.map((r) => r.id))];
+  return ids.includes(myResponsibleId) ? ids : [...ids, myResponsibleId];
+}
+
+export type HouseholdDriverOptionRow = {
+  id: string;
+  name: string;
+  relationshipType: string;
+};
+
+/** Condutores elegíveis: você + co-responsáveis pelos mesmos alunos (mesma escola). */
+export async function listHouseholdDriverOptions(
+  db: AppDb,
+  myResponsibleId: string,
+  clientId: string,
+): Promise<HouseholdDriverOptionRow[]> {
+  const studentIds = await studentsQueries.listStudentIdsForResponsible(
+    db,
+    myResponsibleId,
+  );
+  if (studentIds.length === 0) {
+    const self = await getResponsibleById(db, myResponsibleId, clientId);
+    if (!self) {
+      return [];
+    }
+    return [
+      {
+        id: self.id,
+        name: self.name,
+        relationshipType: 'other',
+      },
+    ];
+  }
+
+  const rows = await db
+    .select({
+      id: responsibles.id,
+      name: responsibles.name,
+      relationshipType: responsibleStudents.relationshipType,
+    })
+    .from(responsibleStudents)
+    .innerJoin(
+      responsibles,
+      eq(responsibleStudents.responsibleId, responsibles.id),
+    )
+    .where(
+      and(
+        inArray(responsibleStudents.studentId, studentIds),
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.isActive, true),
+      ),
+    )
+    .orderBy(asc(responsibles.name), asc(responsibleStudents.relationshipType));
+
+  const byId = new Map<string, HouseholdDriverOptionRow>();
+  for (const r of rows) {
+    if (!byId.has(r.id)) {
+      byId.set(r.id, {
+        id: r.id,
+        name: r.name,
+        relationshipType: r.relationshipType,
+      });
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, 'pt-BR'),
+  );
 }
 
 export async function listActiveResponsiblePeersExcept(
@@ -214,9 +319,14 @@ export async function listResponsibleStudentLinksWithStudents(
     .select({
       link: responsibleStudents,
       student: students,
+      schoolClass: {
+        name: schoolClasses.name,
+        year: schoolClasses.year,
+      },
     })
     .from(responsibleStudents)
     .innerJoin(students, eq(responsibleStudents.studentId, students.id))
+    .leftJoin(schoolClasses, eq(students.classId, schoolClasses.id))
     .where(
       and(
         eq(responsibleStudents.responsibleId, responsibleId),

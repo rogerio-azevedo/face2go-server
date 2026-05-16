@@ -10,4 +10,5 @@ export * from './schools';
 export * from './students';
 export * from './responsibles';
 export * from './pickup-authorizations';
+export * from './vehicles';
 export * from './shifts';

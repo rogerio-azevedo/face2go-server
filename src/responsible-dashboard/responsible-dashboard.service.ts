@@ -18,6 +18,7 @@ import {
 } from '../common/crypto/reader-credentials.cipher';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
+import * as clientsQueries from '../database/queries/clients.queries';
 import * as readersQueries from '../database/queries/readers.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
@@ -30,8 +31,14 @@ type LastAccessDto = {
 };
 
 export type ResponsibleChildSummaryDto = {
-  studentId: string;
+  kind: 'student' | 'responsible';
+  /** Preenchido quando `kind === 'student'`. */
+  studentId: string | null;
+  /** Preenchido quando `kind === 'responsible'` (co-responsável do mesmo núcleo). */
+  responsibleId: string | null;
   name: string;
+  /** Turma formatada para exibição (nome + ano), ex.: `3º A – 2026`. */
+  className: string | null;
   photoUrl: string | null;
   relationshipType: string;
   lastAccess: LastAccessDto | null;
@@ -45,6 +52,9 @@ export type ResponsibleAccessHistoryItemDto = {
   eventDate: string | null;
   createdAt: string;
   snapPath: string | null;
+  /** Quem passou no leitor (`userId` / face), quando resolvido (ex.: lista "Todos"). */
+  subjectName: string | null;
+  subjectPhotoUrl: string | null;
 };
 
 @Injectable()
@@ -64,11 +74,24 @@ export class ResponsibleDashboardService {
     this.readerCipher = createReaderCredentialsCipher(key);
   }
 
-  private mapFacialDocsToDto(
+  /** Minutos a somar ao instante UTC para o horário local da escola (ex.: −240 = UTC−4). */
+  private async schoolTimezoneOffsetMinutes(clientId: string): Promise<number> {
+    const row = await clientsQueries.getClientByIdOnly(
+      this.database.db,
+      clientId,
+    );
+    return row?.timezoneOffsetMinutes ?? 0;
+  }
+
+  private async mapFacialDocsToDto(
     docs: unknown[],
-  ): ResponsibleAccessHistoryItemDto[] {
-    return docs.map((raw) => {
+    subjectByFaceId?: Map<number, { name: string; photoKey: string | null }>,
+  ): Promise<ResponsibleAccessHistoryItemDto[]> {
+    const out: ResponsibleAccessHistoryItemDto[] = [];
+    for (const raw of docs) {
       const doc = raw as FacialAccessDocument & {
+        userId?: number;
+        personName?: string | null;
         readerName?: string;
         eventCode?: string;
         eventAction?: string;
@@ -76,8 +99,44 @@ export class ResponsibleDashboardService {
         eventDate?: Date | null;
         createdAt?: Date;
         snapPath?: string | null;
+        snapR2Key?: string | null;
       };
-      return {
+
+      let snapPath: string | null =
+        typeof doc.snapPath === 'string' && doc.snapPath.trim()
+          ? doc.snapPath.trim()
+          : null;
+
+      const snapR2Key =
+        typeof doc.snapR2Key === 'string' && doc.snapR2Key.trim()
+          ? doc.snapR2Key.trim()
+          : null;
+
+      if (snapR2Key) {
+        try {
+          snapPath = await this.r2Storage.createPresignedGetUrl(snapR2Key);
+        } catch {
+          /* mantém snapPath do leitor se presign falhar */
+        }
+      }
+
+      let subjectName: string | null = null;
+      let subjectPhotoUrl: string | null = null;
+      const uid = typeof doc.userId === 'number' ? doc.userId : null;
+      if (subjectByFaceId && uid != null && subjectByFaceId.has(uid)) {
+        const s = subjectByFaceId.get(uid)!;
+        subjectName = s.name;
+        subjectPhotoUrl = await this.optionalPhotoUrl(s.photoKey);
+      }
+      const pn =
+        typeof doc.personName === 'string' && doc.personName.trim()
+          ? doc.personName.trim()
+          : '';
+      if (!subjectName && pn) {
+        subjectName = pn;
+      }
+
+      out.push({
         readerName: doc.readerName ?? '',
         eventCode: doc.eventCode ?? '',
         eventAction: doc.eventAction ?? '',
@@ -86,12 +145,12 @@ export class ResponsibleDashboardService {
         createdAt: doc.createdAt
           ? doc.createdAt.toISOString()
           : new Date().toISOString(),
-        snapPath:
-          typeof doc.snapPath === 'string' && doc.snapPath.trim()
-            ? doc.snapPath.trim()
-            : null,
-      };
-    });
+        snapPath,
+        subjectName,
+        subjectPhotoUrl,
+      });
+    }
+    return out;
   }
 
   private async paginateFacialAccessByUserId(
@@ -115,8 +174,99 @@ export class ResponsibleDashboardService {
       .lean()
       .exec();
 
-    const items = this.mapFacialDocsToDto(docs);
+    const items = await this.mapFacialDocsToDto(docs);
     return { items, total };
+  }
+
+  private async paginateFacialAccessByUserIds(
+    clientId: string,
+    userIds: number[],
+    page: number,
+    limit: number,
+    subjectByFaceId?: Map<number, { name: string; photoKey: string | null }>,
+  ): Promise<{
+    items: ResponsibleAccessHistoryItemDto[];
+    total: number;
+  }> {
+    if (userIds.length === 0) {
+      return { items: [], total: 0 };
+    }
+    const filter = { clientId, userId: { $in: userIds } };
+    const total = await this.accessModel.countDocuments(filter).exec();
+    const skip = (page - 1) * limit;
+
+    const docs = await this.accessModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean()
+      .exec();
+
+    const items = await this.mapFacialDocsToDto(docs, subjectByFaceId);
+    return { items, total };
+  }
+
+  private async buildHouseholdFaceSubjectMap(
+    responsibleId: string,
+    clientId: string,
+  ): Promise<Map<number, { name: string; photoKey: string | null }>> {
+    const map = new Map<number, { name: string; photoKey: string | null }>();
+    const householdIds = await responsiblesQueries.listHouseholdResponsibleIds(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    for (const hid of householdIds) {
+      const row = await responsiblesQueries.getResponsibleById(
+        this.database.db,
+        hid,
+        clientId,
+      );
+      if (!row?.faceId) continue;
+      map.set(row.faceId, {
+        name: row.name,
+        photoKey: row.photoKey ?? null,
+      });
+    }
+    const linkRows =
+      await responsiblesQueries.listResponsibleStudentLinksWithStudents(
+        this.database.db,
+        responsibleId,
+        clientId,
+      );
+    for (const r of linkRows) {
+      const fid = r.student.faceId;
+      if (fid == null) continue;
+      map.set(fid, {
+        name: r.student.name,
+        photoKey: r.student.photoKey ?? null,
+      });
+    }
+    return map;
+  }
+
+  private async lastAccessForFaceUserId(
+    clientId: string,
+    faceUserId: number,
+  ): Promise<LastAccessDto | null> {
+    const doc = await this.accessModel
+      .findOne({ clientId, userId: faceUserId })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+    if (!doc) return null;
+    const d = doc as FacialAccessDocument & {
+      readerName?: string;
+      eventAction?: string;
+      eventDate?: Date | null;
+      createdAt?: Date;
+    };
+    return {
+      eventDate: d.eventDate ? d.eventDate.toISOString() : null,
+      readerName: d.readerName ?? '',
+      eventAction: d.eventAction ?? '',
+    };
   }
 
   private assertResponsibleScope(
@@ -141,8 +291,13 @@ export class ResponsibleDashboardService {
     }
   }
 
-  async listChildren(user: JwtPayload): Promise<ResponsibleChildSummaryDto[]> {
+  async listChildren(user: JwtPayload): Promise<{
+    children: ResponsibleChildSummaryDto[];
+    timezoneOffsetMinutes: number;
+  }> {
     const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    const timezoneOffsetMinutes =
+      await this.schoolTimezoneOffsetMinutes(clientId);
     const rows =
       await responsiblesQueries.listResponsibleStudentLinksWithStudents(
         this.database.db,
@@ -155,35 +310,147 @@ export class ResponsibleDashboardService {
       let lastAccess: LastAccessDto | null = null;
       const faceId = row.student.faceId;
       if (faceId != null) {
-        const doc = await this.accessModel
-          .findOne({ clientId, userId: faceId })
-          .sort({ createdAt: -1 })
-          .lean()
-          .exec();
-        if (doc) {
-          const d = doc as FacialAccessDocument & {
-            readerName?: string;
-            eventAction?: string;
-            eventDate?: Date | null;
-            createdAt?: Date;
-          };
-          lastAccess = {
-            eventDate: d.eventDate ? d.eventDate.toISOString() : null,
-            readerName: d.readerName ?? '',
-            eventAction: d.eventAction ?? '',
-          };
-        }
+        lastAccess = await this.lastAccessForFaceUserId(clientId, faceId);
       }
 
+      const sc = row.schoolClass;
+      const rawName = sc?.name?.trim() ?? '';
+      const className =
+        rawName !== ''
+          ? sc?.year != null
+            ? `${rawName} – ${sc.year}`
+            : rawName
+          : null;
+
       out.push({
+        kind: 'student',
         studentId: row.student.id,
+        responsibleId: null,
         name: row.student.name,
+        className,
         photoUrl: await this.optionalPhotoUrl(row.student.photoKey),
         relationshipType: row.link.relationshipType,
         lastAccess,
       });
     }
-    return out;
+
+    const peerOptions =
+      await responsiblesQueries.listHouseholdDriverOptions(
+        this.database.db,
+        responsibleId,
+        clientId,
+      );
+    const peers = peerOptions.filter((p) => p.id !== responsibleId);
+
+    for (const peer of peers) {
+      const faceId = await responsiblesQueries.getResponsibleFaceId(
+        this.database.db,
+        peer.id,
+        clientId,
+      );
+      const lastAccess =
+        faceId != null
+          ? await this.lastAccessForFaceUserId(clientId, faceId)
+          : null;
+      const respRow = await responsiblesQueries.getResponsibleById(
+        this.database.db,
+        peer.id,
+        clientId,
+      );
+      out.push({
+        kind: 'responsible',
+        studentId: null,
+        responsibleId: peer.id,
+        name: peer.name,
+        className: null,
+        photoUrl: await this.optionalPhotoUrl(respRow?.photoKey ?? null),
+        relationshipType: peer.relationshipType,
+        lastAccess,
+      });
+    }
+
+    return { children: out, timezoneOffsetMinutes };
+  }
+
+  async listAllHouseholdAccesses(
+    user: JwtPayload,
+    page: number,
+    limit: number,
+  ): Promise<{
+    items: ResponsibleAccessHistoryItemDto[];
+    page: number;
+    limit: number;
+    total: number;
+    timezoneOffsetMinutes: number;
+  }> {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    const timezoneOffsetMinutes =
+      await this.schoolTimezoneOffsetMinutes(clientId);
+
+    const subjectMap = await this.buildHouseholdFaceSubjectMap(
+      responsibleId,
+      clientId,
+    );
+    const userIds = [...subjectMap.keys()];
+    const { items, total } = await this.paginateFacialAccessByUserIds(
+      clientId,
+      userIds,
+      page,
+      limit,
+      subjectMap,
+    );
+
+    return { items, page, limit, total, timezoneOffsetMinutes };
+  }
+
+  async listAccessesForHouseholdResponsible(
+    user: JwtPayload,
+    targetResponsibleId: string,
+    page: number,
+    limit: number,
+  ): Promise<{
+    items: ResponsibleAccessHistoryItemDto[];
+    page: number;
+    limit: number;
+    total: number;
+    timezoneOffsetMinutes: number;
+  }> {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    const timezoneOffsetMinutes =
+      await this.schoolTimezoneOffsetMinutes(clientId);
+
+    const householdIds = await responsiblesQueries.listHouseholdResponsibleIds(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!householdIds.includes(targetResponsibleId)) {
+      throw new NotFoundException('Responsável não encontrado ou sem vínculo.');
+    }
+
+    const faceId = await responsiblesQueries.getResponsibleFaceId(
+      this.database.db,
+      targetResponsibleId,
+      clientId,
+    );
+    if (faceId == null) {
+      return {
+        items: [],
+        page,
+        limit,
+        total: 0,
+        timezoneOffsetMinutes,
+      };
+    }
+
+    const { items, total } = await this.paginateFacialAccessByUserId(
+      clientId,
+      faceId,
+      page,
+      limit,
+    );
+
+    return { items, page, limit, total, timezoneOffsetMinutes };
   }
 
   async listAccessesForLinkedStudent(
@@ -196,8 +463,11 @@ export class ResponsibleDashboardService {
     page: number;
     limit: number;
     total: number;
+    timezoneOffsetMinutes: number;
   }> {
     const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    const timezoneOffsetMinutes =
+      await this.schoolTimezoneOffsetMinutes(clientId);
 
     const allowedIds = await studentsQueries.listStudentIdsForResponsible(
       this.database.db,
@@ -213,7 +483,13 @@ export class ResponsibleDashboardService {
       clientId,
     );
     if (!student?.faceId) {
-      return { items: [], page, limit, total: 0 };
+      return {
+        items: [],
+        page,
+        limit,
+        total: 0,
+        timezoneOffsetMinutes,
+      };
     }
 
     const { items, total } = await this.paginateFacialAccessByUserId(
@@ -223,7 +499,7 @@ export class ResponsibleDashboardService {
       limit,
     );
 
-    return { items, page, limit, total };
+    return { items, page, limit, total, timezoneOffsetMinutes };
   }
 
   async listOwnAccesses(
@@ -235,8 +511,11 @@ export class ResponsibleDashboardService {
     page: number;
     limit: number;
     total: number;
+    timezoneOffsetMinutes: number;
   }> {
     const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    const timezoneOffsetMinutes =
+      await this.schoolTimezoneOffsetMinutes(clientId);
 
     const faceId =
       await responsiblesQueries.getResponsibleFaceId(
@@ -245,7 +524,13 @@ export class ResponsibleDashboardService {
         clientId,
       );
     if (faceId == null) {
-      return { items: [], page, limit, total: 0 };
+      return {
+        items: [],
+        page,
+        limit,
+        total: 0,
+        timezoneOffsetMinutes,
+      };
     }
 
     const { items, total } = await this.paginateFacialAccessByUserId(
@@ -255,7 +540,7 @@ export class ResponsibleDashboardService {
       limit,
     );
 
-    return { items, page, limit, total };
+    return { items, page, limit, total, timezoneOffsetMinutes };
   }
 
   /** Outros responsáveis ativos da mesma escola (ex.: autorizar retirada). */
