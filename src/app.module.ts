@@ -18,6 +18,7 @@ import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SimulateModule } from './simulate/simulate.module';
 import { ResponsibleDashboardModule } from './responsible-dashboard/responsible-dashboard.module';
 import { ResponsiblesModule } from './responsibles/responsibles.module';
 import { PermissionsModule } from './permissions/permissions.module';
@@ -67,6 +68,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     NotificationsModule,
     HealthModule,
     ArrivalsModule,
+    SimulateModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
