@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
 import { DatabaseService } from '../database/database.service';
@@ -11,11 +16,14 @@ import {
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
+/** Deve coincidir com `ANDROID_STUDENT_ACCESS_CHANNEL_ID` no app (Expo Notifications). */
+const EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID = 'student_access';
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly database: DatabaseService) {}
+  constructor(private readonly database: DatabaseService) { }
 
   async updatePushToken(responsibleId: string, pushToken: string): Promise<void> {
     const token = pushToken.trim();
@@ -97,6 +105,9 @@ export class NotificationsService {
       title,
       body,
       data,
+      priority: 'high' as const,
+      channelId: EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID,
+      ttl: 60,
     }));
 
     const res = await fetch(EXPO_PUSH_URL, {
