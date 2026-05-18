@@ -1,12 +1,34 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne } from 'drizzle-orm';
 
 import { slugifyName } from '../../common/utils/slugify';
 import type { AppDb } from '../database.types';
 import { clients } from '../schema';
 
 const SLUG_MAX = 100;
+
+const DISPLAY_SHORT_CODE_CHARS =
+  '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function randomDisplayShortCode(length = 5): string {
+  const bytes = randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i++) {
+    const idx = (bytes[i] ?? 0) % DISPLAY_SHORT_CODE_CHARS.length;
+    out += DISPLAY_SHORT_CODE_CHARS.charAt(idx);
+  }
+  return out;
+}
+
+function isPostgresUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: string }).code === '23505'
+  );
+}
 
 export type ClientListRow = {
   id: string;
@@ -323,4 +345,75 @@ export async function regenerateDisplayTokenForCompanyClient(
     return undefined;
   }
   return { token: updated.displayToken };
+}
+
+/** Garante código curto do display (idempotente). */
+export async function ensureDisplayShortCodeForCompanyClient(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+): Promise<{ shortCode: string } | undefined> {
+  const existing = await getClientById(db, clientId, companyId);
+  if (!existing) {
+    return undefined;
+  }
+  if (existing.displayShortCode) {
+    return { shortCode: existing.displayShortCode };
+  }
+
+  for (let attempt = 0; attempt < 32; attempt++) {
+    const code = randomDisplayShortCode(5);
+    try {
+      const now = new Date();
+      const [updated] = await db
+        .update(clients)
+        .set({ displayShortCode: code, updatedAt: now })
+        .where(
+          and(
+            eq(clients.id, clientId),
+            eq(clients.companyId, companyId),
+            isNull(clients.displayShortCode),
+          ),
+        )
+        .returning({ displayShortCode: clients.displayShortCode });
+
+      if (updated?.displayShortCode) {
+        return { shortCode: updated.displayShortCode };
+      }
+
+      const again = await getClientById(db, clientId, companyId);
+      if (again?.displayShortCode) {
+        return { shortCode: again.displayShortCode };
+      }
+    } catch (err) {
+      if (!isPostgresUniqueViolation(err)) {
+        throw err;
+      }
+    }
+  }
+
+  throw new Error('Não foi possível gerar um código curto único para o display.');
+}
+
+/** Resolve display público pelo código curto (lookup global). */
+export async function getClientByDisplayShortCode(
+  db: AppDb,
+  shortCodeRaw: string,
+): Promise<{ id: string; displayToken: string | null } | undefined> {
+  const shortCode = shortCodeRaw.trim();
+  if (!shortCode || shortCode.length > 8) {
+    return undefined;
+  }
+  if (!/^[0-9a-zA-Z]+$/.test(shortCode)) {
+    return undefined;
+  }
+  const [row] = await db
+    .select({
+      id: clients.id,
+      displayToken: clients.displayToken,
+    })
+    .from(clients)
+    .where(eq(clients.displayShortCode, shortCode))
+    .limit(1);
+  return row;
 }

@@ -7,11 +7,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -23,7 +19,7 @@ import { ClientsService } from './clients.service';
 @Roles('company_admin', 'company_operator')
 @Controller('clients')
 export class ClientsController {
-  constructor(private readonly clientsService: ClientsService) {}
+  constructor(private readonly clientsService: ClientsService) { }
 
   @Get()
   @ApiOperation({ summary: 'Listar clientes da empresa' })
@@ -32,6 +28,17 @@ export class ClientsController {
   }
 
   /** Rotas mais específicas antes de `:clientId` (evita sombreamento no roteador). */
+  @Get(':clientId/display-short-code')
+  @ApiOperation({
+    summary: 'Garante e retorna o código curto da URL do display em TV',
+  })
+  ensureDisplayShortCode(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientsService.ensureTvDisplayShortCode(user, clientId);
+  }
+
   @Get(':clientId/display-token')
   @ApiOperation({
     summary:

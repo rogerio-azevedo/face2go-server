@@ -36,10 +36,10 @@ export class ClientsService {
     return companyId;
   }
 
-  private omitDisplayToken<T extends { displayToken?: unknown }>(
+  private omitDisplayToken<T extends { displayToken?: unknown; displayShortCode?: unknown }>(
     row: T,
-  ): Omit<T, 'displayToken'> {
-    const { displayToken: _omit, ...rest } = row;
+  ): Omit<T, 'displayToken' | 'displayShortCode'> {
+    const { displayToken: _omit, displayShortCode: _omitCode, ...rest } = row;
     return rest;
   }
 
@@ -122,7 +122,7 @@ export class ClientsService {
     throw new ForbiddenException('Sem permissão.');
   }
 
-  /** Token do display público TV (URL com query param). */
+  /** Token e código curto do display público TV. */
   async ensureTvDisplayToken(user: JwtPayload, clientId: string) {
     const companyId = await this.assertReadAccessToClient(user, clientId);
     const result = await clientsQueries.ensureDisplayTokenForCompanyClient(
@@ -133,7 +133,37 @@ export class ClientsService {
     if (!result) {
       throw new NotFoundException('Cliente não encontrado.');
     }
-    return { token: result.token };
+    const short = await clientsQueries.ensureDisplayShortCodeForCompanyClient(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!short) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+    return { token: result.token, shortCode: short.shortCode };
+  }
+
+  /** Garante apenas o código curto (token já deve existir ou será criado). */
+  async ensureTvDisplayShortCode(user: JwtPayload, clientId: string) {
+    const companyId = await this.assertReadAccessToClient(user, clientId);
+    const tokenOk = await clientsQueries.ensureDisplayTokenForCompanyClient(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!tokenOk) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+    const short = await clientsQueries.ensureDisplayShortCodeForCompanyClient(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!short) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+    return { shortCode: short.shortCode };
   }
 
   /** Troca o token — invalida URLs antigas. */
@@ -147,7 +177,15 @@ export class ClientsService {
     if (!result) {
       throw new NotFoundException('Cliente não encontrado.');
     }
-    return { token: result.token };
+    const short = await clientsQueries.ensureDisplayShortCodeForCompanyClient(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!short) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+    return { token: result.token, shortCode: short.shortCode };
   }
 
   /** Escrita: apenas company_admin (comportamento atual do Next.js). */

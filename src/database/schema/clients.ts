@@ -42,6 +42,8 @@ export const clients = pgTable(
     logoUrl: varchar('logo_url', { length: 500 }),
     /** Segredo público só para SSE do display TV (opcional até gerar/regenerar). */
     displayToken: uuid('display_token'),
+    /** Código curto público para URL do display (ex.: /display/eA1tP). */
+    displayShortCode: varchar('display_short_code', { length: 8 }),
     isActive: boolean('is_active').default(true).notNull(),
     /**
      * Diferença em minutos em relação ao UTC (UTC−4 → −240, UTC+3 → +180).
@@ -54,6 +56,7 @@ export const clients = pgTable(
   (t) => [
     uniqueIndex('clients_company_slug_unique').on(t.companyId, t.slug),
     uniqueIndex('clients_display_token_unique').on(t.displayToken),
+    uniqueIndex('clients_display_short_code_unique').on(t.displayShortCode),
   ],
 );
 

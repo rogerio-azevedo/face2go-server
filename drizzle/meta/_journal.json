@@ -148,6 +148,13 @@
       "when": 1778900000000,
       "tag": "0020_clients_display_token",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1778910000000,
+      "tag": "0021_clients_display_short_code",
+      "breakpoints": true
     }
   ]
 }
