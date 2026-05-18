@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { and, asc, eq, ne } from 'drizzle-orm';
 
 import { slugifyName } from '../../common/utils/slugify';
@@ -245,4 +247,80 @@ export async function setClientActive(
     .where(and(eq(clients.id, clientId), eq(clients.companyId, companyId)))
     .returning();
   return row;
+}
+
+export async function validateClientDisplayToken(
+  db: AppDb,
+  clientId: string,
+  token: string,
+): Promise<boolean> {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const [row] = await db
+    .select({ id: clients.id })
+    .from(clients)
+    .where(
+      and(eq(clients.id, clientId), eq(clients.displayToken, trimmed)),
+    )
+    .limit(1);
+  return !!row;
+}
+
+export async function getDisplayTokenForCompanyClient(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+): Promise<string | null> {
+  const row = await getClientById(db, clientId, companyId);
+  return row?.displayToken ?? null;
+}
+
+/** Garante um token antes de usar o display pela primeira vez. */
+export async function ensureDisplayTokenForCompanyClient(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+): Promise<{ token: string } | undefined> {
+  const existing = await getClientById(db, clientId, companyId);
+  if (!existing) {
+    return undefined;
+  }
+  if (existing.displayToken) {
+    return { token: existing.displayToken };
+  }
+  const token = randomUUID();
+  const now = new Date();
+  const [updated] = await db
+    .update(clients)
+    .set({ displayToken: token, updatedAt: now })
+    .where(and(eq(clients.id, clientId), eq(clients.companyId, companyId)))
+    .returning({ displayToken: clients.displayToken });
+  if (!updated?.displayToken) {
+    return undefined;
+  }
+  return { token: updated.displayToken };
+}
+
+export async function regenerateDisplayTokenForCompanyClient(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+): Promise<{ token: string } | undefined> {
+  const existing = await getClientById(db, clientId, companyId);
+  if (!existing) {
+    return undefined;
+  }
+  const token = randomUUID();
+  const now = new Date();
+  const [updated] = await db
+    .update(clients)
+    .set({ displayToken: token, updatedAt: now })
+    .where(and(eq(clients.id, clientId), eq(clients.companyId, companyId)))
+    .returning({ displayToken: clients.displayToken });
+  if (!updated?.displayToken) {
+    return undefined;
+  }
+  return { token: updated.displayToken };
 }

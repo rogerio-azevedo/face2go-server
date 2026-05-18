@@ -36,8 +36,18 @@ export class ClientsService {
     return companyId;
   }
 
-  /** Detalhe de um cliente (admin ou operador com `clients` + can_read). */
-  async getById(user: JwtPayload, clientId: string) {
+  private omitDisplayToken<T extends { displayToken?: unknown }>(
+    row: T,
+  ): Omit<T, 'displayToken'> {
+    const { displayToken: _omit, ...rest } = row;
+    return rest;
+  }
+
+  /** Garante leitura do cliente (admin empresa ou operador com `clients` + can_read). */
+  private async assertReadAccessToClient(
+    user: JwtPayload,
+    clientId: string,
+  ): Promise<string> {
     const companyId = this.ensureCompany(user);
     if (user.role === 'company_admin') {
       const row = await clientsQueries.getClientById(
@@ -48,10 +58,7 @@ export class ClientsService {
       if (!row) {
         throw new NotFoundException('Cliente não encontrado.');
       }
-      return {
-        ...row,
-        type: row.type ?? 'other',
-      };
+      return companyId;
     }
     if (user.role === 'company_operator') {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
@@ -71,12 +78,27 @@ export class ClientsService {
       if (!row) {
         throw new NotFoundException('Cliente não encontrado.');
       }
-      return {
-        ...row,
-        type: row.type ?? 'other',
-      };
+      return companyId;
     }
     throw new ForbiddenException('Sem permissão.');
+  }
+
+  /** Detalhe de um cliente (admin ou operador com `clients` + can_read). */
+  async getById(user: JwtPayload, clientId: string) {
+    const companyId = await this.assertReadAccessToClient(user, clientId);
+    const row = await clientsQueries.getClientById(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!row) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+    const safe = this.omitDisplayToken(row);
+    return {
+      ...safe,
+      type: row.type ?? 'other',
+    };
   }
 
   /** Lista clientes (admin ou operador com `clients` + can_read). */
@@ -100,6 +122,34 @@ export class ClientsService {
     throw new ForbiddenException('Sem permissão.');
   }
 
+  /** Token do display público TV (URL com query param). */
+  async ensureTvDisplayToken(user: JwtPayload, clientId: string) {
+    const companyId = await this.assertReadAccessToClient(user, clientId);
+    const result = await clientsQueries.ensureDisplayTokenForCompanyClient(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!result) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+    return { token: result.token };
+  }
+
+  /** Troca o token — invalida URLs antigas. */
+  async regenerateTvDisplayToken(user: JwtPayload, clientId: string) {
+    const companyId = await this.assertReadAccessToClient(user, clientId);
+    const result = await clientsQueries.regenerateDisplayTokenForCompanyClient(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!result) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+    return { token: result.token };
+  }
+
   /** Escrita: apenas company_admin (comportamento atual do Next.js). */
   async create(user: JwtPayload, body: unknown) {
     if (user.role !== 'company_admin') {
@@ -110,7 +160,7 @@ export class ClientsService {
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
-    return clientsQueries.createClient(this.database.db, {
+    const created = await clientsQueries.createClient(this.database.db, {
       companyId,
       name: parsed.data.name,
       type: parsed.data.type,
@@ -121,6 +171,7 @@ export class ClientsService {
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
     });
+    return this.omitDisplayToken(created);
   }
 
   async update(user: JwtPayload, clientId: string, body: unknown) {
@@ -163,7 +214,7 @@ export class ClientsService {
       },
     );
     if (!updated) throw new NotFoundException('Cliente não encontrado.');
-    return updated;
+    return this.omitDisplayToken(updated);
   }
 
   async setActive(user: JwtPayload, clientId: string, body: unknown) {
@@ -181,11 +232,13 @@ export class ClientsService {
       companyId,
     );
     if (!existing) throw new NotFoundException('Cliente não encontrado.');
-    return clientsQueries.setClientActive(
+    const row = await clientsQueries.setClientActive(
       this.database.db,
       clientId,
       companyId,
       parsed.data.isActive,
     );
+    if (!row) throw new NotFoundException('Cliente não encontrado.');
+    return this.omitDisplayToken(row);
   }
 }

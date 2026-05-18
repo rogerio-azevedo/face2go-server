@@ -183,6 +183,30 @@ export async function getResponsibleById(
   return rows[0];
 }
 
+/** Responsável pelo face ID do leitor (chegada do pai/avô etc.). */
+export async function findResponsibleByFaceIdAndClientId(
+  db: AppDb,
+  faceId: number,
+  clientId: string,
+) {
+  const [row] = await db
+    .select({
+      id: responsibles.id,
+      name: responsibles.name,
+      photoKey: responsibles.photoKey,
+    })
+    .from(responsibles)
+    .where(
+      and(
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.faceId, faceId),
+        eq(responsibles.isActive, true),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
 export async function getResponsibleByUserId(db: AppDb, userId: string) {
   const rows = await db
     .select()

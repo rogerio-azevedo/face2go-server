@@ -13,9 +13,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { ClientsService } from './clients.service';
 
 @ApiTags('clients')
@@ -29,6 +29,42 @@ export class ClientsController {
   @ApiOperation({ summary: 'Listar clientes da empresa' })
   list(@CurrentUser() user: JwtPayload) {
     return this.clientsService.list(user);
+  }
+
+  /** Rotas mais específicas antes de `:clientId` (evita sombreamento no roteador). */
+  @Get(':clientId/display-token')
+  @ApiOperation({
+    summary:
+      'Garante e retorna o token do display em TV da escola (URL pública SSE)',
+  })
+  ensureDisplayToken(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientsService.ensureTvDisplayToken(user, clientId);
+  }
+
+  @Post(':clientId/display-token/regenerate')
+  @ApiOperation({
+    summary: 'Regenerar token do display em TV (invalida URL antiga)',
+  })
+  regenerateDisplayToken(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientsService.regenerateTvDisplayToken(user, clientId);
+  }
+
+  @Patch(':clientId/active')
+  @ApiOperation({
+    summary: 'Ativar/inativar cliente (apenas admin da empresa)',
+  })
+  setActive(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Body() body: unknown,
+  ) {
+    return this.clientsService.setActive(user, clientId, body);
   }
 
   @Get(':clientId')
@@ -54,17 +90,5 @@ export class ClientsController {
     @Body() body: unknown,
   ) {
     return this.clientsService.update(user, clientId, body);
-  }
-
-  @Patch(':clientId/active')
-  @ApiOperation({
-    summary: 'Ativar/inativar cliente (apenas admin da empresa)',
-  })
-  setActive(
-    @CurrentUser() user: JwtPayload,
-    @Param('clientId', ParseUUIDPipe) clientId: string,
-    @Body() body: unknown,
-  ) {
-    return this.clientsService.setActive(user, clientId, body);
   }
 }

@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { MongooseModule } from '@nestjs/mongoose';
 
+import { ArrivalsModule } from './arrivals/arrivals.module';
 import { AuthModule } from './auth/auth.module';
 import { AccessesModule } from './accesses/accesses.module';
 import { ClientsModule } from './clients/clients.module';
@@ -65,6 +66,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     MeModule,
     NotificationsModule,
     HealthModule,
+    ArrivalsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

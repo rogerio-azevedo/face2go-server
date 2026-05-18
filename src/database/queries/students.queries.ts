@@ -47,6 +47,7 @@ export async function findStudentByFaceIdAndClientId(
     .select({
       id: students.id,
       name: students.name,
+      photoKey: students.photoKey,
     })
     .from(students)
     .where(
