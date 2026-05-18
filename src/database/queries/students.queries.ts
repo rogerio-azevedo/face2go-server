@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { responsibleStudents, students } from '../schema';
+import { responsibleStudents, schoolClasses, students } from '../schema';
 
 export async function listStudentsByClient(db: AppDb, clientId: string) {
   return db
@@ -82,6 +82,28 @@ export async function listStudentsByResponsible(
   return db
     .select()
     .from(students)
+    .where(and(eq(students.clientId, clientId), inArray(students.id, ids)))
+    .orderBy(asc(students.name));
+}
+
+/** Alunos do responsável com nome da turma (`school_classes`), quando existir. */
+export async function listStudentsWithClassByResponsible(
+  db: AppDb,
+  clientId: string,
+  responsibleId: string,
+) {
+  const ids = await listStudentIdsForResponsible(db, responsibleId);
+  if (ids.length === 0) return [];
+  return db
+    .select({
+      id: students.id,
+      name: students.name,
+      photoKey: students.photoKey,
+      isActive: students.isActive,
+      className: schoolClasses.name,
+    })
+    .from(students)
+    .leftJoin(schoolClasses, eq(students.classId, schoolClasses.id))
     .where(and(eq(students.clientId, clientId), inArray(students.id, ids)))
     .orderBy(asc(students.name));
 }

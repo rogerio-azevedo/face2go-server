@@ -10,6 +10,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
+import * as vehiclesQueries from '../database/queries/vehicles.queries';
 import type { AccessFacialRecordedPayload } from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
 
@@ -106,7 +107,7 @@ export class ArrivalsService {
     clientId: string,
     responsibleId: string,
   ): Promise<ArrivalSseStudent[]> {
-    const rows = await studentsQueries.listStudentsByResponsible(
+    const rows = await studentsQueries.listStudentsWithClassByResponsible(
       this.database.db,
       clientId,
       responsibleId,
@@ -116,6 +117,7 @@ export class ArrivalsService {
       active.map(async (s) => ({
         name: s.name,
         photoUrl: await this.presignPhoto(s.photoKey),
+        className: s.className?.trim() || null,
       })),
     );
     return enriched;
@@ -137,6 +139,7 @@ export class ArrivalsService {
       let personName = payload.personName?.trim() || null;
       let personPhotoUrl: string | null = snapUrl;
       let students: ArrivalSseStudent[] = [];
+      let vehiclePlate: string | null = null;
 
       if (responsible) {
         kind = 'responsible';
@@ -149,6 +152,11 @@ export class ArrivalsService {
         students = await this.resolveStudentsResponsible(
           payload.clientId,
           responsible.id,
+        );
+        vehiclePlate = await vehiclesQueries.findVehiclePlateForArrival(
+          this.database.db,
+          responsible.id,
+          payload.clientId,
         );
       } else {
         const student =
@@ -184,6 +192,7 @@ export class ArrivalsService {
         personPhotoUrl,
         readerName: payload.readerName,
         eventDate: eventDateIso,
+        vehiclePlate,
         students,
       };
 

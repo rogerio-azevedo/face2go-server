@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
+import { listHouseholdResponsibleIds } from './responsibles.queries';
 import { responsibles, vehicles } from '../schema';
 
 export type VehicleRow = typeof vehicles.$inferSelect;
@@ -48,6 +49,39 @@ export async function vehicleListForHousehold(
     )
     .orderBy(desc(vehicles.createdAt));
   return rows as VehicleWithDriverRow[];
+}
+
+/**
+ * Placa para o display de chegadas: primeiro veículo do próprio responsável;
+ * se não houver, primeira placa entre co-responsáveis pelos mesmos alunos.
+ */
+export async function findVehiclePlateForArrival(
+  db: AppDb,
+  responsibleId: string,
+  clientId: string,
+): Promise<string | null> {
+  const [own] = await db
+    .select({ plate: vehicles.plate })
+    .from(vehicles)
+    .where(
+      and(eq(vehicles.clientId, clientId), eq(vehicles.responsibleId, responsibleId)),
+    )
+    .orderBy(desc(vehicles.createdAt))
+    .limit(1);
+  const ownPlate = own?.plate?.trim();
+  if (ownPlate) return ownPlate;
+
+  const householdIds = await listHouseholdResponsibleIds(
+    db,
+    responsibleId,
+    clientId,
+  );
+  const otherDriverIds = householdIds.filter((id) => id !== responsibleId);
+  if (otherDriverIds.length === 0) return null;
+
+  const rows = await vehicleListForHousehold(db, otherDriverIds, clientId);
+  const fallback = rows[0]?.plate?.trim();
+  return fallback || null;
 }
 
 export async function vehicleGetById(
