@@ -67,4 +67,36 @@ export class FaceEnrollmentController {
       dto.imageBase64,
     );
   }
+
+  @Get('household/:responsibleId/face')
+  @ApiOperation({
+    summary:
+      'Status da face de um co-responsável do mesmo núcleo (compartilham alunos)',
+  })
+  async getHouseholdMemberFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+  ) {
+    return this.faceEnrollmentService.getHouseholdMemberFaceStatus(
+      user,
+      responsibleId,
+    );
+  }
+
+  @Post('household/:responsibleId/face')
+  @ApiOperation({
+    summary:
+      'Enviar/atualizar foto de um co-responsável do núcleo e sincronizar com os leitores',
+  })
+  async uploadHouseholdMemberFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+    @Body() dto: UploadFaceDto,
+  ) {
+    return this.faceEnrollmentService.uploadAndSyncHouseholdMemberFace(
+      user,
+      responsibleId,
+      dto.imageBase64,
+    );
+  }
 }

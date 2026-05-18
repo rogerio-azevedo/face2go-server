@@ -76,8 +76,28 @@ export class FaceEnrollmentService {
     }
   }
 
-  async getMyFaceStatus(user: JwtPayload): Promise<FaceEnrollmentStatusDto> {
+  private async assertHouseholdPeer(
+    user: JwtPayload,
+    targetResponsibleId: string,
+  ): Promise<{ clientId: string }> {
     const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    const householdIds = await responsiblesQueries.listHouseholdResponsibleIds(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!householdIds.includes(targetResponsibleId)) {
+      throw new ForbiddenException(
+        'Responsável não pertence ao seu núcleo familiar.',
+      );
+    }
+    return { clientId };
+  }
+
+  private async responsibleFaceStatusDto(
+    responsibleId: string,
+    clientId: string,
+  ): Promise<FaceEnrollmentStatusDto> {
     const row = await responsiblesQueries.getResponsibleWithFaceStatus(
       this.database.db,
       responsibleId,
@@ -95,6 +115,22 @@ export class FaceEnrollmentService {
         ? row.deviceSyncedAt.toISOString()
         : null,
     };
+  }
+
+  async getMyFaceStatus(user: JwtPayload): Promise<FaceEnrollmentStatusDto> {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    return this.responsibleFaceStatusDto(responsibleId, clientId);
+  }
+
+  async getHouseholdMemberFaceStatus(
+    user: JwtPayload,
+    targetResponsibleId: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { clientId } = await this.assertHouseholdPeer(
+      user,
+      targetResponsibleId,
+    );
+    return this.responsibleFaceStatusDto(targetResponsibleId, clientId);
   }
 
   async getChildFaceStatus(
@@ -130,11 +166,11 @@ export class FaceEnrollmentService {
     };
   }
 
-  async uploadAndSyncMyFace(
-    user: JwtPayload,
+  private async uploadAndSyncResponsibleFace(
+    clientId: string,
+    responsibleId: string,
     imageBase64: string,
   ): Promise<FaceEnrollmentStatusDto> {
-    const { responsibleId, clientId } = this.assertResponsibleScope(user);
     const responsible = await responsiblesQueries.getResponsibleById(
       this.database.db,
       responsibleId,
@@ -201,6 +237,34 @@ export class FaceEnrollmentService {
       deviceSyncedAt:
         sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
     };
+  }
+
+  async uploadAndSyncMyFace(
+    user: JwtPayload,
+    imageBase64: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    return this.uploadAndSyncResponsibleFace(
+      clientId,
+      responsibleId,
+      imageBase64,
+    );
+  }
+
+  async uploadAndSyncHouseholdMemberFace(
+    user: JwtPayload,
+    targetResponsibleId: string,
+    imageBase64: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { clientId } = await this.assertHouseholdPeer(
+      user,
+      targetResponsibleId,
+    );
+    return this.uploadAndSyncResponsibleFace(
+      clientId,
+      targetResponsibleId,
+      imageBase64,
+    );
   }
 
   async uploadAndSyncChildFace(
