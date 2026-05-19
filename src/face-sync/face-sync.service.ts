@@ -19,6 +19,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
 import {
+  formatReaderFaceSyncError,
   intelbrasUpsertFaceOnReader,
   toPlainReaderCredential,
 } from './intelbras-device.client';
@@ -192,34 +193,49 @@ export class FaceSyncService {
     const failures: string[] = [];
     const logPrefix = logContext ? `${logContext} ` : '';
 
-    for (const r of intelbrasReaders) {
-      try {
-        const plain = toPlainReaderCredential(
-          r,
-          cipher.decrypt(r.passwordEncrypted),
-        );
-        await intelbrasUpsertFaceOnReader(
-          plain,
-          faceId,
-          name || 'USUARIO',
-          base64,
-        );
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        failures.push(`${r.name}: ${msg}`);
-        this.log.warn(
-          `Sync face ${logPrefix}reader=${r.name}: ${msg}`,
-        );
-      }
+    const outcomes = await Promise.all(
+      intelbrasReaders.map(async (r) => {
+        try {
+          const plain = toPlainReaderCredential(
+            r,
+            cipher.decrypt(r.passwordEncrypted),
+          );
+          await intelbrasUpsertFaceOnReader(
+            plain,
+            faceId,
+            name || 'USUARIO',
+            base64,
+          );
+          return null;
+        } catch (e) {
+          const msg = formatReaderFaceSyncError(r.name, e);
+          const raw =
+            e instanceof Error
+              ? e.message
+              : typeof e === 'string'
+                ? e
+                : String(e);
+          this.log.warn(`Sync face ${logPrefix}reader=${r.name}: ${raw}`);
+          return msg;
+        }
+      }),
+    );
+
+    for (const m of outcomes) {
+      if (m !== null) failures.push(m);
     }
 
     if (failures.length === intelbrasReaders.length) {
-      const err = failures.join(' | ');
+      const failedCount = failures.length;
+      const total = intelbrasReaders.length;
+      const err = `Não foi possível sincronizar com ${failedCount} de ${total} leitor(es).`;
       return { deviceSyncStatus: 'sync_failed', deviceSyncError: err };
     }
 
     const warn =
-      failures.length > 0 ? `Parcial: ${failures.join(' | ')}` : null;
+      failures.length > 0
+        ? `Sincronizado parcialmente (${intelbrasReaders.length - failures.length} de ${intelbrasReaders.length} leitor(es)).`
+        : null;
     return { deviceSyncStatus: 'synced', deviceSyncError: warn };
   }
 

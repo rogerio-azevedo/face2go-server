@@ -18,6 +18,43 @@ export async function listResponsiblesByClient(db: AppDb, clientId: string) {
     .orderBy(asc(responsibles.name));
 }
 
+/** Gestão web: todos os responsáveis da escola como opções de condutor (uso em veículos LPR). */
+export async function listResponsibleDriverOptionsForClient(
+  db: AppDb,
+  clientId: string,
+): Promise<HouseholdDriverOptionRow[]> {
+  const rs = await listResponsiblesByClient(db, clientId);
+  if (rs.length === 0) {
+    return [];
+  }
+  const responsibleIds = rs.map((r) => r.id);
+  const links = await db
+    .select({
+      responsibleId: responsibleStudents.responsibleId,
+      relationshipType: responsibleStudents.relationshipType,
+      createdAt: responsibleStudents.createdAt,
+    })
+    .from(responsibleStudents)
+    .where(inArray(responsibleStudents.responsibleId, responsibleIds))
+    .orderBy(asc(responsibleStudents.createdAt));
+
+  const relationshipByResponsible = new Map<string, string>();
+  for (const row of links) {
+    if (!relationshipByResponsible.has(row.responsibleId)) {
+      relationshipByResponsible.set(
+        row.responsibleId,
+        String(row.relationshipType),
+      );
+    }
+  }
+
+  return rs.map((r) => ({
+    id: r.id,
+    name: r.name,
+    relationshipType: relationshipByResponsible.get(r.id) ?? 'other',
+  }));
+}
+
 /** Responsáveis que compartilham pelo menos um aluno com `myResponsibleId` (inclui o próprio). */
 export async function listHouseholdResponsibleIds(
   db: AppDb,

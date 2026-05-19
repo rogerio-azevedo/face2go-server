@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
+import { SchoolAccessModule } from '../school-access/school-access.module';
+import { ClientVehiclesController } from './client-school-vehicles.controller';
 import { VehiclesResponsibleController } from './vehicles.controller';
 import { VehiclesService } from './vehicles.service';
 
 @Module({
-  imports: [DatabaseModule],
-  controllers: [VehiclesResponsibleController],
+  imports: [DatabaseModule, SchoolAccessModule],
+  controllers: [ClientVehiclesController, VehiclesResponsibleController],
   providers: [VehiclesService],
   exports: [VehiclesService],
 })

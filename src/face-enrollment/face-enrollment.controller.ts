@@ -40,6 +40,15 @@ export class FaceEnrollmentController {
     );
   }
 
+  @Post('me/face/sync')
+  @ApiOperation({
+    summary:
+      'Reenviar foto já armazenada para os leitores faciais (sem nova imagem)',
+  })
+  async resyncMyFace(@CurrentUser() user: JwtPayload) {
+    return this.faceEnrollmentService.resyncMyFaceFromR2(user);
+  }
+
   @Get('children/:studentId/face')
   @ApiOperation({
     summary: 'Status da face de um aluno vinculado ao responsável',
@@ -66,6 +75,18 @@ export class FaceEnrollmentController {
       studentId,
       dto.imageBase64,
     );
+  }
+
+  @Post('children/:studentId/face/sync')
+  @ApiOperation({
+    summary:
+      'Reenviar foto do aluno já armazenada para os leitores (sem nova imagem)',
+  })
+  async resyncChildFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.faceEnrollmentService.resyncChildFaceFromR2(user, studentId);
   }
 
   @Get('household/:responsibleId/face')
@@ -97,6 +118,21 @@ export class FaceEnrollmentController {
       user,
       responsibleId,
       dto.imageBase64,
+    );
+  }
+
+  @Post('household/:responsibleId/face/sync')
+  @ApiOperation({
+    summary:
+      'Reenviar foto do co-responsável já armazenada para os leitores (sem nova imagem)',
+  })
+  async resyncHouseholdMemberFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+  ) {
+    return this.faceEnrollmentService.resyncHouseholdMemberFaceFromR2(
+      user,
+      responsibleId,
     );
   }
 }

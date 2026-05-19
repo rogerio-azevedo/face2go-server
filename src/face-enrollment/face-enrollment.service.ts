@@ -349,4 +349,192 @@ export class FaceEnrollmentService {
         sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
     };
   }
+
+  private async resyncResponsibleFromR2(
+    clientId: string,
+    responsibleId: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const row = await responsiblesQueries.getResponsibleWithFaceStatus(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+    if (!row.photoKey || row.faceId == null) {
+      throw new BadRequestException('Sem foto cadastrada para sincronizar.');
+    }
+
+    const responsible = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!responsible) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    let buffer: Buffer;
+    try {
+      const got = await this.r2.getObjectBytes(row.photoKey);
+      buffer = got.buffer;
+    } catch {
+      throw new BadRequestException(
+        'Não foi possível obter a foto armazenada.',
+      );
+    }
+    if (buffer.length < 256) {
+      throw new BadRequestException(
+        'Imagem armazenada inválida ou muito pequena.',
+      );
+    }
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      responsibleId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    const sync = await this.faceSync.syncPersonOnReaders({
+      clientId,
+      faceId: row.faceId,
+      name: responsible.name,
+      imageBuffer: buffer,
+      logContext: `responsible=${responsibleId}`,
+    });
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      responsibleId,
+      clientId,
+      {
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt:
+          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+    );
+
+    return {
+      photoUrl: await this.optionalPhotoUrl(row.photoKey),
+      faceId: row.faceId,
+      deviceSyncStatus: sync.deviceSyncStatus,
+      deviceSyncError: sync.deviceSyncError,
+      deviceSyncedAt:
+        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+    };
+  }
+
+  private async resyncStudentFromR2(
+    clientId: string,
+    studentId: string,
+  ): Promise<ChildFaceEnrollmentStatusDto> {
+    const student = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!student) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+    if (!student.photoKey || student.faceId == null) {
+      throw new BadRequestException('Sem foto cadastrada para sincronizar.');
+    }
+
+    let buffer: Buffer;
+    try {
+      const got = await this.r2.getObjectBytes(student.photoKey);
+      buffer = got.buffer;
+    } catch {
+      throw new BadRequestException(
+        'Não foi possível obter a foto armazenada.',
+      );
+    }
+    if (buffer.length < 256) {
+      throw new BadRequestException(
+        'Imagem armazenada inválida ou muito pequena.',
+      );
+    }
+
+    await studentsQueries.updateStudentFace(
+      this.database.db,
+      studentId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    const sync = await this.faceSync.syncPersonOnReaders({
+      clientId,
+      faceId: student.faceId,
+      name: student.name,
+      imageBuffer: buffer,
+      logContext: `student=${studentId}`,
+    });
+
+    await studentsQueries.updateStudentFace(
+      this.database.db,
+      studentId,
+      clientId,
+      {
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt:
+          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+    );
+
+    return {
+      studentId: student.id,
+      name: student.name,
+      photoUrl: await this.optionalPhotoUrl(student.photoKey),
+      faceId: student.faceId,
+      deviceSyncStatus: sync.deviceSyncStatus,
+      deviceSyncError: sync.deviceSyncError,
+      deviceSyncedAt:
+        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+    };
+  }
+
+  async resyncMyFaceFromR2(
+    user: JwtPayload,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    return this.resyncResponsibleFromR2(clientId, responsibleId);
+  }
+
+  async resyncHouseholdMemberFaceFromR2(
+    user: JwtPayload,
+    targetResponsibleId: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { clientId } = await this.assertHouseholdPeer(
+      user,
+      targetResponsibleId,
+    );
+    return this.resyncResponsibleFromR2(clientId, targetResponsibleId);
+  }
+
+  async resyncChildFaceFromR2(
+    user: JwtPayload,
+    studentId: string,
+  ): Promise<ChildFaceEnrollmentStatusDto> {
+    const { responsibleId, clientId } = this.assertResponsibleScope(user);
+    const allowed = await studentsQueries.listStudentIdsForResponsible(
+      this.database.db,
+      responsibleId,
+    );
+    if (!allowed.includes(studentId)) {
+      throw new NotFoundException('Aluno não encontrado ou sem vínculo.');
+    }
+    return this.resyncStudentFromR2(clientId, studentId);
+  }
 }

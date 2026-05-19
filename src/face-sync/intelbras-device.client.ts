@@ -37,7 +37,197 @@ function deviceUrl(reader: PlainReaderCredential): string {
     : `http://${reader.ip}:${port}`;
 }
 
+const OFFLINE_ERRNO_CODES = new Set([
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENOTFOUND',
+  'ENETUNREACH',
+  'ECONNABORTED',
+]);
+
+function errnoCode(err: unknown): string | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const c = (err as NodeJS.ErrnoException).code;
+  return typeof c === 'string' ? c : undefined;
+}
+
+function coerceHttpStatus(raw: unknown): number | undefined {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const n = Math.trunc(raw);
+    return n >= 100 && n <= 599 ? n : undefined;
+  }
+  if (typeof raw === 'string') {
+    const m = /^(\d{3})$/.exec(raw.trim());
+    if (m) return parseInt(m[1], 10);
+  }
+  return undefined;
+}
+
+function walkErrorRoots(err: unknown): unknown[] {
+  const out: unknown[] = [];
+  const queue: unknown[] = [err];
+  const seen = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur === null || cur === undefined) continue;
+
+    if (typeof cur !== 'object') {
+      continue;
+    }
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    out.push(cur);
+
+    const cause = (cur as { cause?: unknown }).cause;
+    if (cause !== undefined) queue.push(cause);
+
+    if (cur instanceof AggregateError && Array.isArray(cur.errors)) {
+      queue.push(...cur.errors);
+    }
+  }
+  return out;
+}
+
+/** Status HTTP vindos do Axios/outros clientes (`response.status` pode vir como string). */
+function httpStatusFromError(err: unknown): number | undefined {
+  for (const node of walkErrorRoots(err)) {
+    if (typeof node !== 'object' || node === null) continue;
+    const r = node as {
+      response?: { status?: unknown };
+      status?: unknown;
+      statusCode?: unknown;
+    };
+    const fromResp =
+      coerceHttpStatus(r.response?.status) ??
+      coerceHttpStatus((r.response as { statusCode?: unknown } | undefined)?.statusCode);
+    if (fromResp !== undefined) return fromResp;
+
+    const top = coerceHttpStatus(r.status) ?? coerceHttpStatus(r.statusCode);
+    if (top !== undefined) return top;
+  }
+
+  for (const node of walkErrorRoots(err)) {
+    const raw =
+      node instanceof Error
+        ? node.message
+        : typeof node === 'string'
+          ? node
+          : '';
+    if (!raw) continue;
+
+    const patterns = [
+      /status\s*(?:code)?\D{0,3}(\d{3})\b/i,
+      /\b(?:http\s*)?(\d{3})\s+(?:response|error)\b/i,
+    ];
+    for (const pattern of patterns) {
+      const m = pattern.exec(raw);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (Number.isFinite(n) && n >= 100 && n <= 599) return n;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Converte erro bruto da comunicação com o leitor (rede / HTTP CGI) em mensagem amigável.
+ * Não inclui o nome do leitor — use `formatReaderFaceSyncError` no agregador.
+ */
+export function mapReaderError(err: unknown): string {
+  const roots = walkErrorRoots(err);
+
+  /** Mensagens concatenadas para encaixar Axios/cause aninhadas. */
+  const chainedMsgs = roots
+    .flatMap((n) =>
+      n instanceof Error
+        ? n.message
+          ? [n.message]
+          : []
+        : typeof n === 'string'
+          ? [n]
+          : [],
+    )
+    .join(' ')
+    .trim();
+
+  const rawMsg =
+    chainedMsgs.length > 0
+      ? chainedMsgs
+      : err instanceof Error
+        ? err.message
+        : String(err);
+
+  for (const node of roots) {
+    const c = errnoCode(node);
+    if (c && OFFLINE_ERRNO_CODES.has(c)) {
+      return 'Leitor offline ou inacessível';
+    }
+  }
+
+  const lower = rawMsg.toLowerCase();
+  if (
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('econnaborted') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('ehostunreach') ||
+    lower.includes('enotfound') ||
+    lower.includes('enetunreach') ||
+    lower.includes('network error') ||
+    lower.includes('socket hang up')
+  ) {
+    return 'Leitor offline ou inacessível';
+  }
+
+  const http = httpStatusFromError(err);
+  if (http === 400) {
+    return 'Foto rejeitada pelo leitor: rosto não detectado ou qualidade insuficiente.';
+  }
+
+  /** Mensagem só em inglês, sem objeto `response` na raiz útil ao type checker. */
+  if (
+    /\brequest failed\b/i.test(rawMsg) &&
+    (/\bstatus(?:\s+code)?\D{0,5}400\b/i.test(rawMsg) || /\b400\b.*status\b/i.test(lower))
+  ) {
+    return 'Foto rejeitada pelo leitor: rosto não detectado ou qualidade insuficiente.';
+  }
+
+  if (http === 401 || http === 403) {
+    return 'Credenciais inválidas para o leitor.';
+  }
+  if (http !== undefined && http >= 500) {
+    return 'Erro interno no leitor.';
+  }
+
+  const looksTechnical =
+    /(?:^|\s)e(?:connrefused|timedout|hostunreach|notfound|netunreach|connaborted)/i.test(
+      lower,
+    ) ||
+    /\bconnect\s+[a-z]/i.test(rawMsg) ||
+    /\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?/.test(rawMsg);
+
+  if (looksTechnical || /request failed|\baxios\b|\btimeout\b|\btimed\s+out\b/i.test(lower)) {
+    return 'Leitor offline ou inacessível';
+  }
+
+  if (rawMsg.length > 0) return rawMsg;
+  return String(err);
+}
+
+/** Mensagem por leitor para `deviceSyncError` (ex.: fluxo FaceSyncService). */
+export function formatReaderFaceSyncError(readerName: string, err: unknown): string {
+  return `${readerName}: ${mapReaderError(err)}`;
+}
+
 type ApiDigestResponse = { status?: number; data?: unknown };
+
+/** Evita pendurar a API/gateway enquanto o SO tenta TCP até ~2min em IP inalcançável. */
+const READER_HTTP_TIMEOUT_MS = 10_000;
 
 function stripDataUriBase64(raw: string): string {
   return raw.replace(/^data:image\/[a-z+]+;base64,/, '');
@@ -52,7 +242,10 @@ async function digestRequest(
     headers?: Record<string, string>;
   },
 ): Promise<ApiDigestResponse> {
-  return auth.request(init) as Promise<ApiDigestResponse>;
+  return auth.request({
+    ...init,
+    timeout: READER_HTTP_TIMEOUT_MS,
+  } as Parameters<AxiosDigestAuth['request']>[0]) as Promise<ApiDigestResponse>;
 }
 
 /**

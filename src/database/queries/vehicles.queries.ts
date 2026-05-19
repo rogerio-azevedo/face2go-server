@@ -155,3 +155,67 @@ export async function vehicleDeleteForHousehold(
     .returning({ id: vehicles.id });
   return rows[0];
 }
+
+/** Lista todos os veículos da escola (gestão empresa / web). */
+export async function vehicleListForClient(
+  db: AppDb,
+  clientId: string,
+): Promise<VehicleWithDriverRow[]> {
+  const rows = await db
+    .select({
+      id: vehicles.id,
+      clientId: vehicles.clientId,
+      responsibleId: vehicles.responsibleId,
+      plate: vehicles.plate,
+      brand: vehicles.brand,
+      model: vehicles.model,
+      color: vehicles.color,
+      createdAt: vehicles.createdAt,
+      updatedAt: vehicles.updatedAt,
+      driverName: responsibles.name,
+    })
+    .from(vehicles)
+    .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .where(eq(vehicles.clientId, clientId))
+    .orderBy(desc(vehicles.createdAt));
+  return rows as VehicleWithDriverRow[];
+}
+
+export async function vehicleUpdateById(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  values: {
+    responsibleId: string;
+    plate: string;
+    brand: string;
+    model: string;
+    color: string;
+  },
+) {
+  const rows = await db
+    .update(vehicles)
+    .set({
+      responsibleId: values.responsibleId,
+      plate: values.plate,
+      brand: values.brand,
+      model: values.model,
+      color: values.color,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(vehicles.id, id), eq(vehicles.clientId, clientId)))
+    .returning();
+  return rows[0];
+}
+
+export async function vehicleDeleteById(
+  db: AppDb,
+  id: string,
+  clientId: string,
+) {
+  const rows = await db
+    .delete(vehicles)
+    .where(and(eq(vehicles.id, id), eq(vehicles.clientId, clientId)))
+    .returning({ id: vehicles.id });
+  return rows[0];
+}
