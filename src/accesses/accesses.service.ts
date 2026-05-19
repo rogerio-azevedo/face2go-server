@@ -193,6 +193,7 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
         clientId: ctx.clientId,
         personName,
         readerName: ctx.name,
+        readerDirection: ctx.direction ?? null,
         eventDate: eventDate ?? null,
       });
     } catch (err: unknown) {
@@ -323,6 +324,7 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
         clientId: ctx.clientId,
         personName,
         readerName: ctx.name,
+        readerDirection: ctx.direction ?? null,
         eventDate: eventDate ?? null,
       });
     } catch (err: unknown) {

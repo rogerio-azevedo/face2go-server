@@ -15,6 +15,7 @@ import {
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
+import * as readersQueries from '../database/queries/readers.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
@@ -80,6 +81,45 @@ export class SimulateService {
     return row;
   }
 
+  private async resolveSimulationReaderContext(
+    companyId: string,
+    clientId: string,
+    readerIdInput: string | undefined,
+  ): Promise<{
+    mongoReaderId: string;
+    readerName: string;
+    readerDirection: 'in' | 'out' | null;
+  }> {
+    const fallback = {
+      mongoReaderId: 'simulator',
+      readerName: 'Simulador (Dev)',
+      readerDirection: null as 'in' | 'out' | null,
+    };
+    const trimmed = readerIdInput?.trim();
+    if (!trimmed) {
+      return fallback;
+    }
+
+    const reader = await readersQueries.getReaderById(
+      this.database.db,
+      trimmed,
+      companyId,
+    );
+    if (
+      !reader ||
+      !reader.isActive ||
+      reader.clientId !== clientId
+    ) {
+      return fallback;
+    }
+
+    return {
+      mongoReaderId: reader.id,
+      readerName: reader.name,
+      readerDirection: reader.direction ?? null,
+    };
+  }
+
   async listPeople(
     user: JwtPayload,
     clientId: string,
@@ -124,6 +164,12 @@ export class SimulateService {
   ): Promise<{ accessId: string }> {
     const client = await this.resolveClientForUser(user, dto.clientId);
 
+    const simReader = await this.resolveSimulationReaderContext(
+      client.companyId,
+      dto.clientId,
+      dto.readerId,
+    );
+
     if (dto.personType === 'student') {
       const student = await studentsQueries.getStudentById(
         this.database.db,
@@ -157,8 +203,8 @@ export class SimulateService {
 
       const doc = await this.accessModel.create({
         companyId: client.companyId,
-        readerId: 'simulator',
-        readerName: 'Simulador (Dev)',
+        readerId: simReader.mongoReaderId,
+        readerName: simReader.readerName,
         clientId: dto.clientId,
         clientName: client.name,
         userId: student.faceId,
@@ -176,7 +222,8 @@ export class SimulateService {
         faceId: student.faceId,
         clientId: dto.clientId,
         personName,
-        readerName: 'Simulador (Dev)',
+        readerName: simReader.readerName,
+        readerDirection: simReader.readerDirection,
         eventDate:
           doc.eventDate instanceof Date
             ? doc.eventDate
@@ -223,8 +270,8 @@ export class SimulateService {
 
     const doc = await this.accessModel.create({
       companyId: client.companyId,
-      readerId: 'simulator',
-      readerName: 'Simulador (Dev)',
+      readerId: simReader.mongoReaderId,
+      readerName: simReader.readerName,
       clientId: dto.clientId,
       clientName: client.name,
       userId: responsible.faceId,
@@ -242,7 +289,8 @@ export class SimulateService {
       faceId: responsible.faceId,
       clientId: dto.clientId,
       personName,
-      readerName: 'Simulador (Dev)',
+      readerName: simReader.readerName,
+      readerDirection: simReader.readerDirection,
       eventDate:
         doc.eventDate instanceof Date
           ? doc.eventDate

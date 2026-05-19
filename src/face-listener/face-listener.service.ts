@@ -17,6 +17,7 @@ import { DatabaseService } from '../database/database.service';
 import { AccessesService } from '../accesses/accesses.service';
 import type {
   ReaderBrand,
+  ReaderDirection,
   ReaderEventStreamRow,
 } from '../database/queries/readers.queries';
 import * as readersQueries from '../database/queries/readers.queries';
@@ -52,6 +53,7 @@ type ReaderStreamContext = {
   clientName: string;
   companyId: string;
   brand: ReaderBrand;
+  direction: ReaderDirection | null;
   host: string;
   username: string;
   passwordPlain: string;
@@ -84,6 +86,7 @@ function toStreamContext(
       clientName: row.clientName,
       companyId: row.companyId,
       brand: row.brand,
+      direction: row.direction ?? null,
       host: hostFromIpPort(row.ip, row.port),
       username: row.username.trim(),
       passwordPlain,

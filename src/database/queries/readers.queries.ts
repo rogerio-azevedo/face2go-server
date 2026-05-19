@@ -340,6 +340,7 @@ export type ReaderEventStreamRow = {
   clientName: string;
   companyId: string;
   brand: ReaderBrand;
+  direction: ReaderDirection | null;
   ip: string;
   port: number;
   username: string;
@@ -357,6 +358,7 @@ export async function listReadersForEventStream(
       clientName: clients.name,
       companyId: clients.companyId,
       brand: facialReaders.brand,
+      direction: facialReaders.direction,
       ip: facialReaders.ip,
       port: facialReaders.port,
       username: facialReaders.username,
@@ -391,6 +393,7 @@ export async function listReadersForEventStream(
       clientName: r.clientName,
       companyId: r.companyId,
       brand: (r.brand ?? 'intelbras') as ReaderBrand,
+      direction: (r.direction ?? null) as ReaderDirection | null,
       ip: r.ip,
       port: r.port,
       username: r.username as string,
@@ -410,6 +413,7 @@ export async function getReaderForEventStreamById(
       clientName: clients.name,
       companyId: clients.companyId,
       brand: facialReaders.brand,
+      direction: facialReaders.direction,
       ip: facialReaders.ip,
       port: facialReaders.port,
       username: facialReaders.username,
@@ -444,6 +448,7 @@ export async function getReaderForEventStreamById(
     clientName: row.clientName,
     companyId: row.companyId,
     brand: (row.brand ?? 'intelbras') as ReaderBrand,
+    direction: (row.direction ?? null) as ReaderDirection | null,
     ip: row.ip,
     port: row.port,
     username: row.username,

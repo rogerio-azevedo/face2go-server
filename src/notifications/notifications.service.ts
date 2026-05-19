@@ -82,7 +82,13 @@ export class NotificationsService {
 
     const displayName = payload.personName?.trim() || student.name;
     const title = 'Acesso facial';
-    const body = `${displayName} registrou entrada em ${payload.readerName}.`;
+    const verb =
+      payload.readerDirection === 'in'
+        ? 'ENTROU em'
+        : payload.readerDirection === 'out'
+          ? 'SAIU de'
+          : 'acessou';
+    const body = `${displayName} ${verb} ${payload.readerName}.`;
 
     await this.dispatchExpoPush(tokens, title, body, {
       type: 'student_access',
