@@ -155,6 +155,13 @@
       "when": 1778910000000,
       "tag": "0021_clients_display_short_code",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778920000000,
+      "tag": "0022_reader_direction",
+      "breakpoints": true
     }
   ]
 }

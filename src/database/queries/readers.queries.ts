@@ -6,11 +6,14 @@ import { clients, facialReaders } from '../schema';
 
 export type ReaderBrand = 'intelbras' | 'hikvision';
 
+export type ReaderDirection = 'in' | 'out';
+
 export type ReaderListRow = {
   id: string;
   clientId: string;
   clientName: string;
   brand: ReaderBrand;
+  direction: ReaderDirection | null;
   name: string;
   description: string | null;
   ip: string;
@@ -45,6 +48,7 @@ export async function listReaders(
       clientId: facialReaders.clientId,
       clientName: clients.name,
       brand: facialReaders.brand,
+      direction: facialReaders.direction,
       name: facialReaders.name,
       description: facialReaders.description,
       ip: facialReaders.ip,
@@ -66,6 +70,7 @@ export async function listReaders(
   return rows.map(({ passwordEncrypted, ...r }) => ({
     ...r,
     brand: (r.brand ?? 'intelbras') as ReaderBrand,
+    direction: (r.direction ?? null) as ReaderDirection | null,
     hasCredentials: !!(
       r.username?.trim() &&
       passwordEncrypted != null &&
@@ -85,6 +90,7 @@ export async function getReaderById(
       clientId: facialReaders.clientId,
       companyId: clients.companyId,
       brand: facialReaders.brand,
+      direction: facialReaders.direction,
       name: facialReaders.name,
       description: facialReaders.description,
       ip: facialReaders.ip,
@@ -111,6 +117,7 @@ export async function getReaderById(
   return {
     ...rest,
     brand: (row.brand ?? 'intelbras') as ReaderBrand,
+    direction: (row.direction ?? null) as ReaderDirection | null,
     hasCredentials: !!(
       row.username?.trim() &&
       passwordEncrypted != null &&
@@ -149,6 +156,7 @@ export type ReaderCreateInput = {
   companyId: string;
   clientId: string;
   brand: ReaderBrand;
+  direction?: ReaderDirection | null;
   name: string;
   description?: string | null;
   ip: string;
@@ -176,6 +184,7 @@ export async function createReader(db: AppDb, input: ReaderCreateInput) {
     .values({
       clientId: input.clientId,
       brand: input.brand,
+      direction: input.direction ?? null,
       name: input.name.trim(),
       description: input.description?.trim() || null,
       ip: input.ip.trim(),
@@ -195,6 +204,7 @@ export async function createReader(db: AppDb, input: ReaderCreateInput) {
 export type ReaderUpdateInput = Partial<{
   clientId: string;
   brand: ReaderBrand;
+  direction: ReaderDirection | null;
   name: string;
   description: string | null;
   ip: string;
@@ -233,6 +243,7 @@ export async function updateReader(
 
   if (input.clientId !== undefined) setPayload.clientId = input.clientId;
   if (input.brand !== undefined) setPayload.brand = input.brand;
+  if (input.direction !== undefined) setPayload.direction = input.direction;
   if (input.name !== undefined) setPayload.name = input.name.trim();
   if (input.description !== undefined) {
     setPayload.description =
@@ -312,6 +323,7 @@ export function readerRowToPublic(row: typeof facialReaders.$inferSelect) {
   return {
     ...rest,
     brand: (rest.brand ?? 'intelbras') as ReaderBrand,
+    direction: (rest.direction ?? null) as ReaderDirection | null,
     hasCredentials: !!(
       rest.username?.trim() &&
       passwordEncrypted != null &&

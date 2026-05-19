@@ -16,12 +16,15 @@ export const readerBrandEnum = pgEnum('reader_brand', [
   'hikvision',
 ]);
 
+export const readerDirectionEnum = pgEnum('reader_direction', ['in', 'out']);
+
 export const facialReaders = pgTable('facial_readers', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: uuid('client_id')
     .notNull()
     .references(() => clients.id, { onDelete: 'cascade' }),
   brand: readerBrandEnum('brand').notNull().default('intelbras'),
+  direction: readerDirectionEnum('direction'),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
   /** IPv4, IPv6 ou hostname (DNS/DDNS); FQDN até 253 caracteres (RFC 1035). */

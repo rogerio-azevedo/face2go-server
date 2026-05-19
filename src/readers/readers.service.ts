@@ -123,6 +123,7 @@ export class ReadersService {
       companyId,
       clientId: d.clientId,
       brand: d.brand,
+      direction: d.direction ?? null,
       name: d.name,
       description: d.description,
       ip: d.ip,
@@ -164,7 +165,8 @@ export class ReadersService {
       d.location === undefined &&
       d.isActive === undefined &&
       d.username === undefined &&
-      d.password === undefined
+      d.password === undefined &&
+      d.direction === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
     }
@@ -197,6 +199,7 @@ export class ReadersService {
       ...(d.model !== undefined ? { model: d.model ?? null } : {}),
       ...(d.location !== undefined ? { location: d.location ?? null } : {}),
       ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+      ...(d.direction !== undefined ? { direction: d.direction } : {}),
     };
 
     if (d.username !== undefined) {

@@ -30,9 +30,12 @@ const optionalTrimmed = z
 
 export const READER_BRANDS = ['intelbras', 'hikvision'] as const;
 
+export const READER_DIRECTIONS = ['in', 'out'] as const;
+
 export const readerSchema = z.object({
   clientId: z.string().uuid('Cliente inválido.'),
   brand: z.enum(READER_BRANDS, { message: 'Marca inválida.' }),
+  direction: z.enum(READER_DIRECTIONS).optional().nullable(),
   name: z
     .string()
     .trim()
