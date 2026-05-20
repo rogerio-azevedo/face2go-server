@@ -371,6 +371,35 @@ export async function deleteResponsibleStudentLink(
   return rows[0];
 }
 
+type ResponsibleStudentPatch = Partial<
+  Pick<
+    typeof responsibleStudents.$inferInsert,
+    'relationshipType' | 'isAuthorizedPickup'
+  >
+>;
+
+export async function updateResponsibleStudentLink(
+  db: AppDb,
+  responsibleId: string,
+  studentId: string,
+  patch: ResponsibleStudentPatch,
+) {
+  if (Object.keys(patch).length === 0) {
+    return undefined;
+  }
+  const [row] = await db
+    .update(responsibleStudents)
+    .set(patch)
+    .where(
+      and(
+        eq(responsibleStudents.responsibleId, responsibleId),
+        eq(responsibleStudents.studentId, studentId),
+      ),
+    )
+    .returning();
+  return row;
+}
+
 export async function listResponsibleStudentLinksWithStudents(
   db: AppDb,
   responsibleId: string,

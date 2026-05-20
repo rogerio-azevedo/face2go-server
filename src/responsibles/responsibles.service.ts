@@ -17,6 +17,7 @@ import {
   createResponsibleSchema,
   linkResponsibleStudentSchema,
   updateResponsibleSchema,
+  updateResponsibleStudentLinkSchema,
 } from '../validation/responsibles.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 
@@ -229,6 +230,57 @@ export class ResponsiblesService {
         'Este vínculo já existe ou não pôde ser criado.',
       );
     }
+  }
+
+  async updateLink(
+    user: JwtPayload,
+    clientId: string,
+    responsibleId: string,
+    studentId: string,
+    body: unknown,
+  ) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const parsed = updateResponsibleStudentLinkSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const d = parsed.data;
+    if (
+      d.relationshipType === undefined &&
+      d.isAuthorizedPickup === undefined
+    ) {
+      throw new BadRequestException('Nada para atualizar.');
+    }
+
+    const responsible = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!responsible) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    const patch = {
+      ...(d.relationshipType !== undefined
+        ? { relationshipType: d.relationshipType }
+        : {}),
+      ...(d.isAuthorizedPickup !== undefined
+        ? { isAuthorizedPickup: d.isAuthorizedPickup }
+        : {}),
+    };
+
+    const updated =
+      await responsiblesQueries.updateResponsibleStudentLink(
+        this.database.db,
+        responsibleId,
+        studentId,
+        patch,
+      );
+    if (!updated) {
+      throw new NotFoundException('Vínculo não encontrado.');
+    }
+    return updated;
   }
 
   async unlinkStudent(

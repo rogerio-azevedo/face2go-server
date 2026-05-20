@@ -35,3 +35,9 @@ export const linkResponsibleStudentSchema = z.object({
   relationshipType: responsibleRelationshipSchema,
   isAuthorizedPickup: z.boolean().optional().default(true),
 });
+
+/** Body do PATCH vínculo: ao menos um campo deve ser enviado (validação no service). */
+export const updateResponsibleStudentLinkSchema = z.object({
+  relationshipType: responsibleRelationshipSchema.optional(),
+  isAuthorizedPickup: z.boolean().optional(),
+});

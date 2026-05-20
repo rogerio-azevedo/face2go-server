@@ -93,6 +93,26 @@ export class ResponsiblesController {
     );
   }
 
+  @Patch(':responsibleId/students/:studentId')
+  @ApiOperation({
+    summary: 'Atualizar vínculo (parentesco / autorização de retirada)',
+  })
+  updateLink(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() body: unknown,
+  ) {
+    return this.responsiblesService.updateLink(
+      user,
+      clientId,
+      responsibleId,
+      studentId,
+      body,
+    );
+  }
+
   @Get(':responsibleId')
   @ApiOperation({ summary: 'Detalhe do responsável' })
   getOne(
