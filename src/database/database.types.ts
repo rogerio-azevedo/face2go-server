@@ -1,5 +1,5 @@
-import type { NeonHttpDatabase } from 'drizzle-orm/neon-http';
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 
 import type * as schema from './schema';
 
-export type AppDb = NeonHttpDatabase<typeof schema>;
+export type AppDb = PostgresJsDatabase<typeof schema>;

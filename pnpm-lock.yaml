@@ -14,9 +14,6 @@ dependencies:
   '@mhoc/axios-digest-auth':
     specifier: ^0.8.0
     version: 0.8.0
-  '@neondatabase/serverless':
-    specifier: ^1.1.0
-    version: 1.1.0
   '@nestjs/common':
     specifier: ^11.0.1
     version: 11.1.19(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -58,7 +55,7 @@ dependencies:
     version: 17.4.2
   drizzle-orm:
     specifier: ^0.45.2
-    version: 0.45.2(@neondatabase/serverless@1.1.0)
+    version: 0.45.2(postgres@3.4.9)
   mongoose:
     specifier: ^9.6.1
     version: 9.6.1
@@ -71,6 +68,9 @@ dependencies:
   passport-local:
     specifier: ^1.0.0
     version: 1.0.0
+  postgres:
+    specifier: ^3.4.9
+    version: 3.4.9
   reflect-metadata:
     specifier: ^0.2.2
     version: 0.2.2
@@ -2790,11 +2790,6 @@ packages:
     dev: true
     optional: true
 
-  /@neondatabase/serverless@1.1.0:
-    resolution: {integrity: sha512-r3ZZhRjEcfEdKIZnoB1RusNgvHuaBRqfCzV4Gi+5A9yUX0S4HTws/ASWqt13wL4y4I+0rqsWGdA2w7EQXHi3+Q==}
-    engines: {node: '>=19.0.0'}
-    dev: false
-
   /@nestjs/cli@11.0.21(@types/node@22.19.17)(prettier@3.8.3):
     resolution: {integrity: sha512-F8mV0Sj/zVEouzR3NxBuJy08YHTUOmC5Xdcx3qIIaJWzrm8Vw86CHkhkaPBJ5ewRMHPDCShPmhsfwhpCcjts3A==}
     engines: {node: '>= 20.11'}
@@ -5014,7 +5009,7 @@ packages:
       tsx: 4.21.0
     dev: true
 
-  /drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0):
+  /drizzle-orm@0.45.2(postgres@3.4.9):
     resolution: {integrity: sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==}
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
@@ -5106,7 +5101,7 @@ packages:
       sqlite3:
         optional: true
     dependencies:
-      '@neondatabase/serverless': 1.1.0
+      postgres: 3.4.9
     dev: false
 
   /dunder-proto@1.0.1:
@@ -7204,6 +7199,11 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
     dev: true
+
+  /postgres@3.4.9:
+    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
+    engines: {node: '>=12'}
+    dev: false
 
   /prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}

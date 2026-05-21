@@ -1,10 +1,10 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/postgres-js';
 
 import { ALL_FEATURES } from '../common/features.constants';
+import { createPostgresClient } from '../database/postgres-connection';
 import type { AppDb } from '../database/database.types';
 import * as schema from '../database/schema';
 
@@ -33,38 +33,43 @@ async function main() {
     throw new Error('DATABASE_URL ou POSTGRES_URL é obrigatório para o seed.');
   }
 
-  const sql = neon(databaseUrl);
-  const db = drizzle(sql, { schema }) as AppDb;
+  const client = createPostgresClient(databaseUrl);
 
-  const email =
-    process.env.SUPER_ADMIN_EMAIL ?? 'admin@face2go.local';
-  const password =
-    process.env.SUPER_ADMIN_PASSWORD ?? 'altere-esta-senha';
+  try {
+    const db = drizzle(client, { schema }) as AppDb;
 
-  const [existing] = await db
-    .select({ id: schema.users.id })
-    .from(schema.users)
-    .where(eq(schema.users.email, email))
-    .limit(1);
+    const email =
+      process.env.SUPER_ADMIN_EMAIL ?? 'admin@face2go.local';
+    const password =
+      process.env.SUPER_ADMIN_PASSWORD ?? 'altere-esta-senha';
 
-  if (existing) {
-    console.info(`Super admin já existe: ${email}`);
-  } else {
-    const hash = await bcrypt.hash(password, 12);
+    const [existing] = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
 
-    await db.insert(schema.users).values({
-      email,
-      name: 'Super Admin',
-      password: hash,
-      role: 'super_admin',
-      isActive: true,
-    });
+    if (existing) {
+      console.info(`Super admin já existe: ${email}`);
+    } else {
+      const hash = await bcrypt.hash(password, 12);
 
-    console.info(`Super admin criado: ${email}`);
+      await db.insert(schema.users).values({
+        email,
+        name: 'Super Admin',
+        password: hash,
+        role: 'super_admin',
+        isActive: true,
+      });
+
+      console.info(`Super admin criado: ${email}`);
+    }
+
+    await seedFeaturesIfNeeded(db);
+    console.info('Catálogo de features verificado.');
+  } finally {
+    await client.end({ timeout: 5 });
   }
-
-  await seedFeaturesIfNeeded(db);
-  console.info('Catálogo de features verificado.');
 }
 
 main()

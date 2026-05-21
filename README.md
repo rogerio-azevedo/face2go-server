@@ -95,8 +95,10 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 
 ## Face2go — backend API
 
-Variáveis de ambiente: copie [`.env.example`](./.env.example) para `.env` e defina `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL` (URL do Next.js, ex.: `http://localhost:3000`). Em desenvolvimento o servidor usa `PORT` padrão **3001**.
+Variáveis de ambiente: copie [`.env.example`](./.env.example) para `.env` e defina `DATABASE_URL` (Postgres TCP, ex. AWS RDS: `postgresql://user:senha@endpoint.rds.amazonaws.com:5432/face2go?sslmode=require`), `JWT_SECRET`, `FRONTEND_URL` (URL do Next.js, ex.: `http://localhost:3000`). Em desenvolvimento o servidor usa `PORT` padrão **3001**.
 
+- **PostgreSQL / RDS:** evite `schema=public` na URI (herança Neon/Prisma pode quebrar o driver). TLS: `?sslmode=require` **ou** `POSTGRES_SSL=require` em produção.
+- **Criar banco lógico (primeiro provisionamento RDS):** `pnpm db:create`
 - **Migrations:** `pnpm db:migrate` (usa `drizzle-kit` na pasta [`drizzle/`](./drizzle)).
 - **Seed (super admin + catálogo de features):** `pnpm db:seed`
 - **Swagger:** com o servidor rodando, abra `/api/docs`.
