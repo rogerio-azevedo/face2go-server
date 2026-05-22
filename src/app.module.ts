@@ -16,6 +16,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { DatabaseModule } from './database/database.module';
 import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
+import { LegalDocumentsModule } from './legal-documents/legal-documents.module';
 import { MeModule } from './me/me.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SimulateModule } from './simulate/simulate.module';
@@ -67,6 +68,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     MeModule,
     NotificationsModule,
     HealthModule,
+    LegalDocumentsModule,
     ArrivalsModule,
     SimulateModule,
   ],

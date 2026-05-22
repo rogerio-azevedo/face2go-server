@@ -7,6 +7,7 @@ import { ALL_FEATURES } from '../common/features.constants';
 import { createPostgresClient } from '../database/postgres-connection';
 import type { AppDb } from '../database/database.types';
 import * as schema from '../database/schema';
+import { seedLegalDocumentsIfNeeded } from './seed-legal-documents';
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 
@@ -67,6 +68,9 @@ async function main() {
 
     await seedFeaturesIfNeeded(db);
     console.info('Catálogo de features verificado.');
+
+    await seedLegalDocumentsIfNeeded(db);
+    console.info('Documentos legais verificados.');
   } finally {
     await client.end({ timeout: 5 });
   }
