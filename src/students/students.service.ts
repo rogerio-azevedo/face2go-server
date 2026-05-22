@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 
@@ -9,6 +10,7 @@ import * as schoolClassQueries from '../database/queries/school-classes.queries'
 import * as studentsQueries from '../database/queries/students.queries';
 import { DatabaseService } from '../database/database.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 import {
   createStudentSchema,
   updateStudentSchema,
@@ -17,9 +19,12 @@ import { zodFirstMessage } from '../validation/zod-utils';
 
 @Injectable()
 export class StudentsService {
+  private readonly log = new Logger(StudentsService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly schoolAccess: SchoolAccessService,
+    private readonly r2Storage: R2StorageService,
   ) {}
 
   async list(
@@ -28,6 +33,10 @@ export class StudentsService {
     classId?: string,
   ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    let rows: Awaited<
+      ReturnType<(typeof studentsQueries)['listStudentsByClient']>
+    >;
+
     if (classId) {
       const klass = await schoolClassQueries.getSchoolClassById(
         this.database.db,
@@ -37,13 +46,37 @@ export class StudentsService {
       if (!klass) {
         throw new NotFoundException('Turma não encontrada.');
       }
-      return studentsQueries.listStudentsByClass(
+      rows = await studentsQueries.listStudentsByClass(
         this.database.db,
         clientId,
         classId,
       );
+    } else {
+      rows = await studentsQueries.listStudentsByClient(
+        this.database.db,
+        clientId,
+      );
     }
-    return studentsQueries.listStudentsByClient(this.database.db, clientId);
+
+    return Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        photoUrl: await this.optionalPhotoUrl(row.photoKey),
+      })),
+    );
+  }
+
+  private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
+    if (!photoKey) return null;
+    try {
+      return await this.r2Storage.createPresignedGetUrl(photoKey);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.log.warn(
+        `URL assinada (aluno/R2): falha para key="${photoKey}": ${msg}`,
+      );
+      return null;
+    }
   }
 
   async getById(user: JwtPayload, clientId: string, studentId: string) {

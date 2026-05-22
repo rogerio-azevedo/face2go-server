@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
@@ -13,6 +14,7 @@ import * as studentsQueries from '../database/queries/students.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { SchoolAccessService } from '../school-access/school-access.service';
+import { R2StorageService } from '../storage/r2-storage.service';
 import {
   createResponsibleSchema,
   linkResponsibleStudentSchema,
@@ -23,17 +25,39 @@ import { zodFirstMessage } from '../validation/zod-utils';
 
 @Injectable()
 export class ResponsiblesService {
+  private readonly log = new Logger(ResponsiblesService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly schoolAccess: SchoolAccessService,
+    private readonly r2Storage: R2StorageService,
   ) {}
 
   async list(user: JwtPayload, clientId: string) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    return responsiblesQueries.listResponsiblesByClient(
+    const rows = await responsiblesQueries.listResponsiblesByClient(
       this.database.db,
       clientId,
     );
+    return Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        photoUrl: await this.optionalPhotoUrl(row.photoKey),
+      })),
+    );
+  }
+
+  private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
+    if (!photoKey) return null;
+    try {
+      return await this.r2Storage.createPresignedGetUrl(photoKey);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.log.warn(
+        `URL assinada (responsável/R2): falha para key="${photoKey}": ${msg}`,
+      );
+      return null;
+    }
   }
 
   async getById(user: JwtPayload, clientId: string, responsibleId: string) {
@@ -177,10 +201,21 @@ export class ResponsiblesService {
     if (!responsible) {
       throw new NotFoundException('Responsável não encontrado.');
     }
-    return responsiblesQueries.listResponsibleStudentLinksWithStudents(
-      this.database.db,
-      responsibleId,
-      clientId,
+    const rows =
+      await responsiblesQueries.listResponsibleStudentLinksWithStudents(
+        this.database.db,
+        responsibleId,
+        clientId,
+      );
+    return Promise.all(
+      rows.map(async (item) => ({
+        link: item.link,
+        student: {
+          ...item.student,
+          photoUrl: await this.optionalPhotoUrl(item.student.photoKey),
+        },
+        schoolClass: item.schoolClass,
+      })),
     );
   }
 
