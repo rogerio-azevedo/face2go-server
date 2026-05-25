@@ -4,6 +4,7 @@ export * from './invite-links';
 export * from './permissions';
 export * from './clients';
 export * from './readers';
+export * from './cameras';
 export * from './faces';
 export * from './registrations';
 export * from './schools';

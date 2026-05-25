@@ -7,6 +7,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ArrivalsModule } from './arrivals/arrivals.module';
 import { AuthModule } from './auth/auth.module';
 import { AccessesModule } from './accesses/accesses.module';
+import { CamerasModule } from './cameras/cameras.module';
 import { ClientsModule } from './clients/clients.module';
 import { CompaniesModule } from './companies/companies.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
@@ -14,6 +15,7 @@ import { validateEnv, type EnvVars } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { DatabaseModule } from './database/database.module';
+import { LprPlateSyncModule } from './lpr-plate-sync/lpr-plate-sync.module';
 import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
 import { LegalDocumentsModule } from './legal-documents/legal-documents.module';
@@ -50,10 +52,12 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     DatabaseModule,
     StorageModule,
     PermissionsModule,
+    LprPlateSyncModule,
     AuthModule,
     CompaniesModule,
     ClientsModule,
     ReadersModule,
+    CamerasModule,
     RegistrationsModule,
     CompanyUsersModule,
     SchoolClassesModule,

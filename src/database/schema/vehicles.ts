@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm';
 import {
   pgTable,
+  text,
   timestamp,
   unique,
   uuid,
@@ -8,6 +9,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { clients } from './clients';
+import { deviceSyncStatusEnum } from './registrations';
 import { responsibles } from './responsibles';
 
 export const vehicles = pgTable(
@@ -27,6 +29,12 @@ export const vehicles = pgTable(
     color: varchar('color', { length: 50 }).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    /** Sincronização da placa com câmeras LPR Intelbras (TrafficRedList). */
+    lprSyncStatus: deviceSyncStatusEnum('lpr_sync_status').default(
+      'pending_sync',
+    ),
+    lprSyncError: text('lpr_sync_error'),
+    lprSyncedAt: timestamp('lpr_synced_at'),
   },
   (t) => ({
     plateClientUnique: unique('vehicles_client_plate_unique').on(

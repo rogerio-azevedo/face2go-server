@@ -5,14 +5,14 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import { ALL_FEATURES, type FeatureSlug, type PermissionAction } from '../common/features.constants';
+import {
+  ALL_FEATURES,
+  type FeatureSlug,
+  type PermissionAction,
+} from '../common/features.constants';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PermissionsService } from '../permissions/permissions.service';
 
@@ -20,7 +20,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 @ApiBearerAuth()
 @Controller('me')
 export class MeController {
-  constructor(private readonly permissionsService: PermissionsService) {}
+  constructor(private readonly permissionsService: PermissionsService) { }
 
   @Get('navigation')
   @ApiOperation({
@@ -77,11 +77,10 @@ export class MeController {
     if (!slugOk) {
       throw new BadRequestException('Feature inválida.');
     }
-    const actions =
-      await this.permissionsService.getEffectivePermissionActions(
-        user,
-        featureSlug as FeatureSlug,
-      );
+    const actions = await this.permissionsService.getEffectivePermissionActions(
+      user,
+      featureSlug as FeatureSlug,
+    );
     return { actions };
   }
 }

@@ -9,3 +9,14 @@ export type AccessFacialRecordedPayload = {
   readerDirection: 'in' | 'out' | null;
   eventDate: Date | null;
 };
+
+export const ACCESS_LPR_RECORDED = 'access.lpr.recorded';
+
+export type AccessLprRecordedPayload = {
+  accessId: string;
+  cameraId: string;
+  clientId: string;
+  plateNumber: string;
+  cameraName: string;
+  snapTime: Date | null;
+};

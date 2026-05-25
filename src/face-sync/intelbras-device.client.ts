@@ -134,10 +134,37 @@ function httpStatusFromError(err: unknown): number | undefined {
 }
 
 /**
- * Converte erro bruto da comunicação com o leitor (rede / HTTP CGI) em mensagem amigável.
- * Não inclui o nome do leitor — use `formatReaderFaceSyncError` no agregador.
+ * Fluxo facial: mensagens mencionam "leitor" e HTTP 400 costuma significar foto/rosto inválidos.
+ * Fluxo LPR: HTTP 400 em CGI de placas é outro contexto — não reutilizar mensagem de face.
  */
-export function mapReaderError(err: unknown): string {
+export type IntelbrasHttpMessaging = 'facial' | 'lpr';
+
+const INTELBRAS_ERR_MSG = {
+  facial: {
+    offline: 'Leitor offline ou inacessível',
+    bad400:
+      'Foto rejeitada pelo leitor: rosto não detectado ou qualidade insuficiente.',
+    unauthorized: 'Credenciais inválidas para o leitor.',
+    serverError: 'Erro interno no leitor.',
+  },
+  lpr: {
+    offline: 'Câmera LPR offline ou inacessível',
+    bad400:
+      'A câmera recusou a consulta (HTTP 400). Verifique firmware, modelo e permissões HTTP (Digest); não está relacionado a reconhecimento facial.',
+    unauthorized: 'Credenciais inválidas para a câmera.',
+    serverError: 'Erro interno na câmera.',
+  },
+} satisfies Record<IntelbrasHttpMessaging, Record<string, string>>;
+
+/**
+ * Converte erro bruto da comunicação com o leitor ou câmera (rede / HTTP CGI) em mensagem amigável.
+ * Não inclui o nome do equipamento — use `formatReaderFaceSyncError` no agregador.
+ */
+export function mapReaderError(
+  err: unknown,
+  messaging: IntelbrasHttpMessaging = 'facial',
+): string {
+  const msgs = INTELBRAS_ERR_MSG[messaging];
   const roots = walkErrorRoots(err);
 
   /** Mensagens concatenadas para encaixar Axios/cause aninhadas. */
@@ -164,7 +191,7 @@ export function mapReaderError(err: unknown): string {
   for (const node of roots) {
     const c = errnoCode(node);
     if (c && OFFLINE_ERRNO_CODES.has(c)) {
-      return 'Leitor offline ou inacessível';
+      return msgs.offline;
     }
   }
 
@@ -181,12 +208,12 @@ export function mapReaderError(err: unknown): string {
     lower.includes('network error') ||
     lower.includes('socket hang up')
   ) {
-    return 'Leitor offline ou inacessível';
+    return msgs.offline;
   }
 
   const http = httpStatusFromError(err);
   if (http === 400) {
-    return 'Foto rejeitada pelo leitor: rosto não detectado ou qualidade insuficiente.';
+    return msgs.bad400;
   }
 
   /** Mensagem só em inglês, sem objeto `response` na raiz útil ao type checker. */
@@ -194,14 +221,14 @@ export function mapReaderError(err: unknown): string {
     /\brequest failed\b/i.test(rawMsg) &&
     (/\bstatus(?:\s+code)?\D{0,5}400\b/i.test(rawMsg) || /\b400\b.*status\b/i.test(lower))
   ) {
-    return 'Foto rejeitada pelo leitor: rosto não detectado ou qualidade insuficiente.';
+    return msgs.bad400;
   }
 
   if (http === 401 || http === 403) {
-    return 'Credenciais inválidas para o leitor.';
+    return msgs.unauthorized;
   }
   if (http !== undefined && http >= 500) {
-    return 'Erro interno no leitor.';
+    return msgs.serverError;
   }
 
   const looksTechnical =
@@ -211,8 +238,11 @@ export function mapReaderError(err: unknown): string {
     /\bconnect\s+[a-z]/i.test(rawMsg) ||
     /\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?/.test(rawMsg);
 
-  if (looksTechnical || /request failed|\baxios\b|\btimeout\b|\btimed\s+out\b/i.test(lower)) {
-    return 'Leitor offline ou inacessível';
+  if (
+    looksTechnical ||
+    /request failed|\baxios\b|\btimeout\b|\btimed\s+out\b/i.test(lower)
+  ) {
+    return msgs.offline;
   }
 
   if (rawMsg.length > 0) return rawMsg;

@@ -169,6 +169,20 @@
       "when": 1778930000000,
       "tag": "0023_legal_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778940000000,
+      "tag": "0024_cameras",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778950000000,
+      "tag": "0025_vehicle_lpr_sync",
+      "breakpoints": true
     }
   ]
 }

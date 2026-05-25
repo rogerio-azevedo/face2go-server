@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 
@@ -10,6 +11,7 @@ import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as vehicleQueries from '../database/queries/vehicles.queries';
 import type { VehicleWithDriverRow } from '../database/queries/vehicles.queries';
+import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import {
   createVehicleSchema,
@@ -27,6 +29,10 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+function normalizeVehiclePlateCmp(plate: string): string {
+  return plate.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
 export type VehicleDriverOptionDto = {
   id: string;
   name: string;
@@ -35,9 +41,12 @@ export type VehicleDriverOptionDto = {
 
 @Injectable()
 export class VehiclesService {
+  private readonly log = new Logger(VehiclesService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly schoolAccess: SchoolAccessService,
+    private readonly lprPlateSync: LprPlateSyncService,
   ) {}
 
   private assertResponsibleJwt(user: JwtPayload): asserts user is JwtPayload & {
@@ -113,6 +122,22 @@ export class VehiclesService {
         row.responsibleId,
         user.clientId,
       );
+      void this.lprPlateSync
+        .syncVehiclePlateOnCameras({
+          clientId: user.clientId,
+          vehicleId: row.id,
+          plate: row.plate,
+          ownerDisplayName: driver?.name ?? 'CONDUTOR',
+          vehicleColor: row.color,
+          logContext: `create responsible vehicle=${row.id}`,
+        })
+        .catch((e) =>
+          this.log.warn(
+            `LPR sync create veículo ${row.id}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          ),
+        );
       return {
         ...row,
         driverName: driver?.name ?? '',
@@ -147,6 +172,15 @@ export class VehiclesService {
     }
 
     try {
+      const prev = await vehicleQueries.vehicleGetWithDriver(
+        this.database.db,
+        id,
+        user.clientId,
+      );
+      if (!prev || !household.includes(prev.responsibleId)) {
+        throw new NotFoundException('Veículo não encontrado.');
+      }
+
       const row = await vehicleQueries.vehicleUpdateForHousehold(
         this.database.db,
         id,
@@ -168,6 +202,53 @@ export class VehiclesService {
         row.responsibleId,
         user.clientId,
       );
+
+      const plateChanged =
+        normalizeVehiclePlateCmp(prev.plate) !==
+        normalizeVehiclePlateCmp(row.plate);
+      if (plateChanged) {
+        void this.lprPlateSync
+          .removePlateFromAllLprCameras(
+            user.clientId,
+            prev.plate,
+            `plat change vehicle=${id}`,
+          )
+          .then(() =>
+            this.lprPlateSync.syncVehiclePlateOnCameras({
+              clientId: user.clientId,
+              vehicleId: id,
+              plate: row.plate,
+              ownerDisplayName: driver?.name ?? 'CONDUTOR',
+              vehicleColor: row.color,
+              logContext: `update plate vehicle=${id}`,
+            }),
+          )
+          .catch((e) =>
+            this.log.warn(
+              `LPR sync atualizar placa vehicle=${id}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            ),
+          );
+      } else {
+        void this.lprPlateSync
+          .syncVehiclePlateOnCameras({
+            clientId: user.clientId,
+            vehicleId: id,
+            plate: row.plate,
+            ownerDisplayName: driver?.name ?? 'CONDUTOR',
+            vehicleColor: row.color,
+            logContext: `update vehicle=${id}`,
+          })
+          .catch((e) =>
+            this.log.warn(
+              `LPR sync atualizar veículo ${id}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            ),
+          );
+      }
+
       return {
         ...row,
         driverName: driver?.name ?? '',
@@ -188,6 +269,29 @@ export class VehiclesService {
   async deleteForResponsible(user: JwtPayload, id: string): Promise<void> {
     this.assertResponsibleJwt(user);
     const household = await this.householdResponsibleIds(user);
+    const existing = await vehicleQueries.vehicleGetWithDriver(
+      this.database.db,
+      id,
+      user.clientId,
+    );
+    if (!existing || !household.includes(existing.responsibleId)) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+
+    void this.lprPlateSync
+      .removePlateFromAllLprCameras(
+        user.clientId,
+        existing.plate,
+        `delete vehicle=${id}`,
+      )
+      .catch((e) =>
+        this.log.warn(
+          `LPR remove ao excluir veículo ${id}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        ),
+      );
+
     const deleted = await vehicleQueries.vehicleDeleteForHousehold(
       this.database.db,
       id,
@@ -254,6 +358,24 @@ export class VehiclesService {
       if (!row) {
         throw new BadRequestException('Não foi possível cadastrar o veículo.');
       }
+
+      void this.lprPlateSync
+        .syncVehiclePlateOnCameras({
+          clientId,
+          vehicleId: row.id,
+          plate: row.plate,
+          ownerDisplayName: driver.name ?? 'CONDUTOR',
+          vehicleColor: row.color,
+          logContext: `create company-client vehicle=${row.id}`,
+        })
+        .catch((e) =>
+          this.log.warn(
+            `LPR sync create veículo ${row.id}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          ),
+        );
+
       return {
         ...row,
         driverName: driver.name ?? '',
@@ -293,6 +415,15 @@ export class VehiclesService {
     }
 
     try {
+      const prev = await vehicleQueries.vehicleGetWithDriver(
+        this.database.db,
+        id,
+        clientId,
+      );
+      if (!prev) {
+        throw new NotFoundException('Veículo não encontrado.');
+      }
+
       const row = await vehicleQueries.vehicleUpdateById(
         this.database.db,
         id,
@@ -308,6 +439,53 @@ export class VehiclesService {
       if (!row) {
         throw new NotFoundException('Veículo não encontrado.');
       }
+
+      const plateChanged =
+        normalizeVehiclePlateCmp(prev.plate) !==
+        normalizeVehiclePlateCmp(row.plate);
+      if (plateChanged) {
+        void this.lprPlateSync
+          .removePlateFromAllLprCameras(
+            clientId,
+            prev.plate,
+            `plate change vehicle=${id}`,
+          )
+          .then(() =>
+            this.lprPlateSync.syncVehiclePlateOnCameras({
+              clientId,
+              vehicleId: id,
+              plate: row.plate,
+              ownerDisplayName: driver.name ?? 'CONDUTOR',
+              vehicleColor: row.color,
+              logContext: `update plate vehicle=${id}`,
+            }),
+          )
+          .catch((e) =>
+            this.log.warn(
+              `LPR sync atualizar placa vehicle=${id}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            ),
+          );
+      } else {
+        void this.lprPlateSync
+          .syncVehiclePlateOnCameras({
+            clientId,
+            vehicleId: id,
+            plate: row.plate,
+            ownerDisplayName: driver.name ?? 'CONDUTOR',
+            vehicleColor: row.color,
+            logContext: `update vehicle=${id}`,
+          })
+          .catch((e) =>
+            this.log.warn(
+              `LPR sync atualizar veículo ${id}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            ),
+          );
+      }
+
       return {
         ...row,
         driverName: driver.name ?? '',
@@ -331,6 +509,25 @@ export class VehiclesService {
     id: string,
   ): Promise<void> {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const existing = await vehicleQueries.vehicleGetWithDriver(
+      this.database.db,
+      id,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+
+    void this.lprPlateSync
+      .removePlateFromAllLprCameras(clientId, existing.plate, `delete vehicle=${id}`)
+      .catch((e) =>
+        this.log.warn(
+          `LPR remove ao excluir veículo ${id}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        ),
+      );
+
     const deleted = await vehicleQueries.vehicleDeleteById(
       this.database.db,
       id,
