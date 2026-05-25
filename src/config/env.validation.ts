@@ -29,6 +29,8 @@ export const envSchema = z.object({
   LPR_EVENT_CODES: z.string().optional(),
   /** Log detalhado do stream LPR. Ex.: `1` para ativar. */
   LPR_STREAM_VERBOSE: z.string().optional(),
+  /** Log JSON no console (evento/raw + dedup) em cada ingestão LPR. Ex.: `1`. */
+  LPR_DEBUG_RAW: z.string().optional(),
   /** Cloudflare R2 (upload de fotos no cadastro público). */
   CLOUDFLARE_ACCOUNT_ID: z.string().min(1),
   CLOUDFLARE_R2_BUCKET: z.string().min(1),

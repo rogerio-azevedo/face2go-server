@@ -363,6 +363,7 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
         pend.reading,
         ctx,
         orderedJpegs.length > 0 ? orderedJpegs : undefined,
+        { stream: 'snapManager' },
       )
       .catch((e: unknown) =>
         this.logger.warn(
@@ -710,7 +711,16 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     if (!reading) return;
 
     void this.lprAccesses
-      .recordLprReading(reading, ctx)
+      .recordLprReading(reading, ctx, undefined, {
+        stream: 'eventManager',
+        videoEvent: {
+          code: ev.code,
+          action: ev.action,
+          index: ev.index,
+          data: ev.data,
+          raw: ev.raw,
+        },
+      })
       .catch((e: unknown) =>
         this.logger.warn(
           `[LprListener] Persistência eventManager LPR falhou: ${e instanceof Error ? e.message : String(e)}`,
