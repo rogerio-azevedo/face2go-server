@@ -4,7 +4,7 @@
  * Os nomes dos campos variam por modelo/firmware: cobrimos padrões conhecidos e chaves Tollgate/API Push.
  */
 
-import type { VideoEvent } from '../face-listener/video-stream.parser';
+import type { VideoEvent } from '../face-listener/face-listener.types';
 
 /** Leitura ANPR normalizada — fonte pode ser CGI stream ou objeto JSON parecido com TollgateInfo. */
 export type LprStreamReadingPayload = {

@@ -21,10 +21,6 @@ export const envSchema = z.object({
       /^[0-9a-fA-F]{64}$/,
       'READER_ENCRYPTION_KEY deve ter exatamente 64 caracteres hexadecimais (32 bytes).',
     ),
-  /** Códigos do eventManager Intelbras; padrão All. */
-  FACIAL_EVENT_CODES: z.string().optional(),
-  /** Log detalhado do stream (parse). Ex.: `1` para ativar. */
-  FACIAL_STREAM_VERBOSE: z.string().optional(),
   /** Códigos do eventManager Intelbras para câmeras LPR; padrão All. */
   LPR_EVENT_CODES: z.string().optional(),
   /** Log detalhado do stream LPR. Ex.: `1` para ativar. */

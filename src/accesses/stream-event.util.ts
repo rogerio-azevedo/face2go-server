@@ -1,4 +1,4 @@
-/** Payload `data={...}` do eventManager para eventos faciais (Intelbras). */
+/** Payload `data={...}` do snapManager para eventos faciais (Intelbras). */
 export interface AccessControlEventData {
   CardName?: string;
   CardNo?: string;

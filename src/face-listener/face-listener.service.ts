@@ -39,11 +39,8 @@ import {
   sliceSnapJpeg,
   snapFlatMapToVideoEvent,
 } from './snap-stream.parser';
-import type { VideoEvent } from './video-stream.parser';
-import {
-  parseVideoEventLine,
-  parseVideoEventPayload,
-} from './video-stream.parser';
+
+type FacialSnapEvent = NonNullable<ReturnType<typeof snapFlatMapToVideoEvent>>;
 
 /** Registro em memória para stream + digest (senha só em RAM). */
 type ReaderStreamContext = {
@@ -68,7 +65,7 @@ function toBrandSlug(brand: ReaderBrand): ReaderBrandSlug {
 }
 
 type SnapPending = {
-  event: VideoEvent | null;
+  event: FacialSnapEvent | null;
   image: Buffer | null;
   slices: SnapImageSliceMeta[];
 };
@@ -106,20 +103,14 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
   private readonly cipher: ReaderCredentialsCipher;
 
-  private buffers = new Map<string, string>();
-  private partBuffers = new Map<string, string[]>();
   private reconnectTimers = new Map<string, NodeJS.Timeout>();
-  private snapReconnectTimers = new Map<string, NodeJS.Timeout>();
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
   private streamAbortByReader = new Map<string, AbortController>();
   private connectGeneration = new Map<string, number>();
 
-  private snapStreamAbortByReader = new Map<string, AbortController>();
-  private snapConnectGeneration = new Map<string, number>();
-  private snapMultipartByReader = new Map<string, SnapMultipartAccumState>();
-  private snapPendingByReader = new Map<string, SnapPending>();
-  private readonly snapActiveReaders = new Set<string>();
+  private multipartByReader = new Map<string, SnapMultipartAccumState>();
+  private pendingByReader = new Map<string, SnapPending>();
 
   private static readonly REFRESH_INTERVAL_MS = 60_000;
   private static readonly LAST_SEEN_DEBOUNCE_MS = 30_000;
@@ -137,19 +128,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.cipher = createReaderCredentialsCipher(key);
-  }
-
-  private get facialEventCodes(): string {
-    return (
-      this.configService.get('FACIAL_EVENT_CODES', { infer: true })?.trim() ||
-      'All'
-    );
-  }
-
-  private get streamVerbose(): boolean {
-    return (
-      this.configService.get('FACIAL_STREAM_VERBOSE', { infer: true }) === '1'
-    );
   }
 
   async onModuleInit(): Promise<void> {
@@ -179,10 +157,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(timer);
     }
     this.reconnectTimers.clear();
-    for (const timer of this.snapReconnectTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.snapReconnectTimers.clear();
     for (const timer of this.lastSeenDebounceTimers.values()) {
       clearTimeout(timer);
     }
@@ -191,10 +165,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       this.streamAbortByReader.get(id)?.abort();
     }
     this.streamAbortByReader.clear();
-    for (const id of this.snapStreamAbortByReader.keys()) {
-      this.snapStreamAbortByReader.get(id)?.abort();
-    }
-    this.snapStreamAbortByReader.clear();
   }
 
   /**
@@ -295,7 +265,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.log(
-      `Iniciando streams eventManager + snapManager em ${valid.length} leitor(es) Intelbras...`,
+      `[FaceListener] Iniciando snapManager em ${valid.length} leitor(es) Intelbras...`,
     );
 
     for (const ctx of valid) {
@@ -309,7 +279,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         eventsReceived: 0,
       });
       this.subscribe(ctx);
-      this.subscribeSnap(ctx);
     }
   }
 
@@ -354,7 +323,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           `[FaceListener] Novo leitor: "${ctx.name}" → ${dbHost}`,
         );
         this.subscribe(ctx);
-        this.subscribeSnap(ctx);
         continue;
       }
 
@@ -364,10 +332,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           `[FaceListener] Host alterado "${ctx.name}" (${memHost} → ${dbHost}) — reconectando`,
         );
         this.clearReconnectTimer(ctx.id);
-        this.abortReaderStream(ctx.id);
-        this.abortSnapStream(ctx.id);
-        this.snapActiveReaders.delete(ctx.id);
-        this.clearSnapReconnectTimer(ctx.id);
+        this.abortStream(ctx.id);
         this.updateStatus(ctx.id, {
           readerName: ctx.name,
           host: dbHost,
@@ -377,7 +342,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           lastConnectionError: undefined,
         });
         this.subscribe(ctx);
-        this.subscribeSnap(ctx);
       } else {
         this.updateStatus(ctx.id, {
           readerName: ctx.name,
@@ -399,78 +363,16 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     this.reconnectTimers.delete(readerId);
   }
 
-  private clearSnapReconnectTimer(readerId: string): void {
-    const t = this.snapReconnectTimers.get(readerId);
-    if (t) clearTimeout(t);
-    this.snapReconnectTimers.delete(readerId);
-  }
-
-  private scheduleSnapReconnect(readerId: string, delayMs: number): void {
-    this.clearSnapReconnectTimer(readerId);
-    const timer = setTimeout(() => {
-      this.snapReconnectTimers.delete(readerId);
-      void this.subscribeSnapFromDb(readerId);
-    }, delayMs);
-    this.snapReconnectTimers.set(readerId, timer);
-  }
-
-  private async subscribeSnapFromDb(readerId: string): Promise<void> {
-    const row = await readersQueries.getReaderForEventStreamById(
-      this.database.db,
-      readerId,
-    );
-    if (!row) {
-      return;
-    }
-    const ctx = toStreamContext(row, this.cipher);
-    if (!ctx) {
-      return;
-    }
-    this.subscribeSnap(ctx);
-  }
-
-  private abortReaderStream(readerId: string): void {
-    const ac = this.streamAbortByReader.get(readerId);
-    if (ac) {
-      ac.abort();
-      this.streamAbortByReader.delete(readerId);
-    }
-  }
-
-  private bumpSnapConnectGeneration(readerId: string): number {
-    const n = (this.snapConnectGeneration.get(readerId) ?? 0) + 1;
-    this.snapConnectGeneration.set(readerId, n);
-    return n;
-  }
-
-  private abortSnapStream(readerId: string): void {
-    const ac = this.snapStreamAbortByReader.get(readerId);
-    if (ac) {
-      ac.abort();
-      this.snapStreamAbortByReader.delete(readerId);
-    }
-  }
-
-  private teardownReader(readerId: string, reason: string): void {
-    this.logger.log(`[FaceListener] Encerrando stream ${readerId}: ${reason}`);
+  private scheduleReconnect(readerId: string, delayMs: number): void {
     this.clearReconnectTimer(readerId);
-    this.clearSnapReconnectTimer(readerId);
-    this.bumpConnectGeneration(readerId);
-    this.bumpSnapConnectGeneration(readerId);
-    this.abortReaderStream(readerId);
-    this.abortSnapStream(readerId);
-    this.snapActiveReaders.delete(readerId);
-    this.snapMultipartByReader.delete(readerId);
-    this.snapPendingByReader.delete(readerId);
-    this.buffers.delete(readerId);
-    this.partBuffers.delete(readerId);
-    const t = this.lastSeenDebounceTimers.get(readerId);
-    if (t) clearTimeout(t);
-    this.lastSeenDebounceTimers.delete(readerId);
-    this.statuses.delete(readerId);
+    const timer = setTimeout(() => {
+      this.reconnectTimers.delete(readerId);
+      void this.subscribeFromDb(readerId);
+    }, delayMs);
+    this.reconnectTimers.set(readerId, timer);
   }
 
-  private async subscribeReaderFromDb(readerId: string): Promise<void> {
+  private async subscribeFromDb(readerId: string): Promise<void> {
     const row = await readersQueries.getReaderForEventStreamById(
       this.database.db,
       readerId,
@@ -508,27 +410,46 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         clientName: row.clientName,
       });
     }
-    this.clearSnapReconnectTimer(readerId);
+    this.clearReconnectTimer(readerId);
     this.subscribe(ctx);
-    this.subscribeSnap(ctx);
   }
 
-  private buildUrl(host: string): string {
-    const codes = this.facialEventCodes;
+  private abortStream(readerId: string): void {
+    const ac = this.streamAbortByReader.get(readerId);
+    if (ac) {
+      ac.abort();
+      this.streamAbortByReader.delete(readerId);
+    }
+  }
+
+  private teardownReader(readerId: string, reason: string): void {
+    this.logger.log(`[FaceListener] Encerrando stream ${readerId}: ${reason}`);
+    this.clearReconnectTimer(readerId);
+    this.bumpConnectGeneration(readerId);
+    this.abortStream(readerId);
+    this.multipartByReader.delete(readerId);
+    this.pendingByReader.delete(readerId);
+    const t = this.lastSeenDebounceTimers.get(readerId);
+    if (t) clearTimeout(t);
+    this.lastSeenDebounceTimers.delete(readerId);
+    this.statuses.delete(readerId);
+  }
+
+  private buildSnapUrl(host: string): string {
     return (
-      `http://${host}/cgi-bin/eventManager.cgi` +
-      `?action=attach&codes=[${codes}]&heartbeat=5`
+      `http://${host}/cgi-bin/snapManager.cgi` +
+      `?action=attachFileProc&Flags[0]=Event&Events=[All]&heartbeat=5`
     );
   }
 
   private subscribe(ctx: ReaderStreamContext): void {
     const gen = this.bumpConnectGeneration(ctx.id);
-    this.abortReaderStream(ctx.id);
+    this.abortStream(ctx.id);
 
     const ac = new AbortController();
     this.streamAbortByReader.set(ctx.id, ac);
 
-    const url = this.buildUrl(ctx.host);
+    const url = this.buildSnapUrl(ctx.host);
     const auth = new AxiosDigestAuth({
       username: ctx.username,
       password: ctx.passwordPlain,
@@ -540,7 +461,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       clientName: ctx.clientName,
     });
 
-    this.logger.log(`[FaceListener] Conectando "${ctx.name}" → ${url}`);
+    this.logger.log(`[FaceListener] snapManager "${ctx.name}" → ${url}`);
 
     auth
       .request({
@@ -554,11 +475,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         if (this.connectGeneration.get(ctx.id) !== gen) return;
 
         this.logger.log(
-          `[FaceListener] Conectado "${ctx.name}" — aguardando eventos`,
+          `[FaceListener] snapManager conectado "${ctx.name}" — aguardando eventos+capturas`,
         );
 
-        this.buffers.set(ctx.id, '');
-        this.partBuffers.set(ctx.id, []);
+        this.multipartByReader.set(ctx.id, createSnapMultipartState());
         this.updateStatus(ctx.id, {
           connected: true,
           connectedSince: new Date(),
@@ -569,14 +489,15 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
         stream.on('data', (chunk: Buffer) => {
           if (this.connectGeneration.get(ctx.id) !== gen) return;
-          this.processChunk(chunk.toString(), ctx);
+          this.processSnapChunk(chunk, ctx);
         });
 
         stream.on('end', () => {
           if (this.connectGeneration.get(ctx.id) !== gen) return;
           this.logger.warn(
-            `[FaceListener] Stream encerrada: "${ctx.name}". Reconectando em 5s...`,
+            `[FaceListener] snapManager stream encerrada: "${ctx.name}". Reconectando em 5s...`,
           );
+          this.pendingByReader.delete(ctx.id);
           this.updateStatus(ctx.id, {
             connected: false,
             lastConnectionError: 'Stream encerrada pelo leitor',
@@ -587,8 +508,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         stream.on('error', (err: Error) => {
           if (this.connectGeneration.get(ctx.id) !== gen) return;
           this.logger.error(
-            `[FaceListener] Erro na stream "${ctx.name}": ${err.message}`,
+            `[FaceListener] Erro snapManager "${ctx.name}": ${err.message}`,
           );
+          this.pendingByReader.delete(ctx.id);
           this.updateStatus(ctx.id, {
             connected: false,
             lastConnectionError: err.message,
@@ -599,100 +521,22 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       .catch((err: Error) => {
         if (this.connectGeneration.get(ctx.id) !== gen) return;
         if (ac.signal.aborted) return;
-        this.logger.error(
-          `[FaceListener] Falha ao conectar "${ctx.name}": ${err.message}`,
+        this.logger.warn(
+          `[FaceListener] snapManager falhou "${ctx.name}": ${err.message}`,
         );
         this.updateStatus(ctx.id, {
           connected: false,
           lastConnectionError: err.message,
         });
-        this.scheduleReconnect(ctx.id, 10_000);
-      });
-  }
-
-  private buildSnapUrl(host: string): string {
-    return (
-      `http://${host}/cgi-bin/snapManager.cgi` +
-      `?action=attachFileProc&Flags[0]=Event&Events=[All]&heartbeat=5`
-    );
-  }
-
-  private subscribeSnap(ctx: ReaderStreamContext): void {
-    const gen = this.bumpSnapConnectGeneration(ctx.id);
-    this.abortSnapStream(ctx.id);
-
-    const ac = new AbortController();
-    this.snapStreamAbortByReader.set(ctx.id, ac);
-
-    const url = this.buildSnapUrl(ctx.host);
-    const auth = new AxiosDigestAuth({
-      username: ctx.username,
-      password: ctx.passwordPlain,
-    });
-
-    this.logger.log(
-      `[FaceListener] SnapManager conectando "${ctx.name}" → ${url}`,
-    );
-
-    auth
-      .request({
-        method: 'GET',
-        url,
-        responseType: 'stream',
-        timeout: 0,
-        signal: ac.signal,
-      })
-      .then((response) => {
-        if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
-
-        this.logger.log(
-          `[FaceListener] SnapManager conectado "${ctx.name}" — aguardando eventos+capturas`,
-        );
-
-        this.snapActiveReaders.add(ctx.id);
-        this.snapMultipartByReader.set(ctx.id, createSnapMultipartState());
-
-        const stream = response.data as Readable;
-
-        stream.on('data', (chunk: Buffer) => {
-          if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
-          this.processSnapChunk(chunk, ctx);
-        });
-
-        stream.on('end', () => {
-          if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
-          this.logger.warn(
-            `[FaceListener] SnapManager stream encerrada: "${ctx.name}". Reconectando em 5s...`,
-          );
-          this.snapActiveReaders.delete(ctx.id);
-          this.scheduleSnapReconnect(ctx.id, 5_000);
-        });
-
-        stream.on('error', (err: Error) => {
-          if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
-          this.logger.error(
-            `[FaceListener] Erro SnapManager "${ctx.name}": ${err.message}`,
-          );
-          this.snapActiveReaders.delete(ctx.id);
-          this.scheduleSnapReconnect(ctx.id, 5_000);
-        });
-      })
-      .catch((err: Error) => {
-        if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
-        if (ac.signal.aborted) return;
-        this.logger.warn(
-          `[FaceListener] SnapManager falhou "${ctx.name}" (eventManager segue): ${err.message}`,
-        );
-        this.snapActiveReaders.delete(ctx.id);
-        this.scheduleSnapReconnect(ctx.id, 30_000);
+        this.scheduleReconnect(ctx.id, 30_000);
       });
   }
 
   private getOrCreateSnapPending(readerId: string): SnapPending {
-    let p = this.snapPendingByReader.get(readerId);
+    let p = this.pendingByReader.get(readerId);
     if (!p) {
       p = { event: null, image: null, slices: [] };
-      this.snapPendingByReader.set(readerId, p);
+      this.pendingByReader.set(readerId, p);
     }
     return p;
   }
@@ -701,7 +545,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     readerId: string,
     ctx: ReaderStreamContext,
   ): void {
-    const p = this.snapPendingByReader.get(readerId);
+    const p = this.pendingByReader.get(readerId);
     if (!p?.event || !p.image) {
       return;
     }
@@ -715,9 +559,13 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     const jpeg = sliceSnapJpeg(rawImg, slices);
     const persist = async (): Promise<void> => {
       try {
-        // Ciclo face-listener ↔ accesses pode deixar o tipo do serviço indistinto para o eslint.
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         await this.accessesService.recordSnapManagerAccess(ev, ctx, jpeg);
+        this.updateStatus(readerId, {
+          eventsReceived:
+            (this.statuses.get(readerId)?.eventsReceived ?? 0) + 1,
+          lastEventAt: new Date(),
+        });
+        this.scheduleLastSeenPersist(readerId);
       } catch (err: unknown) {
         this.logger.warn(
           `[FaceListener] Persistência snap falhou: ${err instanceof Error ? err.message : String(err)}`,
@@ -728,10 +576,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private processSnapChunk(chunk: Buffer, ctx: ReaderStreamContext): void {
-    let state = this.snapMultipartByReader.get(ctx.id);
+    let state = this.multipartByReader.get(ctx.id);
     if (!state) {
       state = createSnapMultipartState();
-      this.snapMultipartByReader.set(ctx.id, state);
+      this.multipartByReader.set(ctx.id, state);
     }
 
     const parts = feedSnapMultipart(state, chunk);
@@ -740,6 +588,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       const ct = part.contentType.toLowerCase();
       if (ct.startsWith('text/')) {
         const map = parseSnapManagerTextPart(part.body.toString('latin1'));
+        if (map.size === 0) {
+          continue;
+        }
         const evt = snapFlatMapToVideoEvent(map);
         if (evt) {
           const pend = this.getOrCreateSnapPending(ctx.id);
@@ -753,128 +604,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         this.tryFlushSnapPending(ctx.id, ctx);
       }
     }
-  }
-
-  private processChunk(chunk: string, ctx: ReaderStreamContext): void {
-    const buffered = (this.buffers.get(ctx.id) ?? '') + chunk;
-    const lines = buffered.split('\n');
-
-    this.buffers.set(ctx.id, lines.pop() ?? '');
-
-    const partBuffer = this.partBuffers.get(ctx.id) ?? [];
-    this.partBuffers.set(ctx.id, partBuffer);
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-
-      if (trimmed === 'Heartbeat') {
-        continue;
-      }
-
-      if (
-        trimmed === '--myboundary' ||
-        trimmed === '--myboundary--' ||
-        trimmed.startsWith('--myboundary')
-      ) {
-        this.processPartBuffer(partBuffer, ctx);
-        partBuffer.length = 0;
-        continue;
-      }
-
-      if (trimmed.length > 0) {
-        partBuffer.push(trimmed);
-      }
-    }
-  }
-
-  private processPartBuffer(
-    partLines: string[],
-    ctx: ReaderStreamContext,
-  ): void {
-    if (partLines.length === 0) {
-      return;
-    }
-
-    const payloadLines: string[] = [];
-    let inPayload = false;
-
-    for (const line of partLines) {
-      if (
-        line.startsWith('Content-Type:') ||
-        line.startsWith('Content-Length:')
-      ) {
-        continue;
-      } else if (line.startsWith('Code=')) {
-        inPayload = true;
-        payloadLines.push(line);
-      } else if (inPayload) {
-        payloadLines.push(line);
-      }
-    }
-
-    if (payloadLines.length === 0) {
-      return;
-    }
-
-    const rawPayloadText = payloadLines.join('\n');
-
-    const event =
-      payloadLines.length === 1
-        ? parseVideoEventLine(payloadLines[0])
-        : parseVideoEventPayload(payloadLines);
-
-    if (!event) {
-      if (this.streamVerbose) {
-        this.logger.warn(
-          `[FaceListener] Parse falhou "${ctx.name}" raw=${rawPayloadText.slice(0, 500)}`,
-        );
-      } else {
-        this.logger.warn(
-          `[FaceListener] Parse falhou (eventManager): "${ctx.name}" (readerId=${ctx.id})`,
-        );
-      }
-      return;
-    }
-
-    if (this.snapActiveReaders.has(ctx.id)) {
-      const c = event.code;
-      if (c === 'AccessControl' || c === '_DoorFace_') {
-        return;
-      }
-    }
-
-    this.updateStatus(ctx.id, {
-      eventsReceived: (this.statuses.get(ctx.id)?.eventsReceived ?? 0) + 1,
-      lastEventAt: new Date(),
-    });
-
-    this.scheduleLastSeenPersist(ctx.id);
-
-    if (this.streamVerbose) {
-      this.logger.log(
-        `[FaceListener] ${ctx.name} | ${event.code} | ${event.action} | index=${event.index}`,
-      );
-      this.logger.log(
-        `[FaceListener] raw len=${rawPayloadText.length} preview=${rawPayloadText.slice(0, 400)}`,
-      );
-    }
-
-    void this.accessesService
-      .recordDoorFacePulseIfApplicable(event, ctx)
-      .catch((err: unknown) => {
-        this.logger.warn(
-          `[FaceListener] Persistência de acesso falhou: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-  }
-
-  private scheduleReconnect(readerId: string, delayMs: number): void {
-    this.clearReconnectTimer(readerId);
-    const timer = setTimeout(() => {
-      this.reconnectTimers.delete(readerId);
-      void this.subscribeReaderFromDb(readerId);
-    }, delayMs);
-    this.reconnectTimers.set(readerId, timer);
   }
 
   private scheduleLastSeenPersist(readerId: string): void {

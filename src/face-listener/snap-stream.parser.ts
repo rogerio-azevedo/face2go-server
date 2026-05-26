@@ -1,5 +1,7 @@
 import type { SnapMultipartAccumState } from './snap-buffer-state.type';
-import type { VideoEvent } from './video-stream.parser';
+import type { VideoEvent } from './face-listener.types';
+
+export type { VideoEvent } from './face-listener.types';
 
 /** Uma parte completamente lida do multipart do SnapManager. */
 export type SnapMultipartCompletedPart = {
@@ -258,8 +260,7 @@ export function sliceSnapJpeg(
 }
 
 /**
- * Converte mapa flat em `VideoEvent` compatível com `AccessesService.recordDoorFacePulseIfApplicable` /
- * mesma validação de domínio.
+ * Converte mapa flat em `VideoEvent` para `AccessesService.recordSnapManagerAccess`.
  */
 export function snapFlatMapToVideoEvent(
   lines: Map<string, string>,

@@ -1,6 +1,15 @@
 /** Alinhado ao enum `reader_brand` do Postgres / Drizzle. */
 export type ReaderBrandSlug = 'intelbras' | 'hikvision';
 
+/** Evento facial normalizado (snapManager flat map / persistência). */
+export interface VideoEvent {
+  code: string;
+  action: 'Start' | 'Stop' | 'pulse' | string;
+  index: number;
+  data?: Record<string, unknown>;
+  raw?: Record<string, string | number>;
+}
+
 export type ReaderListenerStatus = {
   readerId: string;
   readerName: string;

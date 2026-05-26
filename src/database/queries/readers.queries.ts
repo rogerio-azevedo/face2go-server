@@ -332,7 +332,7 @@ export function readerRowToPublic(row: typeof facialReaders.$inferSelect) {
   };
 }
 
-/** Leitores Intelbras ativos com credenciais — conexão eventManager. */
+/** Leitores Intelbras ativos com credenciais — conexão snapManager. */
 export type ReaderEventStreamRow = {
   id: string;
   name: string;

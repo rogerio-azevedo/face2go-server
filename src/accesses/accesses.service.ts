@@ -14,7 +14,7 @@ import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
-import type { VideoEvent } from '../face-listener/video-stream.parser';
+import type { VideoEvent } from '../face-listener/face-listener.types';
 import { R2StorageService } from '../storage/r2-storage.service';
 import type { ReaderStreamContextLike } from './reader-stream-context.type';
 import { FacialAccess, type FacialAccessDocument } from './access.schema';
@@ -83,124 +83,6 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
       if (ts < cutoff) {
         this.processedEventKeys.delete(key);
       }
-    }
-  }
-
-  /**
-   * Persiste acesso facial a partir do stream eventManager.
-   * Aceita `_DoorFace_` (Pulse, como no MeuIOT) e `AccessControl` (Pulse ou Start),
-   * pois o firmware Intelbras varia entre modelos.
-   */
-  async recordDoorFacePulseIfApplicable(
-    event: VideoEvent,
-    ctx: ReaderStreamContextLike,
-  ): Promise<void> {
-    const action = String(event.action).toLowerCase();
-    const code = event.code;
-    const isDoorFace = code === '_DoorFace_';
-    const isAccessControl = code === 'AccessControl';
-
-    if (!isDoorFace && !isAccessControl) {
-      return;
-    }
-    if (isDoorFace && action !== 'pulse') {
-      return;
-    }
-    if (isAccessControl && action !== 'pulse' && action !== 'start') {
-      return;
-    }
-
-    const raw = event.data;
-    if (!raw || typeof raw !== 'object') {
-      return;
-    }
-
-    const data = accessControlDataFromRecord(raw as Record<string, unknown>);
-    const userId = data.UserID;
-    if (userId === undefined || userId === null || String(userId) === '') {
-      return;
-    }
-    if (data.Status != null && data.Status !== 1) {
-      return;
-    }
-
-    const rawSim = data.Similarity;
-    const similarityNum =
-      typeof rawSim === 'number'
-        ? rawSim
-        : rawSim != null && String(rawSim).trim() !== ''
-          ? Number(rawSim)
-          : NaN;
-    if (!Number.isFinite(similarityNum) || similarityNum <= 0) {
-      return;
-    }
-
-    const streamKey = getStreamEventDedupKey(ctx.id, data);
-    if (streamKey !== null) {
-      if (this.processedEventKeys.has(streamKey)) {
-        return;
-      }
-      this.processedEventKeys.set(streamKey, Date.now());
-    }
-
-    const faceIdNum = Number(userId);
-    if (!Number.isFinite(faceIdNum)) {
-      return;
-    }
-
-    this.logger.debug(
-      `[AccessesService] SnapPath="${data.SnapPath ?? 'ausente'}" faceId=${faceIdNum} reader=${ctx.name}`,
-    );
-
-    let personName: string | null = null;
-    try {
-      personName =
-        await registrationsQueries.findApprovedRegistrationNameByFaceId(
-          this.database.db,
-          ctx.clientId,
-          faceIdNum,
-        );
-    } catch (err: unknown) {
-      this.logger.warn(
-        `Lookup personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-
-    const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);
-
-    try {
-      const doc = await this.accessModel.create({
-        companyId: ctx.companyId,
-        readerId: ctx.id,
-        readerName: ctx.name,
-        clientId: ctx.clientId,
-        clientName: ctx.clientName,
-        userId: faceIdNum,
-        personName,
-        eventCode: event.code,
-        eventAction: String(event.action),
-        similarity: similarityNum,
-        eventDate: eventDate ?? null,
-        snapPath:
-          typeof data.SnapPath === 'string' && data.SnapPath.trim()
-            ? data.SnapPath.trim()
-            : null,
-      });
-
-      this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
-        accessId: String(doc._id),
-        faceId: faceIdNum,
-        clientId: ctx.clientId,
-        personName,
-        readerName: ctx.name,
-        readerDirection: ctx.direction ?? null,
-        eventDate: eventDate ?? null,
-      });
-    } catch (err: unknown) {
-      this.logger.error(
-        `Mongo create facial_access falhou: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      throw err;
     }
   }
 
