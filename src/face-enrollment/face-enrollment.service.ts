@@ -11,6 +11,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
 
 export type FaceEnrollmentStatusDto = {
@@ -184,6 +185,11 @@ export class FaceEnrollmentService {
     if (buffer.length < 256) {
       throw new BadRequestException('Imagem muito pequena ou inválida.');
     }
+    if (!(await isPortraitImageUsable(buffer))) {
+      throw new BadRequestException(
+        'Foto muito escura ou inválida. Melhore a iluminação e enquadre o rosto.',
+      );
+    }
 
     const photoKey = `responsibles/${clientId}/${responsibleId}/face.jpg`;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
@@ -292,6 +298,11 @@ export class FaceEnrollmentService {
     const buffer = decodeBase64ToBuffer(imageBase64);
     if (buffer.length < 256) {
       throw new BadRequestException('Imagem muito pequena ou inválida.');
+    }
+    if (!(await isPortraitImageUsable(buffer))) {
+      throw new BadRequestException(
+        'Foto muito escura ou inválida. Melhore a iluminação e enquadre o rosto.',
+      );
     }
 
     const photoKey = `students/${clientId}/${studentId}/face.jpg`;

@@ -18,13 +18,10 @@ export type CameraListenerStatus = {
   brand: string;
   host: string;
   connected: boolean;
-  snapConnected?: boolean;
   eventsReceived: number;
   lastEventAt?: Date;
   connectedSince?: Date;
-  snapConnectedSince?: Date;
   lastConnectionError?: string;
-  snapLastConnectionError?: string;
 };
 
 export type CameraMonitorDeviceRow = {
@@ -38,13 +35,10 @@ export type CameraMonitorDeviceRow = {
   hasCredentials: boolean;
   streamSupported: boolean;
   connected: boolean;
-  snapConnected: boolean;
   eventsReceived: number;
   lastEventAt: Date | null;
   connectedSince: Date | null;
-  snapConnectedSince?: Date | null;
   lastConnectionError: string | null;
-  snapLastConnectionError?: string | null;
   lastSeenAt: Date | null;
 };
 

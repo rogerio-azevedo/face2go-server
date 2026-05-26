@@ -87,6 +87,33 @@ export async function findVehiclePlateForArrival(
   return fallback || null;
 }
 
+export async function findResponsibleByPlate(
+  db: AppDb,
+  plateNumber: string,
+  clientId: string,
+): Promise<{ id: string; name: string; photoKey: string | null } | null> {
+  const normalizedPlate = plateNumber.trim().toUpperCase();
+  if (!normalizedPlate) return null;
+
+  const [row] = await db
+    .select({
+      id: responsibles.id,
+      name: responsibles.name,
+      photoKey: responsibles.photoKey,
+    })
+    .from(vehicles)
+    .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .where(
+      and(
+        eq(vehicles.clientId, clientId),
+        eq(vehicles.plate, normalizedPlate),
+      ),
+    )
+    .orderBy(desc(vehicles.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function vehicleGetById(
   db: AppDb,
   id: string,

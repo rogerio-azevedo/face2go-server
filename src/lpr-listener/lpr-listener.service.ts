@@ -27,11 +27,6 @@ import {
   parseSnapManagerTextPart,
   sliceSnapJpeg,
 } from '../face-listener/snap-stream.parser';
-import type { VideoEvent } from '../face-listener/video-stream.parser';
-import {
-  parseVideoEventLine,
-  parseVideoEventPayload,
-} from '../face-listener/video-stream.parser';
 import { LprAccessesService } from '../lpr-accesses/lpr-accesses.service';
 import type {
   CameraListenerStatus,
@@ -40,7 +35,6 @@ import type {
   CameraStreamContext,
 } from './lpr-listener.types';
 import {
-  extractLprReadingFromVideoEvent,
   type LprStreamReadingPayload,
   snapFlatMapToLprReading,
 } from './lpr-stream.parser';
@@ -75,7 +69,7 @@ function toStreamContext(
 }
 
 type SnapPending = {
-  reading: LprStreamReadingPayload;
+  reading: LprStreamReadingPayload | null;
   images: Buffer[];
   slices: SnapImageSliceMeta[];
 };
@@ -88,17 +82,11 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
   /** Contexto atual da conexão (para persistência Snap multipart). */
   private streamCtxByCamera = new Map<string, CameraStreamContext>();
 
-  private buffers = new Map<string, string>();
-  private partBuffers = new Map<string, string[]>();
   private reconnectTimers = new Map<string, NodeJS.Timeout>();
-  private snapReconnectTimers = new Map<string, NodeJS.Timeout>();
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
   private streamAbortByCamera = new Map<string, AbortController>();
   private connectGeneration = new Map<string, number>();
-
-  private snapStreamAbortByCamera = new Map<string, AbortController>();
-  private snapConnectGeneration = new Map<string, number>();
 
   private snapMultipartByCamera = new Map<string, SnapMultipartAccumState>();
   private snapPendingByCamera = new Map<string, SnapPending>();
@@ -118,19 +106,6 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
       this.configService.get('READER_ENCRYPTION_KEY', {
         infer: true,
       }),
-    );
-  }
-
-  private get lprEventCodes(): string {
-    return (
-      this.configService.get('LPR_EVENT_CODES', { infer: true })?.trim() ??
-      'All'
-    );
-  }
-
-  private get streamVerbose(): boolean {
-    return (
-      this.configService.get('LPR_STREAM_VERBOSE', { infer: true }) === '1'
     );
   }
 
@@ -164,15 +139,11 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
 
     for (const t of this.reconnectTimers.values()) clearTimeout(t);
     this.reconnectTimers.clear();
-    for (const t of this.snapReconnectTimers.values()) clearTimeout(t);
-    this.snapReconnectTimers.clear();
     for (const t of this.lastSeenDebounceTimers.values()) clearTimeout(t);
     this.lastSeenDebounceTimers.clear();
 
     for (const ac of this.streamAbortByCamera.values()) ac.abort();
     this.streamAbortByCamera.clear();
-    for (const ac of this.snapStreamAbortByCamera.values()) ac.abort();
-    this.snapStreamAbortByCamera.clear();
     this.streamCtxByCamera.clear();
   }
 
@@ -206,47 +177,40 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
         hasCredentials: d.hasCredentials,
         streamSupported,
         connected: false,
-        snapConnected: false,
         eventsReceived: 0,
         lastEventAt: null,
         connectedSince: null,
-        snapConnectedSince: null,
         lastConnectionError: null,
-        snapLastConnectionError: null,
         lastSeenAt: d.lastSeenAt,
       };
 
       if (!streamSupported) {
-        const err =
-          !d.isActive
-            ? 'Câmera inativa'
-            : d.type !== 'lpr'
-              ? 'Tipo diferente de lpr não entra no stream LPR'
-              : d.brand.toLowerCase().trim() !== 'intelbras'
-                ? 'Stream CGI suportado apenas para Intelbras'
-                : !d.hasCredentials
-                  ? 'Credenciais não configuradas'
-                  : null;
-        return { ...base, lastConnectionError: err, snapLastConnectionError: err };
+        const err = !d.isActive
+          ? 'Câmera inativa'
+          : d.type !== 'lpr'
+            ? 'Tipo diferente de lpr não entra no stream LPR'
+            : d.brand.toLowerCase().trim() !== 'intelbras'
+              ? 'Stream CGI suportado apenas para Intelbras'
+              : !d.hasCredentials
+                ? 'Credenciais não configuradas'
+                : null;
+        return { ...base, lastConnectionError: err };
       }
 
       if (existing) {
         return {
           ...base,
           connected: existing.connected,
-          snapConnected: existing.snapConnected ?? false,
           eventsReceived: existing.eventsReceived,
           lastEventAt: existing.lastEventAt ?? null,
           connectedSince: existing.connectedSince ?? null,
-          snapConnectedSince: existing.snapConnectedSince ?? null,
           lastConnectionError: existing.lastConnectionError ?? null,
-          snapLastConnectionError: existing.snapLastConnectionError ?? null,
         };
       }
       return base;
     });
 
-    const connected = devices.filter((x) => x.connected || x.snapConnected).length;
+    const connected = devices.filter((x) => x.connected).length;
     return {
       devices,
       summary: {
@@ -263,12 +227,6 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     return n;
   }
 
-  private bumpSnapConnectGeneration(cameraId: string): number {
-    const n = (this.snapConnectGeneration.get(cameraId) ?? 0) + 1;
-    this.snapConnectGeneration.set(cameraId, n);
-    return n;
-  }
-
   private clearReconnectTimer(id: string): void {
     const t = this.reconnectTimers.get(id);
     if (t) clearTimeout(t);
@@ -279,27 +237,12 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     this.clearReconnectTimer(cameraId);
     const timer = setTimeout(() => {
       this.reconnectTimers.delete(cameraId);
-      void this.subscribeCameraFromDb(cameraId);
+      void this.subscribeFromDb(cameraId);
     }, delayMs);
     this.reconnectTimers.set(cameraId, timer);
   }
 
-  private clearSnapReconnectTimer(id: string): void {
-    const t = this.snapReconnectTimers.get(id);
-    if (t) clearTimeout(t);
-    this.snapReconnectTimers.delete(id);
-  }
-
-  private scheduleSnapReconnect(cameraId: string, delayMs: number): void {
-    this.clearSnapReconnectTimer(cameraId);
-    const timer = setTimeout(() => {
-      this.snapReconnectTimers.delete(cameraId);
-      void this.subscribeSnapFromDb(cameraId);
-    }, delayMs);
-    this.snapReconnectTimers.set(cameraId, timer);
-  }
-
-  private abortCameraStream(cameraId: string): void {
+  private abortStream(cameraId: string): void {
     const ac = this.streamAbortByCamera.get(cameraId);
     if (ac) {
       ac.abort();
@@ -307,31 +250,18 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private abortSnapStream(cameraId: string): void {
-    const ac = this.snapStreamAbortByCamera.get(cameraId);
-    if (ac) {
-      ac.abort();
-      this.snapStreamAbortByCamera.delete(cameraId);
-    }
-  }
-
   private teardownCamera(cameraId: string, reason: string): void {
     this.logger.log(`[LprListener] Encerrando câmera ${cameraId}: ${reason}`);
     this.clearReconnectTimer(cameraId);
-    this.clearSnapReconnectTimer(cameraId);
     this.finalizeSnapPending(cameraId);
 
     this.bumpConnectGeneration(cameraId);
-    this.bumpSnapConnectGeneration(cameraId);
-    this.abortCameraStream(cameraId);
-    this.abortSnapStream(cameraId);
+    this.abortStream(cameraId);
 
     this.snapMultipartByCamera.delete(cameraId);
     const t = this.lastSeenDebounceTimers.get(cameraId);
     if (t) clearTimeout(t);
     this.lastSeenDebounceTimers.delete(cameraId);
-    this.buffers.delete(cameraId);
-    this.partBuffers.delete(cameraId);
     this.streamCtxByCamera.delete(cameraId);
     this.statuses.delete(cameraId);
   }
@@ -347,35 +277,82 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private finalizeSnapPending(cameraId: string): void {
+    this.tryFlushSnapPending(cameraId);
+  }
+
+  private getOrCreateSnapPending(cameraId: string): SnapPending {
+    let pending = this.snapPendingByCamera.get(cameraId);
+    if (!pending) {
+      pending = { reading: null, images: [], slices: [] };
+      this.snapPendingByCamera.set(cameraId, pending);
+    }
+    return pending;
+  }
+
+  /** Persiste quando texto ANPR e ao menos uma imagem estão prontos. */
+  private isPersistableSnap(
+    map: Map<string, string>,
+    reading: LprStreamReadingPayload,
+  ): boolean {
+    const eventId = reading.correlationEventId?.trim() ?? '';
+    return (
+      this.isFlushableReading(reading) &&
+      /^\d+$/.test(eventId) &&
+      (reading.isAllowed != null || !!reading.vehicleType?.trim()) &&
+      !!map.get('Events[0].TrafficCar.PlateNumber')?.trim()
+    );
+  }
+
+  private isFlushableReading(reading: LprStreamReadingPayload): boolean {
+    return (
+      reading.eventCode === 'TrafficJunction' &&
+      !!reading.correlationEventId?.trim() &&
+      !!reading.direction?.trim()
+    );
+  }
+
+  private discardIncompletePending(cameraId: string): void {
+    const pend = this.snapPendingByCamera.get(cameraId);
+    if (!pend) return;
+    if (pend.reading && this.isFlushableReading(pend.reading)) return;
+    this.snapPendingByCamera.delete(cameraId);
+  }
+
+  private tryFlushSnapPending(cameraId: string): void {
     const pend = this.snapPendingByCamera.get(cameraId);
     const ctx = this.streamCtxByCamera.get(cameraId);
-    if (!pend || !ctx) {
+
+    if (!pend?.reading || pend.images.length === 0 || !ctx) {
+      return;
+    }
+
+    const reading = pend.reading;
+    if (!this.isFlushableReading(reading)) {
       this.snapPendingByCamera.delete(cameraId);
       return;
     }
 
-    const orderedJpegs = pend.images.map((raw, idx) =>
-      idx === 0 ? sliceSnapJpeg(raw, pend.slices) : raw,
+    const slices = pend.slices;
+    const images = pend.images;
+    this.snapPendingByCamera.delete(cameraId);
+
+    const orderedJpegs = images.map((raw, idx) =>
+      idx === 0 ? sliceSnapJpeg(raw, slices) : raw,
     );
 
     void this.lprAccesses
-      .recordLprReading(
-        pend.reading,
-        ctx,
-        orderedJpegs.length > 0 ? orderedJpegs : undefined,
-        { stream: 'snapManager' },
-      )
+      .recordLprReading(reading, ctx, orderedJpegs)
       .catch((e: unknown) =>
         this.logger.warn(
           `[LprListener] Snap LPR persist falhou: ${e instanceof Error ? e.message : String(e)}`,
         ),
       );
-
-    this.snapPendingByCamera.delete(cameraId);
   }
 
   private async connectAllLprCameras(): Promise<void> {
-    const rows = await camerasQueries.listCamerasForEventStream(this.database.db);
+    const rows = await camerasQueries.listCamerasForEventStream(
+      this.database.db,
+    );
     const valid: CameraStreamContext[] = [];
 
     for (const row of rows) {
@@ -391,13 +368,12 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.log(
-      `[LprListener] Iniciando eventManager + snapManager em ${valid.length} câmera(s) LPR.`,
+      `[LprListener] Iniciando snapManager em ${valid.length} câmera(s) LPR.`,
     );
 
     for (const ctx of valid) {
       this.ensureStatusRow(ctx);
       this.subscribe(ctx);
-      this.subscribeSnap(ctx);
     }
   }
 
@@ -410,13 +386,14 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
       brand: ctx.brand,
       host: ctx.host,
       connected: false,
-      snapConnected: false,
       eventsReceived: 0,
     });
   }
 
   async refreshConnections(): Promise<void> {
-    const rows = await camerasQueries.listCamerasForEventStream(this.database.db);
+    const rows = await camerasQueries.listCamerasForEventStream(
+      this.database.db,
+    );
     const validCtx: CameraStreamContext[] = [];
 
     for (const row of rows) {
@@ -427,7 +404,9 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     const validIds = new Set(validCtx.map((c) => c.id));
 
     for (const id of [...this.statuses.keys()]) {
-      if (!validIds.has(id)) this.teardownCamera(id, 'removida/inativa/sem credenciais');
+      if (!validIds.has(id)) {
+        this.teardownCamera(id, 'removida/inativa/sem credenciais');
+      }
     }
 
     for (const ctx of validCtx) {
@@ -437,17 +416,14 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
       if (!existing) {
         this.ensureStatusRow(ctx);
         this.subscribe(ctx);
-        this.subscribeSnap(ctx);
         continue;
       }
 
       if ((existing.host ?? '') !== ctx.host) {
-        this.abortCameraStream(ctx.id);
-        this.abortSnapStream(ctx.id);
+        this.abortStream(ctx.id);
         void this.finalizeSnapPending(ctx.id);
         this.snapMultipartByCamera.set(ctx.id, createSnapMultipartState());
         this.subscribe(ctx);
-        this.subscribeSnap(ctx);
       }
       this.updateStatus(ctx.id, {
         cameraName: ctx.name,
@@ -458,7 +434,7 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async subscribeCameraFromDb(cameraId: string): Promise<void> {
+  private async subscribeFromDb(cameraId: string): Promise<void> {
     const row = await camerasQueries.getCameraForEventStreamById(
       this.database.db,
       cameraId,
@@ -480,117 +456,23 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
       });
     }
     this.clearReconnectTimer(cameraId);
-    this.subscribe(ctx);
-    this.subscribeSnap(ctx);
-  }
-
-  private async subscribeSnapFromDb(cameraId: string): Promise<void> {
-    const row = await camerasQueries.getCameraForEventStreamById(
-      this.database.db,
-      cameraId,
-    );
-    if (!row) return;
-
-    const ctx = toStreamContext(row, this.cipher);
-    if (!ctx) return;
-
     this.streamCtxByCamera.set(ctx.id, ctx);
-    this.subscribeSnap(ctx);
-  }
-
-  private buildEventUrl(host: string): string {
-    const codes = this.lprEventCodes;
-    return (
-      `http://${host}/cgi-bin/eventManager.cgi` +
-      `?action=attach&codes=[${codes}]&heartbeat=5`
-    );
+    this.subscribe(ctx);
   }
 
   private buildSnapUrl(host: string): string {
     return (
       `http://${host}/cgi-bin/snapManager.cgi` +
-      `?action=attachFileProc&Flags[0]=Event&Events=[All]&heartbeat=5`
+      `?action=attachFileProc&Flags[0]=Event&Events=[TrafficJunction]&heartbeat=5`
     );
   }
 
   private subscribe(ctx: CameraStreamContext): void {
     const gen = this.bumpConnectGeneration(ctx.id);
-    this.abortCameraStream(ctx.id);
+    this.abortStream(ctx.id);
 
     const ac = new AbortController();
     this.streamAbortByCamera.set(ctx.id, ac);
-
-    const url = this.buildEventUrl(ctx.host);
-    const auth = new AxiosDigestAuth({
-      username: ctx.username,
-      password: ctx.passwordPlain,
-    });
-
-    this.logger.log(`[LprListener] eventManager "${ctx.name}" → ${url}`);
-
-    auth
-      .request({
-        method: 'GET',
-        url,
-        responseType: 'stream',
-        timeout: 0,
-        signal: ac.signal,
-      })
-      .then((response) => {
-        if (this.connectGeneration.get(ctx.id) !== gen) return;
-
-        this.buffers.set(ctx.id, '');
-        this.partBuffers.set(ctx.id, []);
-
-        this.updateStatus(ctx.id, {
-          connected: true,
-          connectedSince: new Date(),
-          lastConnectionError: undefined,
-        });
-
-        const stream = response.data as Readable;
-
-        stream.on('data', (chunk: Buffer) => {
-          if (this.connectGeneration.get(ctx.id) !== gen) return;
-          this.processEventChunk(chunk.toString(), ctx);
-        });
-
-        stream.on('end', () => {
-          if (this.connectGeneration.get(ctx.id) !== gen) return;
-          this.updateStatus(ctx.id, {
-            connected: false,
-            lastConnectionError: 'Stream encerrada',
-          });
-          this.scheduleReconnect(ctx.id, 5_000);
-        });
-
-        stream.on('error', (err: Error) => {
-          if (this.connectGeneration.get(ctx.id) !== gen) return;
-          this.updateStatus(ctx.id, {
-            connected: false,
-            lastConnectionError: err.message,
-          });
-          this.scheduleReconnect(ctx.id, 5_000);
-        });
-      })
-      .catch((err: Error) => {
-        if (this.connectGeneration.get(ctx.id) !== gen) return;
-        if (ac.signal.aborted) return;
-        this.logger.error(`[LprListener] Falha eventManager "${ctx.name}": ${err.message}`);
-        this.updateStatus(ctx.id, {
-          connected: false,
-          lastConnectionError: err.message,
-        });
-        this.scheduleReconnect(ctx.id, 10_000);
-      });
-  }
-
-  private subscribeSnap(ctx: CameraStreamContext): void {
-    const gen = this.bumpSnapConnectGeneration(ctx.id);
-    this.abortSnapStream(ctx.id);
-
-    const ac = new AbortController();
-    this.snapStreamAbortByCamera.set(ctx.id, ac);
 
     const url = this.buildSnapUrl(ctx.host);
     const auth = new AxiosDigestAuth({
@@ -609,52 +491,52 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
         signal: ac.signal,
       })
       .then((response) => {
-        if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
+        if (this.connectGeneration.get(ctx.id) !== gen) return;
 
         this.streamCtxByCamera.set(ctx.id, ctx);
         this.snapMultipartByCamera.set(ctx.id, createSnapMultipartState());
 
         this.updateStatus(ctx.id, {
-          snapConnected: true,
-          snapConnectedSince: new Date(),
-          snapLastConnectionError: undefined,
+          connected: true,
+          connectedSince: new Date(),
+          lastConnectionError: undefined,
         });
 
         const stream = response.data as Readable;
 
         stream.on('data', (chunk: Buffer) => {
-          if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
+          if (this.connectGeneration.get(ctx.id) !== gen) return;
           this.processSnapChunk(chunk, ctx);
         });
 
         stream.on('end', () => {
-          if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
+          if (this.connectGeneration.get(ctx.id) !== gen) return;
           this.finalizeSnapPending(ctx.id);
-          this.updateStatus(ctx.id, { snapConnected: false });
-          this.scheduleSnapReconnect(ctx.id, 5_000);
+          this.updateStatus(ctx.id, { connected: false });
+          this.scheduleReconnect(ctx.id, 5_000);
         });
 
         stream.on('error', (err: Error) => {
-          if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
+          if (this.connectGeneration.get(ctx.id) !== gen) return;
           this.finalizeSnapPending(ctx.id);
           this.updateStatus(ctx.id, {
-            snapConnected: false,
-            snapLastConnectionError: err.message,
+            connected: false,
+            lastConnectionError: err.message,
           });
-          this.scheduleSnapReconnect(ctx.id, 5_000);
+          this.scheduleReconnect(ctx.id, 5_000);
         });
       })
       .catch((err: Error) => {
-        if (this.snapConnectGeneration.get(ctx.id) !== gen) return;
+        if (this.connectGeneration.get(ctx.id) !== gen) return;
         if (ac.signal.aborted) return;
         this.logger.warn(
           `[LprListener] snapManager falhou "${ctx.name}": ${err.message}`,
         );
         this.updateStatus(ctx.id, {
-          snapConnected: false,
-          snapLastConnectionError: err.message,
+          connected: false,
+          lastConnectionError: err.message,
         });
-        this.scheduleSnapReconnect(ctx.id, 30_000);
+        this.scheduleReconnect(ctx.id, 30_000);
       });
   }
 
@@ -672,21 +554,58 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
 
       if (ct.startsWith('text/')) {
         const map = parseSnapManagerTextPart(part.body.toString('latin1'));
+
         const lr = snapFlatMapToLprReading(map);
 
-        if (lr) {
-          this.finalizeSnapPending(ctx.id);
-          this.snapPendingByCamera.set(ctx.id, {
-            reading: lr,
-            images: [],
-            slices: collectImageSlices(map),
-          });
+        if (!lr || !this.isPersistableSnap(map, lr)) {
+          if (map.size > 0) {
+            this.discardIncompletePending(ctx.id);
+          }
+          continue;
         }
+
+        const prev = this.snapPendingByCamera.get(ctx.id);
+        const nextPlate = lr.plateNumber?.trim().toUpperCase() ?? '';
+
+        if (prev?.reading) {
+          const prevPlate =
+            prev.reading.plateNumber?.trim().toUpperCase() ?? '';
+          const samePlate = prevPlate === nextPlate && prevPlate !== '';
+
+          if (
+            samePlate &&
+            prev.images.length > 0 &&
+            this.isFlushableReading(prev.reading)
+          ) {
+            this.tryFlushSnapPending(ctx.id);
+          } else {
+            this.snapPendingByCamera.delete(ctx.id);
+          }
+        }
+
+        const fresh = this.snapPendingByCamera.get(ctx.id);
+        const waitingImages =
+          fresh != null && fresh.reading == null && fresh.images.length > 0
+            ? fresh.images
+            : [];
+
+        const next = this.getOrCreateSnapPending(ctx.id);
+        next.reading = lr;
+        next.slices = collectImageSlices(map);
+        next.images = waitingImages;
+        this.tryFlushSnapPending(ctx.id);
       } else if (ct.startsWith('image/')) {
-        const pend = this.snapPendingByCamera.get(ctx.id);
-        if (pend) {
-          pend.images.push(part.body);
+        const pend = this.getOrCreateSnapPending(ctx.id);
+        if (pend.reading && !this.isFlushableReading(pend.reading)) {
+          continue;
         }
+        pend.images.push(part.body);
+        this.updateStatus(ctx.id, {
+          eventsReceived: (this.statuses.get(ctx.id)?.eventsReceived ?? 0) + 1,
+          lastEventAt: new Date(),
+        });
+        this.scheduleLastSeen(ctx.id);
+        this.tryFlushSnapPending(ctx.id);
       }
     }
   }
@@ -704,95 +623,5 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
     }, LprListenerService.LAST_SEEN_DEBOUNCE_MS);
 
     this.lastSeenDebounceTimers.set(cameraId, timer);
-  }
-
-  private persistLprVideoEvent(ev: VideoEvent, ctx: CameraStreamContext): void {
-    const reading = extractLprReadingFromVideoEvent(ev);
-    if (!reading) return;
-
-    void this.lprAccesses
-      .recordLprReading(reading, ctx, undefined, {
-        stream: 'eventManager',
-        videoEvent: {
-          code: ev.code,
-          action: ev.action,
-          index: ev.index,
-          data: ev.data,
-          raw: ev.raw,
-        },
-      })
-      .catch((e: unknown) =>
-        this.logger.warn(
-          `[LprListener] Persistência eventManager LPR falhou: ${e instanceof Error ? e.message : String(e)}`,
-        ),
-      );
-  }
-
-  private processEventChunk(chunk: string, ctx: CameraStreamContext): void {
-    const buffered = (this.buffers.get(ctx.id) ?? '') + chunk;
-    const lines = buffered.split('\n');
-    this.buffers.set(ctx.id, lines.pop() ?? '');
-
-    const partBuf = this.partBuffers.get(ctx.id) ?? [];
-    this.partBuffers.set(ctx.id, partBuf);
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed === 'Heartbeat') continue;
-
-      if (
-        trimmed.startsWith('--myboundary') ||
-        trimmed === '--myboundary--'
-      ) {
-        this.flushEventPart(partBuf, ctx);
-        partBuf.length = 0;
-        continue;
-      }
-
-      if (trimmed.length > 0) partBuf.push(trimmed);
-    }
-  }
-
-  private flushEventPart(partLines: string[], ctx: CameraStreamContext): void {
-    if (partLines.length === 0) return;
-
-    const payloadLines: string[] = [];
-    let inPayload = false;
-
-    for (const line of partLines) {
-      if (line.startsWith('Content-Type:') || line.startsWith('Content-Length:')) {
-        continue;
-      }
-      if (line.startsWith('Code=')) {
-        inPayload = true;
-        payloadLines.push(line);
-      } else if (inPayload) {
-        payloadLines.push(line);
-      }
-    }
-
-    if (payloadLines.length === 0) return;
-
-    const ev =
-      payloadLines.length === 1
-        ? parseVideoEventLine(payloadLines[0])
-        : parseVideoEventPayload(payloadLines);
-
-    if (!ev) {
-      if (this.streamVerbose) {
-        this.logger.warn(
-          `[LprListener] Parse eventManager falhou (${ctx.name}): ${payloadLines.join('\n').slice(0, 400)}`,
-        );
-      }
-      return;
-    }
-
-    this.updateStatus(ctx.id, {
-      eventsReceived: (this.statuses.get(ctx.id)?.eventsReceived ?? 0) + 1,
-      lastEventAt: new Date(),
-    });
-    this.scheduleLastSeen(ctx.id);
-
-    this.persistLprVideoEvent(ev, ctx);
   }
 }

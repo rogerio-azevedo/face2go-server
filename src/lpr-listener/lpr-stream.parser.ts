@@ -27,6 +27,14 @@ export type LprStreamReadingPayload = {
   deviceIdReported?: string | null;
   eventCode?: string | null;
   eventAction?: string | null;
+  /**
+   * ID do evento reportado pela câmera (EventID). Mesmo valor nos dois streams
+   * (eventManager JSON e snapManager flat map) — usado como chave de correlação
+   * para o upsert atômico no MongoDB.
+   */
+  correlationEventId?: string | null;
+  /** Código único de defesa por evento (DefendCode). Fallback de correlação. */
+  defendCode?: string | null;
   /** Algumas linhas flat do último multipart (debug). */
   rawFlatSubset?: Record<string, string>;
 };
@@ -190,6 +198,14 @@ function mergeLprFragments(
   return { ...base, ...patch, plateNumber };
 }
 
+function normalizeCorrelationEventId(
+  raw: string | null | undefined,
+): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  return s !== '' ? s : null;
+}
+
 function extractFromJsonData(data: unknown): LprStreamReadingPayload {
   const empty: LprStreamReadingPayload = {
     plateNumber: null,
@@ -204,6 +220,16 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
     asRecord(asRecord(o.Snap)?.info) ??
     null;
   const vehicle = asRecord(o.Vehicle ?? o.vehicle ?? o.car);
+  const trafficCar = asRecord(o.TrafficCar ?? o.trafficCar);
+
+  // Correlação: EventID e DefendCode são iguais nos dois streams para o mesmo evento
+  const correlationEventId = normalizeCorrelationEventId(
+    pickStr(o, 'EventID', 'eventId') ??
+      (o.EventID != null ? String(o.EventID) : null),
+  );
+  const defendCode = trafficCar != null
+    ? pickStr(trafficCar, 'DefendCode', 'defendCode')
+    : null;
 
   let plateNumber =
     plate != null
@@ -217,6 +243,9 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
   ) {
     plateNumber =
       pickStr(o, 'PlateNumber', 'plateNumber', 'plate_no', 'LicensePlate') ??
+      (trafficCar != null
+        ? pickStr(trafficCar, 'PlateNumber', 'plateNumber')
+        : null) ??
       plateNumber;
   }
 
@@ -244,12 +273,36 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
     channel = pickOptionalNum(plate, 'Channel', 'channel');
   }
 
+  // Velocidade: Vehicle > TrafficCar > SnapInfo
   let speed = vehicle != null ? pickOptionalNum(vehicle, 'Speed', 'speed') : null;
+  if (speed == null && trafficCar != null) {
+    speed = pickOptionalNum(trafficCar, 'Speed', 'speed');
+  }
 
+  // Direção: Vehicle > TrafficCar.DrivingDirection[0] > JunctionDirection
   let direction = vehicle != null ? pickStr(vehicle, 'Direction', 'direction') : null;
+  if (direction == null && trafficCar != null) {
+    const drivingDir = trafficCar['DrivingDirection'];
+    if (Array.isArray(drivingDir)) {
+      const first = drivingDir.find(
+        (v) => v != null && String(v).trim() !== '',
+      );
+      direction = first != null ? String(first).trim() : null;
+    }
+    if (direction == null) {
+      direction = pickStr(trafficCar, 'Direction', 'direction');
+    }
+  }
+  if (direction == null) {
+    direction = pickStr(o, 'JunctionDirection', 'Direction');
+  }
 
+  // Lane: SnapInfo > TrafficCar.Lane
   let laneNo =
     snap != null ? pickOptionalNum(snap, 'LanNo', 'laneNo', 'LaneNo') : null;
+  if (laneNo == null && trafficCar != null) {
+    laneNo = pickOptionalNum(trafficCar, 'Lane', 'LaneNo', 'laneNo');
+  }
 
   if (
     snap?.Direction !== undefined &&
@@ -266,7 +319,10 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
   const snapTimeRaw =
     snap != null && asRecord(snap)
       ? pickStr(asRecord(snap)!, 'SnapTime', 'snapTime')
-      : pickStr(o, 'SnapTime');
+      : (pickStr(o, 'SnapTime') ??
+          (trafficCar != null
+            ? pickStr(trafficCar, 'UTC', 'CapTime')
+            : null));
 
   const accurateTimeRaw =
     snap != null && asRecord(snap)
@@ -293,31 +349,51 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
     openStrobe ??= pickOptionalBool(o, 'OpenStrobe');
   }
 
+  // Cor e tipo da placa: Plate > TrafficCar > raiz
+  const plateColor =
+    plate != null
+      ? pickStr(plate, 'PlateColor', 'plateColor', 'Color')
+      : (trafficCar != null
+          ? pickStr(trafficCar, 'PlateColor', 'plateColor')
+          : null) ?? pickStr(o, 'PlateColor', 'plateColor');
+
+  const plateType =
+    plate != null
+      ? pickStr(plate, 'PlateType', 'plateType', 'Type')
+      : pickStr(o, 'PlateType');
+
+  // Tipo e cor do veículo: Vehicle > TrafficCar > raiz
+  const vehicleColor =
+    vehicle != null
+      ? pickStr(vehicle, 'VehicleColor', 'vehicleColor', 'Color')
+      : (trafficCar != null
+          ? pickStr(trafficCar, 'VehicleColor', 'vehicleColor')
+          : null) ?? pickStr(o, 'VehicleColor');
+
+  const vehicleType =
+    vehicle != null
+      ? pickStr(vehicle, 'VehicleType', 'vehicleType', 'type')
+      : (trafficCar != null
+          ? pickStr(trafficCar, 'CarType', 'VehicleType', 'vehicleType')
+          : null) ?? pickStr(o, 'VehicleType', 'CarType');
+
+  const vehicleBrand =
+    vehicle != null
+      ? pickStr(vehicle, 'VehicleSign', 'vehicleBrand', 'Brand')
+      : (trafficCar != null
+          ? pickStr(trafficCar, 'VehicleSign', 'vehicleBrand', 'Brand')
+          : null) ?? pickStr(o, 'VehicleSign', 'VehicleBrand');
+
   return {
     plateNumber,
-    plateColor:
-      plate != null
-        ? pickStr(plate, 'PlateColor', 'plateColor', 'Color')
-        : pickStr(o, 'PlateColor', 'plateColor'),
-    plateType:
-      plate != null
-        ? pickStr(plate, 'PlateType', 'plateType', 'Type')
-        : pickStr(o, 'PlateType'),
+    plateColor,
+    plateType,
     confidence,
-    vehicleColor:
-      vehicle != null
-        ? pickStr(vehicle, 'VehicleColor', 'vehicleColor', 'Color')
-        : pickStr(o, 'VehicleColor'),
-    vehicleType:
-      vehicle != null
-        ? pickStr(vehicle, 'VehicleType', 'vehicleType', 'type')
-        : pickStr(o, 'VehicleType'),
-    vehicleBrand:
-      vehicle != null
-        ? pickStr(vehicle, 'VehicleSign', 'vehicleBrand', 'Brand')
-        : pickStr(o, 'VehicleSign', 'VehicleBrand'),
+    vehicleColor,
+    vehicleType,
+    vehicleBrand,
     speed,
-    direction: direction ?? pickStr(o, 'Direction'),
+    direction,
     laneNo,
     channel:
       channel ??
@@ -331,6 +407,8 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
     isBlocked,
     openStrobe,
     deviceIdReported,
+    correlationEventId,
+    defendCode: defendCode || null,
   };
 }
 
@@ -419,6 +497,12 @@ export function snapFlatMapToLprReading(
     return null;
   }
 
+  // Correlação: EventID e DefendCode identificam o mesmo evento físico no snap.
+  const correlationEventId = normalizeCorrelationEventId(
+    pickEv('EventID', 'EventBaseInfo.EventID'),
+  );
+  const defendCode = pickEv('TrafficCar.DefendCode') ?? null;
+
   const cn = pickEv('Confidence', 'Plate.Confidence', 'ANPR.Confidence');
   let confidence: number | null = null;
   if (cn != undefined) {
@@ -433,13 +517,15 @@ export function snapFlatMapToLprReading(
     if (Number.isFinite(num)) channel = num;
   }
 
-  const lane = pickEv('LanNo', 'SnapInfo.LanNo');
+  // Lane: SnapInfo > TrafficCar.Lane
+  const lane = pickEv('LanNo', 'SnapInfo.LanNo', 'TrafficCar.Lane');
   let laneNo: number | null = null;
   if (lane != undefined) {
     const num = Number(lane);
     if (Number.isFinite(num)) laneNo = num;
   }
 
+  // Velocidade: Vehicle.Speed > TrafficCar.Speed
   const speedStr = pickEv('Speed', 'Vehicle.Speed', 'TrafficCar.Speed');
   let speed: number | null = null;
   if (speedStr != undefined) {
@@ -447,28 +533,47 @@ export function snapFlatMapToLprReading(
     if (Number.isFinite(num)) speed = num;
   }
 
+  // Direção: SnapInfo > TrafficCar.DrivingDirection[0] > JunctionDirection
+  const direction =
+    pickEv('Direction', 'SnapInfo.Direction', 'Vehicle.Direction') ??
+    pickEv('TrafficCar.DrivingDirection[0]') ??
+    pickEv('JunctionDirection') ??
+    null;
+
+  // Tempo: SnapInfo.SnapTime > TrafficCar.UTC
+  const snapTimeRaw =
+    pickEv('SnapTime', 'SnapInfo.SnapTime', 'ParkingSpace.SnapTime') ??
+    pickEv('TrafficCar.UTC') ??
+    null;
+
   return {
     plateNumber: normalizedPlate,
     plateColor:
-      pickEv('PlateColor', 'Plate.PlateColor', 'TrafficParking.PlateColor') ??
+      pickEv('PlateColor', 'Plate.PlateColor', 'TrafficParking.PlateColor', 'TrafficCar.PlateColor') ??
       null,
     plateType: pickEv('PlateType', 'Plate.PlateType') ?? null,
     confidence,
-    vehicleColor: pickEv('VehicleColor', 'Vehicle.VehicleColor') ?? null,
-    vehicleType: pickEv('VehicleType', 'Vehicle.VehicleType') ?? null,
+    vehicleColor:
+      pickEv('VehicleColor', 'Vehicle.VehicleColor', 'TrafficCar.VehicleColor') ?? null,
+    vehicleType:
+      pickEv('VehicleType', 'Vehicle.VehicleType', 'TrafficCar.CarType') ?? null,
     vehicleBrand: pickEv('VehicleSign', 'Vehicle.VehicleSign') ?? null,
     speed,
-    direction:
-      pickEv('Direction', 'SnapInfo.Direction', 'Vehicle.Direction') ?? null,
+    direction,
     laneNo,
     channel,
-    snapTimeRaw:
-      pickEv('SnapTime', 'SnapInfo.SnapTime', 'ParkingSpace.SnapTime') ?? null,
+    snapTimeRaw,
     accurateTimeRaw: pickEv('AccurateTime', 'SnapInfo.AccurateTime') ?? null,
     isAllowed:
-      parseBoolSnap(pickEv('AllowUser', 'SnapInfo.AllowUser')) ?? null,
+      parseBoolSnap(
+        pickEv('AllowUser', 'SnapInfo.AllowUser') ??
+          pickEv('TrafficCar.WhiteList.Enable'),
+      ) ?? null,
     isBlocked:
-      parseBoolSnap(pickEv('BlockUser', 'SnapInfo.BlockUser')) ?? null,
+      parseBoolSnap(
+        pickEv('BlockUser', 'SnapInfo.BlockUser') ??
+          pickEv('TrafficCar.BlackList.Enable'),
+      ) ?? null,
     openStrobe:
       parseBoolSnap(pickEv('OpenStrobe', 'SnapInfo.OpenStrobe')) ?? null,
     deviceIdReported:
@@ -478,6 +583,35 @@ export function snapFlatMapToLprReading(
       lines.get('Events[0].EventBaseInfo.Action') ??
       lines.get('Events[0].Action') ??
       null,
+    correlationEventId,
+    defendCode: defendCode || null,
     rawFlatSubset: buildFlatSubset(lines),
   };
+}
+
+/** Snap completo ANPR (com TrafficCar) — ignora eventos secundários do snapManager. */
+export function isPrimaryLprSnapReading(
+  lines: Map<string, string>,
+  reading: LprStreamReadingPayload,
+): boolean {
+  const trafficCarPlate = lines.get('Events[0].TrafficCar.PlateNumber')?.trim();
+  if (!trafficCarPlate) return false;
+
+  return !!(
+    reading.direction?.trim() ||
+    reading.vehicleType?.trim() ||
+    reading.isAllowed != null ||
+    reading.isBlocked != null ||
+    reading.laneNo != null
+  );
+}
+
+/** Único snap que deve entrar no pending e ser persistido. */
+export function isPersistableTrafficJunctionReading(
+  lines: Map<string, string>,
+  reading: LprStreamReadingPayload,
+): boolean {
+  if (reading.eventCode !== 'TrafficJunction') return false;
+  if (!reading.correlationEventId?.trim()) return false;
+  return isPrimaryLprSnapReading(lines, reading);
 }

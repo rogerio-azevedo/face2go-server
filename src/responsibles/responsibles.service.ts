@@ -50,7 +50,7 @@ export class ResponsiblesService {
   private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
     if (!photoKey) return null;
     try {
-      return await this.r2Storage.createPresignedGetUrl(photoKey);
+      return await this.r2Storage.createPresignedPortraitGetUrl(photoKey);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       this.log.warn(

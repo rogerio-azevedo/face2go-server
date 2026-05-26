@@ -11,7 +11,10 @@ import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as vehiclesQueries from '../database/queries/vehicles.queries';
-import type { AccessFacialRecordedPayload } from '../notifications/notifications.events';
+import type {
+  AccessFacialRecordedPayload,
+  AccessLprRecordedPayload,
+} from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
 
 import type {
@@ -84,6 +87,21 @@ export class ArrivalsService {
     }
   }
 
+  private async presignPortraitPhoto(
+    photoKey: string | null | undefined,
+  ): Promise<string | null> {
+    const k = typeof photoKey === 'string' ? photoKey.trim() : '';
+    if (!k) return null;
+    try {
+      return await this.r2Storage.createPresignedPortraitGetUrl(k);
+    } catch (err: unknown) {
+      this.logger.debug(
+        `Presign retrato arrivals falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return null;
+    }
+  }
+
   private async loadSnapPhotoUrl(accessId: string): Promise<string | null> {
     try {
       if (!Types.ObjectId.isValid(accessId)) {
@@ -147,7 +165,7 @@ export class ArrivalsService {
           personName = responsible.name;
         }
         if (!personPhotoUrl) {
-          personPhotoUrl = await this.presignPhoto(responsible.photoKey);
+          personPhotoUrl = await this.presignPortraitPhoto(responsible.photoKey);
         }
         students = await this.resolveStudentsResponsible(
           payload.clientId,
@@ -200,6 +218,48 @@ export class ArrivalsService {
     } catch (err: unknown) {
       this.logger.warn(
         `broadcastFacialRecorded falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  async broadcastLprRecorded(
+    payload: AccessLprRecordedPayload,
+  ): Promise<void> {
+    try {
+      const responsible = await vehiclesQueries.findResponsibleByPlate(
+        this.database.db,
+        payload.plateNumber,
+        payload.clientId,
+      );
+
+      if (!responsible) {
+        return;
+      }
+
+      const personPhotoUrl = await this.presignPortraitPhoto(
+        responsible.photoKey,
+      );
+      const students = await this.resolveStudentsResponsible(
+        payload.clientId,
+        responsible.id,
+      );
+
+      const out: ArrivalSsePayload = {
+        type: 'arrival',
+        kind: 'responsible',
+        accessId: payload.accessId,
+        personName: responsible.name,
+        personPhotoUrl,
+        readerName: payload.cameraName,
+        eventDate: payload.snapTime?.toISOString() ?? null,
+        vehiclePlate: payload.plateNumber,
+        students,
+      };
+
+      this.emitToHub(payload.clientId, out);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `broadcastLprRecorded falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

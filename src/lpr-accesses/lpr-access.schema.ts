@@ -84,8 +84,24 @@ export class LprAccess {
 
   @Prop({ type: SchemaTypes.Mixed, default: null })
   rawPayload!: Record<string, unknown> | null;
+
+  /**
+   * ID do evento reportado pela câmera (EventID). Presente nos dois streams
+   * (eventManager e snapManager) com o mesmo valor para o mesmo evento físico.
+   * Usado como chave de correlação no upsert — garante que dados JSON e imagem
+   * do mesmo veículo sempre ficam no mesmo documento.
+   */
+  @Prop({ type: String, default: null })
+  correlationEventId!: string | null;
 }
 
 export type LprAccessDocument = HydratedDocument<LprAccess>;
 
 export const LprAccessSchema = SchemaFactory.createForClass(LprAccess);
+
+// Índice unique sparse: impede dois documentos para o mesmo evento físico
+// (eventManager + snapManager). sparse=true porque docs legados terão null.
+LprAccessSchema.index(
+  { cameraId: 1, correlationEventId: 1 },
+  { unique: true, sparse: true },
+);

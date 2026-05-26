@@ -8,6 +8,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { isPortraitImageUsable } from './portrait-image.utils';
+
 const PUT_EXPIRES_SEC = 15 * 60;
 const GET_EXPIRES_SEC = 60 * 60;
 
@@ -100,6 +102,15 @@ export class R2StorageService {
       Key: key,
     });
     return getSignedUrl(this.client, command, { expiresIn: GET_EXPIRES_SEC });
+  }
+
+  /** Presign apenas se o retrato tiver luminância mínima (evita círculo preto no display). */
+  async createPresignedPortraitGetUrl(key: string): Promise<string | null> {
+    const { buffer } = await this.getObjectBytes(key);
+    if (!(await isPortraitImageUsable(buffer))) {
+      return null;
+    }
+    return this.createPresignedGetUrl(key);
   }
 
   async assertObjectExists(key: string): Promise<void> {

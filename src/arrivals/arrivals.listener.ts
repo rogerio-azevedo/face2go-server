@@ -3,7 +3,9 @@ import { OnEvent } from '@nestjs/event-emitter';
 
 import {
   ACCESS_FACIAL_RECORDED,
+  ACCESS_LPR_RECORDED,
   type AccessFacialRecordedPayload,
+  type AccessLprRecordedPayload,
 } from '../notifications/notifications.events';
 
 import { ArrivalsService } from './arrivals.service';
@@ -17,5 +19,12 @@ export class ArrivalsListener {
     payload: AccessFacialRecordedPayload,
   ): Promise<void> {
     await this.arrivalsService.broadcastFacialRecorded(payload);
+  }
+
+  @OnEvent(ACCESS_LPR_RECORDED, { async: true })
+  async onAccessLprRecorded(
+    payload: AccessLprRecordedPayload,
+  ): Promise<void> {
+    await this.arrivalsService.broadcastLprRecorded(payload);
   }
 }

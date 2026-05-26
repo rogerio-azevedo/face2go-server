@@ -1,14 +1,24 @@
-import { Controller, ForbiddenException, Get, Query } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { LprAccessesService } from './lpr-accesses.service';
+import {
+  type LprAccessPhotoUrlsDto,
+  LprAccessesService,
+} from './lpr-accesses.service';
 
 @ApiTags('lpr-accesses')
 @ApiBearerAuth()
@@ -16,6 +26,23 @@ import { LprAccessesService } from './lpr-accesses.service';
 @Controller('lpr-accesses')
 export class LprAccessesController {
   constructor(private readonly lprAccessesService: LprAccessesService) {}
+
+  @Get(':id/photo')
+  @ApiOperation({
+    summary:
+      'Obter URLs assinadas (GET) das fotos ANPR armazenadas no R2 para um acesso',
+  })
+  @ApiParam({ name: 'id', description: 'ID do documento (Mongo ObjectId).' })
+  photos(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ): Promise<LprAccessPhotoUrlsDto> {
+    const companyId = user.companyId;
+    if (!companyId) {
+      throw new ForbiddenException('Empresa não associada ao usuário.');
+    }
+    return this.lprAccessesService.getPhotoUrls(id, companyId);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Listar acessos LPR ANPR (MongoDB), por empresa' })
