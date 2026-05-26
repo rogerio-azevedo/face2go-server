@@ -1,12 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import type { Model } from 'mongoose';
-import { Types } from 'mongoose';
 
-import {
-  FacialAccess,
-  type FacialAccessDocument,
-} from '../accesses/access.schema';
 import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
@@ -32,8 +25,6 @@ export class ArrivalsService {
   private readonly hubs = new Map<string, Set<SinkFn>>();
 
   constructor(
-    @InjectModel(FacialAccess.name)
-    private readonly accessModel: Model<FacialAccessDocument>,
     private readonly database: DatabaseService,
     private readonly r2Storage: R2StorageService,
   ) {}
@@ -102,25 +93,6 @@ export class ArrivalsService {
     }
   }
 
-  private async loadSnapPhotoUrl(accessId: string): Promise<string | null> {
-    try {
-      if (!Types.ObjectId.isValid(accessId)) {
-        return null;
-      }
-      const doc = await this.accessModel
-        .findById(new Types.ObjectId(accessId))
-        .lean<{ snapR2Key?: string | null }>();
-      const key = doc?.snapR2Key?.trim();
-      if (!key) return null;
-      return this.presignPhoto(key);
-    } catch (err: unknown) {
-      this.logger.debug(
-        `Mongo access arrival: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return null;
-    }
-  }
-
   private async resolveStudentsResponsible(
     clientId: string,
     responsibleId: string,
@@ -145,7 +117,6 @@ export class ArrivalsService {
     payload: AccessFacialRecordedPayload,
   ): Promise<void> {
     try {
-      const snapUrl = await this.loadSnapPhotoUrl(payload.accessId);
       const responsible =
         await responsiblesQueries.findResponsibleByFaceIdAndClientId(
           this.database.db,
@@ -155,7 +126,7 @@ export class ArrivalsService {
 
       let kind: ArrivalDisplayKind;
       let personName = payload.personName?.trim() || null;
-      let personPhotoUrl: string | null = snapUrl;
+      let personPhotoUrl: string | null = null;
       let students: ArrivalSseStudent[] = [];
       let vehiclePlate: string | null = null;
 
@@ -164,9 +135,7 @@ export class ArrivalsService {
         if (!personName) {
           personName = responsible.name;
         }
-        if (!personPhotoUrl) {
-          personPhotoUrl = await this.presignPortraitPhoto(responsible.photoKey);
-        }
+        personPhotoUrl = await this.presignPortraitPhoto(responsible.photoKey);
         students = await this.resolveStudentsResponsible(
           payload.clientId,
           responsible.id,
@@ -186,8 +155,7 @@ export class ArrivalsService {
         if (student) {
           kind = 'student';
           personName = student.name;
-          personPhotoUrl =
-            snapUrl ?? (await this.presignPhoto(student.photoKey));
+          personPhotoUrl = await this.presignPhoto(student.photoKey);
           students = [];
         } else {
           kind = 'student';
