@@ -4,10 +4,10 @@ import type { AppDb } from '../database.types';
 import {
   responsibleStudents,
   responsibles,
-  schoolClasses,
   students,
 } from '../schema';
 
+import * as studentClassesQueries from './student-classes.queries';
 import * as studentsQueries from './students.queries';
 
 export async function listResponsiblesByClient(db: AppDb, clientId: string) {
@@ -455,18 +455,13 @@ export async function listResponsibleStudentLinksWithStudents(
   responsibleId: string,
   clientId: string,
 ) {
-  return db
+  const rows = await db
     .select({
       link: responsibleStudents,
       student: students,
-      schoolClass: {
-        name: schoolClasses.name,
-        year: schoolClasses.year,
-      },
     })
     .from(responsibleStudents)
     .innerJoin(students, eq(responsibleStudents.studentId, students.id))
-    .leftJoin(schoolClasses, eq(students.classId, schoolClasses.id))
     .where(
       and(
         eq(responsibleStudents.responsibleId, responsibleId),
@@ -474,4 +469,28 @@ export async function listResponsibleStudentLinksWithStudents(
       ),
     )
     .orderBy(asc(responsibleStudents.createdAt));
+
+  const studentIds = rows.map((r) => r.student.id);
+  const links = await studentClassesQueries.listClassesByStudentIds(
+    db,
+    studentIds,
+  );
+  const firstClassByStudent = new Map<
+    string,
+    { name: string; year: number }
+  >();
+  for (const link of links) {
+    if (link.isActive && !firstClassByStudent.has(link.studentId)) {
+      firstClassByStudent.set(link.studentId, {
+        name: link.className,
+        year: link.year,
+      });
+    }
+  }
+
+  return rows.map((r) => ({
+    link: r.link,
+    student: r.student,
+    schoolClass: firstClassByStudent.get(r.student.id) ?? null,
+  }));
 }

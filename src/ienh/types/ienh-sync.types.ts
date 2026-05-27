@@ -11,6 +11,11 @@ export interface IenhSyncResult {
   responsiblesCreated: number;
   responsiblesUpdated: number;
   classesCreated: number;
+  classesMerged: number;
+  classLinksCreated: number;
+  classLinksUpdated: number;
+  classLinksDeactivated: number;
+  classLinksDeduped: number;
   linksCreated: number;
   errors: IenhSyncError[];
   durationMs: number;

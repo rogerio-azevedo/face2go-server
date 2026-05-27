@@ -21,7 +21,6 @@ export const createStudentSchema = z.object({
     .max(64, 'Matrícula muito longa.'),
   document: z.string().trim().max(32).nullable().optional(),
   birthDate: z.coerce.date().nullable().optional(),
-  classId: z.uuid().nullable().optional(),
   photoKey: z.string().trim().max(2048).nullable().optional(),
   accessSchedule: accessScheduleSchema,
   isActive: z.boolean().optional().default(true),

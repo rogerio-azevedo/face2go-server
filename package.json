@@ -22,7 +22,8 @@
     "db:migrate": "drizzle-kit migrate && node -e \"console.log('\\n✓ db:migrate finalizado. Se algo falhou acima, o Drizzle costuma sair com código ≠ 0.\\n  Confirme as tabelas: npm run db:check-registration-tables\\n')\"",
     "db:check-registration-tables": "tsx src/scripts/check-registration-tables.ts",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx src/scripts/seed.ts"
+    "db:seed": "tsx src/scripts/seed.ts",
+    "db:merge-duplicate-school-classes": "tsx src/scripts/merge-duplicate-school-classes.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1041.0",

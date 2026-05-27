@@ -1,7 +1,9 @@
 import { and, asc, eq, inArray, notInArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { responsibleStudents, schoolClasses, students } from '../schema';
+import { responsibleStudents, studentClasses, students } from '../schema';
+
+import * as studentClassesQueries from './student-classes.queries';
 
 export async function listStudentsByClient(db: AppDb, clientId: string) {
   return db
@@ -17,11 +19,34 @@ export async function listStudentsByClass(
   classId: string,
 ) {
   return db
-    .select()
+    .select({
+      id: students.id,
+      clientId: students.clientId,
+      name: students.name,
+      enrollment: students.enrollment,
+      document: students.document,
+      birthDate: students.birthDate,
+      photoKey: students.photoKey,
+      faceId: students.faceId,
+      deviceSyncStatus: students.deviceSyncStatus,
+      deviceSyncedAt: students.deviceSyncedAt,
+      deviceSyncError: students.deviceSyncError,
+      accessSchedule: students.accessSchedule,
+      situacaoMatricula: students.situacaoMatricula,
+      isActive: students.isActive,
+      createdAt: students.createdAt,
+      updatedAt: students.updatedAt,
+    })
     .from(students)
-    .where(
-      and(eq(students.clientId, clientId), eq(students.classId, classId)),
+    .innerJoin(
+      studentClasses,
+      and(
+        eq(studentClasses.studentId, students.id),
+        eq(studentClasses.classId, classId),
+        eq(studentClasses.isActive, true),
+      ),
     )
+    .where(eq(students.clientId, clientId))
     .orderBy(asc(students.name));
 }
 
@@ -86,7 +111,7 @@ export async function listStudentsByResponsible(
     .orderBy(asc(students.name));
 }
 
-/** Alunos do responsável com nome da turma (`school_classes`), quando existir. */
+/** Alunos do responsável com nome da primeira turma ativa (via `student_classes`). */
 export async function listStudentsWithClassByResponsible(
   db: AppDb,
   clientId: string,
@@ -94,18 +119,30 @@ export async function listStudentsWithClassByResponsible(
 ) {
   const ids = await listStudentIdsForResponsible(db, responsibleId);
   if (ids.length === 0) return [];
-  return db
+
+  const studentRows = await db
     .select({
       id: students.id,
       name: students.name,
       photoKey: students.photoKey,
       isActive: students.isActive,
-      className: schoolClasses.name,
     })
     .from(students)
-    .leftJoin(schoolClasses, eq(students.classId, schoolClasses.id))
     .where(and(eq(students.clientId, clientId), inArray(students.id, ids)))
     .orderBy(asc(students.name));
+
+  const links = await studentClassesQueries.listClassesByStudentIds(db, ids);
+  const firstClassByStudent = new Map<string, string>();
+  for (const link of links) {
+    if (link.isActive && !firstClassByStudent.has(link.studentId)) {
+      firstClassByStudent.set(link.studentId, link.className);
+    }
+  }
+
+  return studentRows.map((s) => ({
+    ...s,
+    className: firstClassByStudent.get(s.id) ?? null,
+  }));
 }
 
 export type StudentInsert = typeof students.$inferInsert;
@@ -133,7 +170,6 @@ export async function updateStudent(
       | 'enrollment'
       | 'document'
       | 'birthDate'
-      | 'classId'
       | 'photoKey'
       | 'faceId'
       | 'deviceSyncStatus'
@@ -192,7 +228,6 @@ export type UpsertStudentByEnrollmentInput = {
   enrollment: string;
   name: string;
   birthDate?: Date | null;
-  classId?: string | null;
   situacaoMatricula?:
     | 'enrolled'
     | 'transferred'
@@ -215,7 +250,6 @@ export async function upsertStudentByEnrollment(
     const row = await updateStudent(db, existing.id, input.clientId, {
       name: input.name,
       birthDate: input.birthDate,
-      classId: input.classId,
       situacaoMatricula: input.situacaoMatricula,
       isActive: input.isActive,
     });
@@ -226,7 +260,6 @@ export async function upsertStudentByEnrollment(
     enrollment: input.enrollment,
     name: input.name,
     birthDate: input.birthDate ?? null,
-    classId: input.classId ?? null,
     situacaoMatricula: input.situacaoMatricula ?? null,
     isActive: input.isActive,
   });

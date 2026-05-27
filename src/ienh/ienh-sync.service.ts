@@ -12,6 +12,7 @@ import * as clientsQueries from '../database/queries/clients.queries';
 import * as responsibleStudentsQueries from '../database/queries/responsible-students.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as schoolClassQueries from '../database/queries/school-classes.queries';
+import * as studentClassesQueries from '../database/queries/student-classes.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { syncFromSnapshotSchema, syncIenhSchema } from '../validation/ienh.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
@@ -248,6 +249,11 @@ export class IenhSyncService {
       responsiblesCreated: 0,
       responsiblesUpdated: 0,
       classesCreated: 0,
+      classesMerged: 0,
+      classLinksCreated: 0,
+      classLinksUpdated: 0,
+      classLinksDeactivated: 0,
+      classLinksDeduped: 0,
       linksCreated: 0,
       errors: [],
       durationMs: 0,
@@ -260,7 +266,9 @@ export class IenhSyncService {
 
     const year = parsePerletYear(perlet);
     const enrollmentsByClient = new Map<string, Set<string>>();
+    const activeClassIdsByStudent = new Map<string, Set<string>>();
     const classCache = new Map<string, string>();
+    const classResolveInflight = new Map<string, Promise<string>>();
     const responsibleCache = new Map<string, string>();
 
     let processed = 0;
@@ -273,7 +281,9 @@ export class IenhSyncService {
           year,
           result,
           enrollmentsByClient,
+          activeClassIdsByStudent,
           classCache,
+          classResolveInflight,
           responsibleCache,
         });
       } catch (err: unknown) {
@@ -304,6 +314,16 @@ export class IenhSyncService {
 
     emit?.({ type: 'deactivate_start' });
 
+    const syncedClientIds = new Set(Object.values(filialClientMap));
+    for (const clientId of syncedClientIds) {
+      const merged =
+        await schoolClassQueries.mergeDuplicateSchoolClassesForClient(
+          this.database.db,
+          clientId,
+        );
+      result.classesMerged += merged.classesRemoved;
+    }
+
     for (const [clientId, enrollments] of enrollmentsByClient) {
       const deactivated = await studentsQueries.deactivateStudentsNotInList(
         this.database.db,
@@ -313,11 +333,32 @@ export class IenhSyncService {
       result.studentsDeactivated += deactivated;
     }
 
+    for (const [studentId, classIds] of activeClassIdsByStudent) {
+      const deactivated =
+        await studentClassesQueries.deactivateStudentClassLinksNotInList(
+          this.database.db,
+          studentId,
+          [...classIds],
+        );
+      result.classLinksDeactivated += deactivated;
+
+      const deduped =
+        await studentClassesQueries.dedupeActiveStudentClassLinksByClassNameYear(
+          this.database.db,
+          studentId,
+        );
+      result.classLinksDeduped += deduped;
+    }
+
     result.durationMs = Date.now() - startedAt;
     this.logger.log(
       `IENH sync: ${result.processedRecords} registros, ` +
         `${result.studentsCreated} alunos criados, ${result.studentsUpdated} atualizados, ` +
-        `${result.studentsDeactivated} desativados em ${result.durationMs}ms`,
+        `${result.studentsDeactivated} desativados, ` +
+        `${result.classLinksCreated} vínculos turma criados, ` +
+        `${result.classLinksDeactivated} vínculos turma desativados, ` +
+        `${result.classLinksDeduped} vínculos duplicados removidos, ` +
+        `${result.classesMerged} turmas duplicadas fundidas em ${result.durationMs}ms`,
     );
 
     return result;
@@ -366,7 +407,9 @@ export class IenhSyncService {
     year: number;
     result: IenhSyncResult;
     enrollmentsByClient: Map<string, Set<string>>;
+    activeClassIdsByStudent: Map<string, Set<string>>;
     classCache: Map<string, string>;
+    classResolveInflight: Map<string, Promise<string>>;
     responsibleCache: Map<string, string>;
   }): Promise<void> {
     const {
@@ -375,7 +418,9 @@ export class IenhSyncService {
       year,
       result,
       enrollmentsByClient,
+      activeClassIdsByStudent,
       classCache,
+      classResolveInflight,
       responsibleCache,
     } = args;
     const record = item.record;
@@ -399,21 +444,21 @@ export class IenhSyncService {
     const turmaCode = record.CODTURMA?.trim();
     if (turmaCode) {
       const classKey = `${clientId}:${turmaCode}:${year}`;
-      const cached = classCache.get(classKey);
-      if (cached) {
-        classId = cached;
-      } else {
-        const klass = await schoolClassQueries.findOrCreateSchoolClassByCode(
-          this.database.db,
-          clientId,
-          turmaCode,
-          year,
-        );
-        classId = klass.id;
-        classCache.set(classKey, klass.id);
-        if (klass.created) result.classesCreated += 1;
-      }
+      classId = await this.resolveSchoolClassId({
+        classKey,
+        clientId,
+        turmaCode,
+        year,
+        classCache,
+        classResolveInflight,
+        onCreated: () => {
+          result.classesCreated += 1;
+        },
+      });
     }
+
+    const studentIsActive = mapStatusAcessoToIsActive(record.STATUSACESSO);
+    const situacaoMatricula = mapSituacaoMatricula(record.SITUACAOMAT);
 
     const studentUpsert = await studentsQueries.upsertStudentByEnrollment(
       this.database.db,
@@ -422,9 +467,8 @@ export class IenhSyncService {
         enrollment,
         name: record.NOMEALUNO.trim(),
         birthDate: parseTotvsDate(record.DTNASCALUNO),
-        classId,
-        situacaoMatricula: mapSituacaoMatricula(record.SITUACAOMAT),
-        isActive: mapStatusAcessoToIsActive(record.STATUSACESSO),
+        situacaoMatricula,
+        isActive: studentIsActive,
       },
     );
     if (studentUpsert.created) {
@@ -439,6 +483,27 @@ export class IenhSyncService {
     enrollmentsByClient.get(clientId)!.add(enrollment);
 
     const studentId = studentUpsert.row.id;
+
+    if (classId) {
+      const classLink = await studentClassesQueries.upsertStudentClassLink(
+        this.database.db,
+        {
+          studentId,
+          classId,
+          situacaoMatricula,
+          isActive: studentIsActive,
+        },
+      );
+      if (classLink.created) {
+        result.classLinksCreated += 1;
+      } else {
+        result.classLinksUpdated += 1;
+      }
+      if (!activeClassIdsByStudent.has(studentId)) {
+        activeClassIdsByStudent.set(studentId, new Set());
+      }
+      activeClassIdsByStudent.get(studentId)!.add(classId);
+    }
     await this.syncParent({
       record,
       clientId,
@@ -455,6 +520,51 @@ export class IenhSyncService {
       result,
       responsibleCache,
     });
+  }
+
+  /** Evita criar duas `school_classes` iguais quando o sync roda com concorrência. */
+  private async resolveSchoolClassId(args: {
+    classKey: string;
+    clientId: string;
+    turmaCode: string;
+    year: number;
+    classCache: Map<string, string>;
+    classResolveInflight: Map<string, Promise<string>>;
+    onCreated: () => void;
+  }): Promise<string> {
+    const {
+      classKey,
+      clientId,
+      turmaCode,
+      year,
+      classCache,
+      classResolveInflight,
+      onCreated,
+    } = args;
+
+    const cached = classCache.get(classKey);
+    if (cached) return cached;
+
+    let inflight = classResolveInflight.get(classKey);
+    if (!inflight) {
+      inflight = (async () => {
+        const again = classCache.get(classKey);
+        if (again) return again;
+
+        const klass = await schoolClassQueries.findOrCreateSchoolClassByCode(
+          this.database.db,
+          clientId,
+          turmaCode,
+          year,
+        );
+        classCache.set(classKey, klass.id);
+        if (klass.created) onCreated();
+        return klass.id;
+      })();
+      classResolveInflight.set(classKey, inflight);
+    }
+
+    return inflight;
   }
 
   private async syncParent(args: {

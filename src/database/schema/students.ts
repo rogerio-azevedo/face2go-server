@@ -24,7 +24,7 @@ export const situacaoMatriculaEnum = pgEnum('situacao_matricula', [
   'pre_enrolled',
 ]);
 
-/** Janela/turnos de acesso opcionais por aluno (além do turno da turma). */
+/** Janela/turnos de acesso opcionais por aluno (além dos turnos das turmas). */
 export type StudentAccessScheduleJson = {
   shifts?: ('morning' | 'afternoon' | 'evening' | 'fulltime')[];
   entryTime?: string;
@@ -39,9 +39,6 @@ export const students = pgTable(
     clientId: uuid('client_id')
       .notNull()
       .references(() => clients.id, { onDelete: 'cascade' }),
-    classId: uuid('class_id').references(() => schoolClasses.id, {
-      onDelete: 'set null',
-    }),
     name: varchar('name', { length: 255 }).notNull(),
     enrollment: varchar('enrollment', { length: 64 }).notNull(),
     document: varchar('document', { length: 32 }),
@@ -62,13 +59,44 @@ export const students = pgTable(
   ],
 );
 
-export const studentsRelations = relations(students, ({ one }) => ({
+/** Vínculo N:N aluno ↔ turma (matrículas em múltiplos cursos/turnos). */
+export const studentClasses = pgTable(
+  'student_classes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => schoolClasses.id, { onDelete: 'cascade' }),
+    situacaoMatricula: situacaoMatriculaEnum('situacao_matricula'),
+    isActive: boolean('is_active').default(true).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('student_classes_student_class_unique').on(
+      t.studentId,
+      t.classId,
+    ),
+  ],
+);
+
+export const studentsRelations = relations(students, ({ one, many }) => ({
   client: one(clients, {
     fields: [students.clientId],
     references: [clients.id],
   }),
+  classLinks: many(studentClasses),
+}));
+
+export const studentClassesRelations = relations(studentClasses, ({ one }) => ({
+  student: one(students, {
+    fields: [studentClasses.studentId],
+    references: [students.id],
+  }),
   schoolClass: one(schoolClasses, {
-    fields: [students.classId],
+    fields: [studentClasses.classId],
     references: [schoolClasses.id],
   }),
 }));
