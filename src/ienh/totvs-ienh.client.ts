@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   Injectable,
   Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -23,16 +24,22 @@ export class TotvsIenhClient {
   ) {}
 
   async fetchRecords(params: TotvsIenhFetchParams): Promise<TotvsIenhRecord[]> {
-    const baseUrl = this.configService
-      .get('IENH_API_URL', { infer: true })
-      .replace(/\/$/, '');
+    const baseUrl = this.configService.get('IENH_API_URL', { infer: true });
     const user = this.configService.get('IENH_API_USER', { infer: true });
     const password = this.configService.get('IENH_API_PASSWORD', {
       infer: true,
     });
 
+    if (!baseUrl || !user || !password) {
+      throw new ServiceUnavailableException(
+        'Integração IENH não configurada (variáveis de ambiente ausentes).',
+      );
+    }
+
+    const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
+
     const parameters = `PERLET=${params.perlet};FILIAL=${params.filial};NIVEL=${params.nivel}`;
-    const url = `${baseUrl}/1/S?parameters=${parameters}`;
+    const url = `${normalizedBaseUrl}/1/S?parameters=${parameters}`;
 
     const auth = Buffer.from(`${user}:${password}`, 'utf8').toString('base64');
     const controller = new AbortController();

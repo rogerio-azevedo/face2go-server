@@ -35,9 +35,9 @@ export const envSchema = z.object({
   CLOUDFLARE_R2_ACCESS_KEY_ID: z.string().min(1),
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: z.string().min(1),
   /** API TOTVS IENH — integração de dados pessoais para controle de acesso. */
-  IENH_API_URL: z.string().url(),
-  IENH_API_USER: z.string().min(1),
-  IENH_API_PASSWORD: z.string().min(1),
+  IENH_API_URL: z.string().url().optional(),
+  IENH_API_USER: z.string().min(1).optional(),
+  IENH_API_PASSWORD: z.string().min(1).optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;
