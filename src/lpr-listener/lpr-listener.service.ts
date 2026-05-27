@@ -565,38 +565,36 @@ export class LprListenerService implements OnModuleInit, OnModuleDestroy {
         }
 
         const prev = this.snapPendingByCamera.get(ctx.id);
-        const nextPlate = lr.plateNumber?.trim().toUpperCase() ?? '';
+        const nextEventId = lr.correlationEventId?.trim() ?? '';
 
-        if (prev?.reading) {
-          const prevPlate =
-            prev.reading.plateNumber?.trim().toUpperCase() ?? '';
-          const samePlate = prevPlate === nextPlate && prevPlate !== '';
+        if (prev?.reading && this.isFlushableReading(prev.reading)) {
+          const prevEventId = prev.reading.correlationEventId?.trim() ?? '';
+          const sameEvent =
+            prevEventId !== '' &&
+            nextEventId !== '' &&
+            prevEventId === nextEventId;
 
-          if (
-            samePlate &&
-            prev.images.length > 0 &&
-            this.isFlushableReading(prev.reading)
-          ) {
+          if (!sameEvent && prev.images.length > 0) {
             this.tryFlushSnapPending(ctx.id);
-          } else {
+          } else if (!sameEvent) {
             this.snapPendingByCamera.delete(ctx.id);
           }
         }
 
-        const fresh = this.snapPendingByCamera.get(ctx.id);
-        const waitingImages =
-          fresh != null && fresh.reading == null && fresh.images.length > 0
-            ? fresh.images
-            : [];
+        const afterPrev = this.snapPendingByCamera.get(ctx.id);
+        const keepImages =
+          afterPrev?.reading?.correlationEventId?.trim() === nextEventId &&
+          nextEventId !== '' &&
+          afterPrev.images.length > 0;
 
         const next = this.getOrCreateSnapPending(ctx.id);
         next.reading = lr;
         next.slices = collectImageSlices(map);
-        next.images = waitingImages;
+        next.images = keepImages && afterPrev ? afterPrev.images : [];
         this.tryFlushSnapPending(ctx.id);
       } else if (ct.startsWith('image/')) {
-        const pend = this.getOrCreateSnapPending(ctx.id);
-        if (pend.reading && !this.isFlushableReading(pend.reading)) {
+        const pend = this.snapPendingByCamera.get(ctx.id);
+        if (!pend?.reading || !this.isFlushableReading(pend.reading)) {
           continue;
         }
         pend.images.push(part.body);

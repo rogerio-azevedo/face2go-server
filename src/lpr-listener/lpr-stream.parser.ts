@@ -28,9 +28,9 @@ export type LprStreamReadingPayload = {
   eventCode?: string | null;
   eventAction?: string | null;
   /**
-   * ID do evento reportado pela câmera (EventID). Mesmo valor nos dois streams
-   * (eventManager JSON e snapManager flat map) — usado como chave de correlação
-   * para o upsert atômico no MongoDB.
+   * ID do evento reportado pela câmera. Preferência: EventID; fallback numérico
+   * (SnapSequence, FrameSequence, GroupID…) em modelos que não enviam EventID.
+   * Usado como chave de correlação para upsert atômico no MongoDB.
    */
   correlationEventId?: string | null;
   /** Código único de defesa por evento (DefendCode). Fallback de correlação. */
@@ -204,6 +204,39 @@ function normalizeCorrelationEventId(
   if (raw == null) return null;
   const s = String(raw).trim();
   return s !== '' ? s : null;
+}
+
+/** Preferência: EventID nativo; depois IDs numéricos usados por modelos sem EventID (ex.: ITC215). */
+function pickNumericCorrelationEventId(
+  ...candidates: (string | undefined | null)[]
+): string | null {
+  for (const raw of candidates) {
+    const normalized = normalizeCorrelationEventId(raw);
+    if (normalized && /^\d+$/.test(normalized)) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+/** CapTime vem como epoch decimal (ex.: 1779894467.898000) — normaliza para dígitos. */
+function correlationIdFromCapTime(
+  capTime: string | undefined | null,
+): string | null {
+  if (capTime == null || capTime.trim() === '') return null;
+  const digits = capTime.replace(/\D/g, '');
+  return digits.length > 0 ? digits : null;
+}
+
+function composeUtcCorrelationId(
+  utc: string | undefined | null,
+  utcMs: string | undefined | null,
+): string | null {
+  const u = utc?.trim();
+  if (!u || !/^\d+$/.test(u)) return null;
+  const ms = utcMs?.trim() ?? '0';
+  if (!/^\d+$/.test(ms)) return null;
+  return `${u}${ms.padStart(3, '0')}`;
 }
 
 function extractFromJsonData(data: unknown): LprStreamReadingPayload {
@@ -497,9 +530,15 @@ export function snapFlatMapToLprReading(
     return null;
   }
 
-  // Correlação: EventID e DefendCode identificam o mesmo evento físico no snap.
-  const correlationEventId = normalizeCorrelationEventId(
+  // Correlação: EventID nativo; modelos sem esse campo (ex.: ITC215) usam SnapSequence/CapTime/UTC.
+  const correlationEventId = pickNumericCorrelationEventId(
     pickEv('EventID', 'EventBaseInfo.EventID'),
+    pickEv('SnapSequence'),
+    correlationIdFromCapTime(pickEv('TrafficCar.CapTime')),
+    composeUtcCorrelationId(pickEv('UTC'), pickEv('UTCMS')),
+    pickEv('FrameSequence'),
+    pickEv('GroupID', 'TrafficCar.GroupID'),
+    pickEv('ObjectID', 'Object.ObjectID'),
   );
   const defendCode = pickEv('TrafficCar.DefendCode') ?? null;
 
