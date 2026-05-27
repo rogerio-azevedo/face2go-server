@@ -12,12 +12,14 @@ export const registerSchema = z.object({
     .string()
     .trim()
     .min(8, 'Telefone inválido')
-    .max(30, 'Telefone muito longo'),
+    .max(30, 'Telefone muito longo')
+    .optional(),
   jobTitle: z
     .string()
     .trim()
     .min(2, 'Informe o cargo')
-    .max(120, 'Cargo muito longo'),
+    .max(120, 'Cargo muito longo')
+    .optional(),
   invite: z.string().min(4, 'Código de convite inválido'),
 });
 

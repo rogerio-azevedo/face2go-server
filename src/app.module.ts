@@ -9,12 +9,14 @@ import { AuthModule } from './auth/auth.module';
 import { AccessesModule } from './accesses/accesses.module';
 import { CamerasModule } from './cameras/cameras.module';
 import { ClientsModule } from './clients/clients.module';
+import { ClientInviteLinksModule } from './client-invite-links/client-invite-links.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
 import { validateEnv, type EnvVars } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { ContextRequiredGuard } from './common/guards/context-required.guard';
 import { DatabaseModule } from './database/database.module';
 import { LprPlateSyncModule } from './lpr-plate-sync/lpr-plate-sync.module';
 import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
@@ -59,6 +61,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     AuthModule,
     CompaniesModule,
     ClientsModule,
+    ClientInviteLinksModule,
     ReadersModule,
     CamerasModule,
     RegistrationsModule,
@@ -84,6 +87,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: ContextRequiredGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })

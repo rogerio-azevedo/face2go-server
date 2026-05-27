@@ -4,20 +4,32 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 import { Public } from '../common/decorators/public.decorator';
+import { AllowIdentity } from '../common/decorators/allow-identity.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
+import type { UserContextType } from './interfaces/user-context.interface';
 import { AuthService } from './auth.service';
 
 export class LoginDto {
-  @IsEmail()
-  email!: string;
+  @IsString()
+  @MinLength(1)
+  identifier!: string;
 
   @IsString()
   @MinLength(6)
   password!: string;
+}
+
+export class SelectContextDto {
+  @IsIn(['super_admin', 'company', 'client', 'responsible', 'face_user'])
+  contextType!: UserContextType;
+
+  @IsOptional()
+  @IsString()
+  contextId?: string;
 }
 
 @ApiTags('auth')
@@ -27,9 +39,23 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  @ApiOperation({ summary: 'Login com e-mail e senha' })
+  @ApiOperation({ summary: 'Login com e-mail ou CPF e senha' })
   async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password);
+    return this.authService.login(dto.identifier, dto.password);
+  }
+
+  @AllowIdentity()
+  @Post('select-context')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Seleciona contexto de acesso e emite JWT de sessão' })
+  async selectContext(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: SelectContextDto,
+  ) {
+    return this.authService.selectContext(user.sub, {
+      contextType: dto.contextType,
+      contextId: dto.contextId,
+    });
   }
 
   @Public()
@@ -39,6 +65,16 @@ export class AuthController {
     return this.authService.register(body);
   }
 
+  @Public()
+  @Post('join-context')
+  @ApiOperation({
+    summary: 'Usuário existente aceita convite e vincula novo contexto',
+  })
+  async joinContext(@Body() body: Record<string, unknown>) {
+    return this.authService.joinContext(body);
+  }
+
+  @AllowIdentity()
   @Get('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Perfil do usuário autenticado (JWT)' })

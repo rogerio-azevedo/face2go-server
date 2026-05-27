@@ -10,11 +10,14 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import type { FeatureSlug } from '../common/features.constants';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
+import * as clientInviteLinksQueries from '../database/queries/client-invite-links.queries';
+import * as clientUsersQueries from '../database/queries/client-users.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import {
   createClientSchema,
   updateClientSchema,
 } from '../validation/clients.schema';
+import { generateClientInviteSchema } from '../validation/client-invites.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 
 const toggleActiveSchema = z.object({
@@ -290,5 +293,60 @@ export class ClientsService {
     );
     if (!row) throw new NotFoundException('Cliente não encontrado.');
     return this.omitDisplayToken(row);
+  }
+
+  async listClientUsers(user: JwtPayload, clientId: string) {
+    await this.assertReadAccessToClient(user, clientId);
+    const usersList = await clientUsersQueries.listClientUsers(
+      this.database.db,
+      clientId,
+    );
+    return { users: usersList };
+  }
+
+  async listClientInviteLinks(user: JwtPayload, clientId: string) {
+    await this.assertReadAccessToClient(user, clientId);
+    const invites = await clientInviteLinksQueries.listClientInvites(
+      this.database.db,
+      clientId,
+    );
+    return { invites };
+  }
+
+  async generateClientInviteLink(
+    user: JwtPayload,
+    clientId: string,
+    body: unknown,
+  ) {
+    const companyId = await this.assertReadAccessToClient(user, clientId);
+    const parsed = generateClientInviteSchema.safeParse({
+      clientId,
+      ...(typeof body === 'object' && body !== null ? body : {}),
+    });
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const client = await clientsQueries.getClientById(
+      this.database.db,
+      clientId,
+      companyId,
+    );
+    if (!client) throw new NotFoundException('Cliente não encontrado.');
+    if (!client.isActive) {
+      throw new BadRequestException('Cliente inativo.');
+    }
+
+    const inviteResult = await clientInviteLinksQueries.generateClientInviteCode(
+      this.database.db,
+      {
+        clientId,
+        role: parsed.data.role,
+      },
+    );
+    if (inviteResult.success === false) {
+      throw new BadRequestException(inviteResult.error);
+    }
+    return { code: inviteResult.code };
   }
 }

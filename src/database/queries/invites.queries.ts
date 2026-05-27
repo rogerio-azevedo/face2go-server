@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { inviteLinks } from '../schema';
@@ -8,6 +8,16 @@ import * as companiesQueries from './companies.queries';
 export type GenerateInviteInput = {
   companyId: string;
   role: 'company_admin' | 'company_operator';
+};
+
+export type CompanyInviteListRow = {
+  id: string;
+  code: string;
+  role: 'company_admin' | 'company_operator';
+  usedCount: number;
+  isActive: boolean;
+  expiresAt: Date | null;
+  createdAt: Date;
 };
 
 export async function generateInviteCode(
@@ -35,6 +45,30 @@ export async function getInviteByCode(db: AppDb, code: string) {
   if (!invite) return null;
   const company = await companiesQueries.getCompanyById(db, invite.companyId);
   return { invite, company: company ?? null };
+}
+
+export async function listCompanyInvites(
+  db: AppDb,
+  companyId: string,
+): Promise<CompanyInviteListRow[]> {
+  return db
+    .select({
+      id: inviteLinks.id,
+      code: inviteLinks.code,
+      role: inviteLinks.role,
+      usedCount: inviteLinks.usedCount,
+      isActive: inviteLinks.isActive,
+      expiresAt: inviteLinks.expiresAt,
+      createdAt: inviteLinks.createdAt,
+    })
+    .from(inviteLinks)
+    .where(
+      and(
+        eq(inviteLinks.companyId, companyId),
+        eq(inviteLinks.isActive, true),
+      ),
+    )
+    .orderBy(desc(inviteLinks.createdAt));
 }
 
 export async function incrementInviteUsedCount(db: AppDb, inviteId: string) {

@@ -27,7 +27,6 @@ export class ClientsController {
     return this.clientsService.list(user);
   }
 
-  /** Rotas mais específicas antes de `:clientId` (evita sombreamento no roteador). */
   @Get(':clientId/display-short-code')
   @ApiOperation({
     summary: 'Garante e retorna o código curto da URL do display em TV',
@@ -60,6 +59,34 @@ export class ClientsController {
     @Param('clientId', ParseUUIDPipe) clientId: string,
   ) {
     return this.clientsService.regenerateTvDisplayToken(user, clientId);
+  }
+
+  @Get(':clientId/client-users')
+  @ApiOperation({ summary: 'Listar usuários do sistema vinculados ao cliente' })
+  listClientUsers(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientsService.listClientUsers(user, clientId);
+  }
+
+  @Get(':clientId/invite-links')
+  @ApiOperation({ summary: 'Listar convites ativos do cliente' })
+  listClientInviteLinks(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientsService.listClientInviteLinks(user, clientId);
+  }
+
+  @Post(':clientId/invite-links')
+  @ApiOperation({ summary: 'Gerar convite para admin/operador do cliente' })
+  generateClientInviteLink(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Body() body: unknown,
+  ) {
+    return this.clientsService.generateClientInviteLink(user, clientId, body);
   }
 
   @Patch(':clientId/active')

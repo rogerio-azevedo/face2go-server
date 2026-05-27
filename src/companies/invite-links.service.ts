@@ -9,6 +9,7 @@ export class InviteLinksService {
 
   /** Retorno compatível com `getInvitePreviewAction` no Next.js. */
   async preview(code: string): Promise<{
+    inviteType: 'company';
     role: 'company_admin' | 'company_operator';
     companyName: string;
   } | null> {
@@ -26,6 +27,7 @@ export class InviteLinksService {
     if (!company?.isActive) return null;
 
     return {
+      inviteType: 'company',
       role: invite.role,
       companyName: company.name,
     };

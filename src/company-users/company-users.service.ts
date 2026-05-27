@@ -11,8 +11,11 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { ALL_FEATURES, type FeatureSlug, type PermissionAction } from '../common/features.constants';
 import { DatabaseService } from '../database/database.service';
 import * as permissionsQueries from '../database/queries/permissions.queries';
+import * as invitesQueries from '../database/queries/invites.queries';
+import * as companiesQueries from '../database/queries/companies.queries';
 import * as usersQueries from '../database/queries/users.queries';
 import { users } from '../database/schema';
+import { generateCompanyInviteByAdminSchema } from '../validation/client-invites.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 
 const roleSchema = z.enum(['company_admin', 'company_operator']);
@@ -75,6 +78,44 @@ export class CompanyUsersService {
     }
 
     return { users: list, permissionsMap };
+  }
+
+  async listInviteLinks(user: JwtPayload) {
+    const companyId = this.ensureCompanyAdmin(user);
+    const invites = await invitesQueries.listCompanyInvites(
+      this.database.db,
+      companyId,
+    );
+    return { invites };
+  }
+
+  async generateInviteLink(user: JwtPayload, body: unknown) {
+    const companyId = this.ensureCompanyAdmin(user);
+    const parsed = generateCompanyInviteByAdminSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const company = await companiesQueries.getCompanyById(
+      this.database.db,
+      companyId,
+    );
+    if (!company) throw new NotFoundException('Empresa não encontrada.');
+    if (!company.isActive) {
+      throw new BadRequestException('Empresa inativa.');
+    }
+
+    const inviteResult = await invitesQueries.generateInviteCode(
+      this.database.db,
+      {
+        companyId,
+        role: parsed.data.role,
+      },
+    );
+    if (inviteResult.success === false) {
+      throw new BadRequestException(inviteResult.error);
+    }
+    return { code: inviteResult.code };
   }
 
   async updateRole(

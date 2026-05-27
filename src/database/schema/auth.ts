@@ -6,6 +6,7 @@ import {
   integer,
   boolean,
   pgEnum,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 /** Papel global do usuário (além dos papéis por tenant em company_users / client_users). */
@@ -21,6 +22,8 @@ export const users = pgTable('user', {
     .$defaultFn(() => crypto.randomUUID()),
   name: text('name'),
   email: text('email').notNull().unique(),
+  /** CPF normalizado (11 dígitos), opcional; usado como credencial de login. */
+  cpf: varchar('cpf', { length: 14 }).unique(),
   emailVerified: timestamp('emailVerified', { mode: 'date' }),
   password: text('password'),
   image: text('image'),

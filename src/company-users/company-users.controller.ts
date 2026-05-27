@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -24,6 +24,18 @@ export class CompanyUsersController {
   })
   list(@CurrentUser() user: JwtPayload) {
     return this.companyUsersService.listWithPermissions(user);
+  }
+
+  @Get('invite-links')
+  @ApiOperation({ summary: 'Listar convites ativos da empresa' })
+  listInviteLinks(@CurrentUser() user: JwtPayload) {
+    return this.companyUsersService.listInviteLinks(user);
+  }
+
+  @Post('invite-links')
+  @ApiOperation({ summary: 'Gerar convite para novo membro da empresa' })
+  generateInviteLink(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.companyUsersService.generateInviteLink(user, body);
   }
 
   @Patch(':companyUserId/role')
