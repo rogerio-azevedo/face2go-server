@@ -2,6 +2,7 @@ import { count, eq } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import {
+  cameras,
   clients,
   facialReaders,
   responsibles,
@@ -17,13 +18,20 @@ export type CompanyDashboardStats = {
   schoolClasses: number;
   vehicles: number;
   facialReaders: number;
+  cameras: number;
 };
 
 export type ClientDashboardStats = Omit<CompanyDashboardStats, 'clients'>;
 
 async function countByClientId(
   db: AppDb,
-  table: typeof students | typeof responsibles | typeof schoolClasses | typeof vehicles | typeof facialReaders,
+  table:
+    | typeof students
+    | typeof responsibles
+    | typeof schoolClasses
+    | typeof vehicles
+    | typeof facialReaders
+    | typeof cameras,
   clientId: string,
 ): Promise<number> {
   const [row] = await db
@@ -35,7 +43,13 @@ async function countByClientId(
 
 async function countByCompanyIdViaClients(
   db: AppDb,
-  table: typeof students | typeof responsibles | typeof schoolClasses | typeof vehicles | typeof facialReaders,
+  table:
+    | typeof students
+    | typeof responsibles
+    | typeof schoolClasses
+    | typeof vehicles
+    | typeof facialReaders
+    | typeof cameras,
   companyId: string,
 ): Promise<number> {
   const [row] = await db
@@ -50,14 +64,21 @@ export async function getClientDashboardStats(
   db: AppDb,
   clientId: string,
 ): Promise<ClientDashboardStats> {
-  const [studentsCount, responsiblesCount, classesCount, vehiclesCount, readersCount] =
-    await Promise.all([
-      countByClientId(db, students, clientId),
-      countByClientId(db, responsibles, clientId),
-      countByClientId(db, schoolClasses, clientId),
-      countByClientId(db, vehicles, clientId),
-      countByClientId(db, facialReaders, clientId),
-    ]);
+  const [
+    studentsCount,
+    responsiblesCount,
+    classesCount,
+    vehiclesCount,
+    readersCount,
+    camerasCount,
+  ] = await Promise.all([
+    countByClientId(db, students, clientId),
+    countByClientId(db, responsibles, clientId),
+    countByClientId(db, schoolClasses, clientId),
+    countByClientId(db, vehicles, clientId),
+    countByClientId(db, facialReaders, clientId),
+    countByClientId(db, cameras, clientId),
+  ]);
 
   return {
     students: studentsCount,
@@ -65,6 +86,7 @@ export async function getClientDashboardStats(
     schoolClasses: classesCount,
     vehicles: vehiclesCount,
     facialReaders: readersCount,
+    cameras: camerasCount,
   };
 }
 
@@ -83,12 +105,14 @@ export async function getCompanyDashboardStats(
     classesCount,
     vehiclesCount,
     readersCount,
+    camerasCount,
   ] = await Promise.all([
     countByCompanyIdViaClients(db, students, companyId),
     countByCompanyIdViaClients(db, responsibles, companyId),
     countByCompanyIdViaClients(db, schoolClasses, companyId),
     countByCompanyIdViaClients(db, vehicles, companyId),
     countByCompanyIdViaClients(db, facialReaders, companyId),
+    countByCompanyIdViaClients(db, cameras, companyId),
   ]);
 
   return {
@@ -98,5 +122,6 @@ export async function getCompanyDashboardStats(
     schoolClasses: classesCount,
     vehicles: vehiclesCount,
     facialReaders: readersCount,
+    cameras: camerasCount,
   };
 }
