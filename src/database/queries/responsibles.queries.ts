@@ -220,6 +220,56 @@ export async function getResponsibleById(
   return rows[0];
 }
 
+export async function findResponsibleByDocumentAndClient(
+  db: AppDb,
+  clientId: string,
+  document: string,
+) {
+  const [row] = await db
+    .select()
+    .from(responsibles)
+    .where(
+      and(eq(responsibles.clientId, clientId), eq(responsibles.document, document)),
+    )
+    .limit(1);
+  return row;
+}
+
+export type UpsertResponsibleByDocumentInput = {
+  clientId: string;
+  document: string;
+  name: string;
+  phone?: string | null;
+  isActive?: boolean;
+};
+
+export async function upsertResponsibleByDocument(
+  db: AppDb,
+  input: UpsertResponsibleByDocumentInput,
+): Promise<{ row: typeof responsibles.$inferSelect; created: boolean }> {
+  const existing = await findResponsibleByDocumentAndClient(
+    db,
+    input.clientId,
+    input.document,
+  );
+  if (existing) {
+    const row = await updateResponsible(db, existing.id, input.clientId, {
+      name: input.name,
+      phone: input.phone ?? existing.phone,
+      isActive: input.isActive ?? existing.isActive,
+    });
+    return { row: row!, created: false };
+  }
+  const row = await insertResponsible(db, {
+    clientId: input.clientId,
+    name: input.name,
+    document: input.document,
+    phone: input.phone ?? null,
+    isActive: input.isActive ?? true,
+  });
+  return { row: row!, created: true };
+}
+
 /** Responsável pelo face ID do leitor (chegada do pai/avô etc.). */
 export async function findResponsibleByFaceIdAndClientId(
   db: AppDb,

@@ -94,5 +94,8 @@ export const updateClientSchema = z
   .object({
     ...baseClientShape,
     timezoneOffsetMinutes: timezoneOffsetUpdate,
+    ienhFilialCode: z
+      .union([z.coerce.number().int().min(1).max(3), z.null()])
+      .optional(),
   })
   .partial();

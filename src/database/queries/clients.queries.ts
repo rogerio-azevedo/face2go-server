@@ -41,6 +41,7 @@ export type ClientListRow = {
   email: string | null;
   logoUrl: string | null;
   timezoneOffsetMinutes: number;
+  ienhFilialCode: number | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -121,6 +122,7 @@ export async function listClients(
       email: clients.email,
       logoUrl: clients.logoUrl,
       timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
+      ienhFilialCode: clients.ienhFilialCode,
       isActive: clients.isActive,
       createdAt: clients.createdAt,
       updatedAt: clients.updatedAt,
@@ -202,6 +204,7 @@ export type ClientUpdateInput = Partial<{
   email: string | null;
   logoUrl: string | null;
   timezoneOffsetMinutes: number;
+  ienhFilialCode: number | null;
   isActive: boolean;
 }>;
 
@@ -240,6 +243,9 @@ export async function updateClient(
     setPayload.timezoneOffsetMinutes = input.timezoneOffsetMinutes;
   }
   if (input.isActive !== undefined) setPayload.isActive = input.isActive;
+  if (input.ienhFilialCode !== undefined) {
+    setPayload.ienhFilialCode = input.ienhFilialCode;
+  }
 
   if (Object.keys(setPayload).length === 0) {
     return existing;
@@ -415,5 +421,80 @@ export async function getClientByDisplayShortCode(
     .from(clients)
     .where(eq(clients.displayShortCode, shortCode))
     .limit(1);
+  return row;
+}
+
+export async function listClientsWithIenhFilialByCompany(
+  db: AppDb,
+  companyId: string,
+) {
+  return db
+    .select({
+      id: clients.id,
+      name: clients.name,
+      ienhFilialCode: clients.ienhFilialCode,
+    })
+    .from(clients)
+    .where(eq(clients.companyId, companyId))
+    .orderBy(asc(clients.name));
+}
+
+export async function findClientByIenhFilialCode(
+  db: AppDb,
+  companyId: string,
+  filialCode: number,
+) {
+  const [row] = await db
+    .select({
+      id: clients.id,
+      name: clients.name,
+      ienhFilialCode: clients.ienhFilialCode,
+    })
+    .from(clients)
+    .where(
+      and(
+        eq(clients.companyId, companyId),
+        eq(clients.ienhFilialCode, filialCode),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
+/** Remove o código de filial de outros clientes da mesma empresa (exclusividade). */
+export async function clearIenhFilialCodeFromOtherClients(
+  db: AppDb,
+  companyId: string,
+  filialCode: number,
+  exceptClientId: string,
+) {
+  await db
+    .update(clients)
+    .set({ ienhFilialCode: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(clients.companyId, companyId),
+        eq(clients.ienhFilialCode, filialCode),
+        ne(clients.id, exceptClientId),
+      ),
+    );
+}
+
+export async function updateClientIenhFilialCode(
+  db: AppDb,
+  clientId: string,
+  companyId: string,
+  filialCode: number | null,
+) {
+  const now = new Date();
+  const [row] = await db
+    .update(clients)
+    .set({ ienhFilialCode: filialCode, updatedAt: now })
+    .where(and(eq(clients.id, clientId), eq(clients.companyId, companyId)))
+    .returning({
+      id: clients.id,
+      name: clients.name,
+      ienhFilialCode: clients.ienhFilialCode,
+    });
   return row;
 }

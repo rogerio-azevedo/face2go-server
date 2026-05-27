@@ -81,3 +81,50 @@ export async function updateSchoolClass(
     .returning();
   return row;
 }
+
+export async function findSchoolClassByNameAndYear(
+  db: AppDb,
+  clientId: string,
+  name: string,
+  year: number,
+) {
+  const [row] = await db
+    .select({ id: schoolClasses.id })
+    .from(schoolClasses)
+    .where(
+      and(
+        eq(schoolClasses.clientId, clientId),
+        eq(schoolClasses.name, name),
+        eq(schoolClasses.year, year),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
+export async function findOrCreateSchoolClassByCode(
+  db: AppDb,
+  clientId: string,
+  classCode: string,
+  year: number,
+): Promise<{ id: string; created: boolean }> {
+  const name = classCode.trim();
+  const existing = await findSchoolClassByNameAndYear(
+    db,
+    clientId,
+    name,
+    year,
+  );
+  if (existing) {
+    return { id: existing.id, created: false };
+  }
+  const row = await insertSchoolClass(db, {
+    clientId,
+    name,
+    shiftId: null,
+    shift: null,
+    year,
+    isActive: true,
+  });
+  return { id: row!.id, created: true };
+}

@@ -10,11 +10,19 @@ import {
   jsonb,
   date,
   uniqueIndex,
+  pgEnum,
 } from 'drizzle-orm/pg-core';
 
 import { clients } from './clients';
 import { deviceSyncStatusEnum } from './registrations';
 import { schoolClasses } from './schools';
+
+export const situacaoMatriculaEnum = pgEnum('situacao_matricula', [
+  'enrolled',
+  'transferred',
+  'cancelled',
+  'pre_enrolled',
+]);
 
 /** Janela/turnos de acesso opcionais por aluno (além do turno da turma). */
 export type StudentAccessScheduleJson = {
@@ -44,6 +52,7 @@ export const students = pgTable(
     deviceSyncedAt: timestamp('device_synced_at'),
     deviceSyncError: text('device_sync_error'),
     accessSchedule: jsonb('access_schedule').$type<StudentAccessScheduleJson>(),
+    situacaoMatricula: situacaoMatriculaEnum('situacao_matricula'),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

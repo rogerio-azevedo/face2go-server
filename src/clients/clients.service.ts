@@ -230,9 +230,18 @@ export class ClientsService {
       d.email === undefined &&
       d.logoUrl === undefined &&
       d.timezoneOffsetMinutes === undefined &&
-      d.isActive === undefined
+      d.isActive === undefined &&
+      d.ienhFilialCode === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
+    }
+    if (d.ienhFilialCode !== undefined && d.ienhFilialCode !== null) {
+      await clientsQueries.clearIenhFilialCodeFromOtherClients(
+        this.database.db,
+        companyId,
+        d.ienhFilialCode,
+        clientId,
+      );
     }
     const updated = await clientsQueries.updateClient(
       this.database.db,
@@ -249,6 +258,9 @@ export class ClientsService {
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
           : {}),
         ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+        ...(d.ienhFilialCode !== undefined
+          ? { ienhFilialCode: d.ienhFilialCode }
+          : {}),
       },
     );
     if (!updated) throw new NotFoundException('Cliente não encontrado.');

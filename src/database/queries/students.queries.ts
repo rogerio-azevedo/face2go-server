@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, notInArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { responsibleStudents, schoolClasses, students } from '../schema';
@@ -140,6 +140,7 @@ export async function updateStudent(
       | 'deviceSyncedAt'
       | 'deviceSyncError'
       | 'accessSchedule'
+      | 'situacaoMatricula'
       | 'isActive'
     >
   >,
@@ -169,4 +170,92 @@ export async function updateStudentFace(
   >,
 ) {
   return updateStudent(db, id, clientId, patch);
+}
+
+export async function findStudentByEnrollment(
+  db: AppDb,
+  clientId: string,
+  enrollment: string,
+) {
+  const [row] = await db
+    .select()
+    .from(students)
+    .where(
+      and(eq(students.clientId, clientId), eq(students.enrollment, enrollment)),
+    )
+    .limit(1);
+  return row;
+}
+
+export type UpsertStudentByEnrollmentInput = {
+  clientId: string;
+  enrollment: string;
+  name: string;
+  birthDate?: Date | null;
+  classId?: string | null;
+  situacaoMatricula?:
+    | 'enrolled'
+    | 'transferred'
+    | 'cancelled'
+    | 'pre_enrolled'
+    | null;
+  isActive: boolean;
+};
+
+export async function upsertStudentByEnrollment(
+  db: AppDb,
+  input: UpsertStudentByEnrollmentInput,
+): Promise<{ row: typeof students.$inferSelect; created: boolean }> {
+  const existing = await findStudentByEnrollment(
+    db,
+    input.clientId,
+    input.enrollment,
+  );
+  if (existing) {
+    const row = await updateStudent(db, existing.id, input.clientId, {
+      name: input.name,
+      birthDate: input.birthDate,
+      classId: input.classId,
+      situacaoMatricula: input.situacaoMatricula,
+      isActive: input.isActive,
+    });
+    return { row: row!, created: false };
+  }
+  const row = await insertStudent(db, {
+    clientId: input.clientId,
+    enrollment: input.enrollment,
+    name: input.name,
+    birthDate: input.birthDate ?? null,
+    classId: input.classId ?? null,
+    situacaoMatricula: input.situacaoMatricula ?? null,
+    isActive: input.isActive,
+  });
+  return { row: row!, created: true };
+}
+
+export async function deactivateStudentsNotInList(
+  db: AppDb,
+  clientId: string,
+  activeEnrollments: string[],
+): Promise<number> {
+  if (activeEnrollments.length === 0) {
+    const rows = await db
+      .update(students)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(and(eq(students.clientId, clientId), eq(students.isActive, true)))
+      .returning({ id: students.id });
+    return rows.length;
+  }
+  const rows = await db
+    .update(students)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(
+      and(
+        eq(students.clientId, clientId),
+        eq(students.isActive, true),
+        notInArray(students.enrollment, activeEnrollments),
+      ),
+    )
+    .returning({ id: students.id });
+  return rows.length;
 }

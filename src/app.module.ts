@@ -18,6 +18,7 @@ import { DatabaseModule } from './database/database.module';
 import { LprPlateSyncModule } from './lpr-plate-sync/lpr-plate-sync.module';
 import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
+import { IenhModule } from './ienh/ienh.module';
 import { LegalDocumentsModule } from './legal-documents/legal-documents.module';
 import { LprAccessesModule } from './lpr-accesses/lpr-accesses.module';
 import { MeModule } from './me/me.module';
@@ -77,6 +78,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     LegalDocumentsModule,
     ArrivalsModule,
     SimulateModule,
+    IenhModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
