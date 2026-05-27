@@ -10,6 +10,7 @@ import { AccessesModule } from './accesses/accesses.module';
 import { CamerasModule } from './cameras/cameras.module';
 import { ClientsModule } from './clients/clients.module';
 import { CompaniesModule } from './companies/companies.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
 import { validateEnv, type EnvVars } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -73,6 +74,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     AccessesModule,
     LprAccessesModule,
     MeModule,
+    DashboardModule,
     NotificationsModule,
     HealthModule,
     LegalDocumentsModule,
