@@ -21,43 +21,37 @@ import {
 } from '../database/schema';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import type {
+  AuthenticatedUser,
+  IdentityUser,
+  JoinContextResult,
+  LoginResult,
+  SelectContextResult,
+} from './interfaces/auth-types.interface';
+import type {
   SelectContextInput,
   UserContext,
 } from './interfaces/user-context.interface';
+import type { AuthServiceContract } from './interfaces/auth-service.interface';
+import { normalizeLoginIdentifier } from './utils/auth-identifiers';
 import {
-  normalizeLoginIdentifier,
-} from './utils/auth-identifiers';
-import { registerSchema, type RegisterInput } from '../validation/register.schema';
-import {
-  joinContextSchema,
-} from '../validation/join-context.schema';
+  registerSchema,
+  type RegisterInput,
+} from '../validation/register.schema';
+import { joinContextSchema } from '../validation/join-context.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 
-export type AuthenticatedUser = {
-  id: string;
-  email: string;
-  name?: string | null;
-  cpf?: string | null;
-  role: string;
-  contextType?: JwtPayload['contextType'];
-  companyId?: string;
-  clientId?: string;
-  companyUserId?: string;
-  clientUserId?: string;
-  responsibleId?: string;
-};
-
-export type IdentityUser = {
-  id: string;
-  email: string;
-  name?: string | null;
-  cpf?: string | null;
-};
+export type {
+  AuthenticatedUser,
+  IdentityUser,
+  JoinContextResult,
+  LoginResult,
+  SelectContextResult,
+} from './interfaces/auth-types.interface';
 
 const IDENTITY_TOKEN_EXPIRES_IN = '5m';
 
 @Injectable()
-export class AuthService {
+export class AuthService implements AuthServiceContract {
   constructor(
     private readonly database: DatabaseService,
     private readonly jwtService: JwtService,
@@ -171,10 +165,7 @@ export class AuthService {
       .from(companyUsers)
       .innerJoin(companies, eq(companyUsers.companyId, companies.id))
       .where(
-        and(
-          eq(companyUsers.userId, userId),
-          eq(companyUsers.isActive, true),
-        ),
+        and(eq(companyUsers.userId, userId), eq(companyUsers.isActive, true)),
       );
 
     for (const link of companyLinks) {
@@ -231,10 +222,7 @@ export class AuthService {
       .from(responsibles)
       .innerJoin(clients, eq(responsibles.clientId, clients.id))
       .where(
-        and(
-          eq(responsibles.userId, userId),
-          eq(responsibles.isActive, true),
-        ),
+        and(eq(responsibles.userId, userId), eq(responsibles.isActive, true)),
       );
 
     for (const link of responsibleLinks) {
@@ -264,7 +252,10 @@ export class AuthService {
     contexts: UserContext[],
     input: SelectContextInput,
   ): UserContext | undefined {
-    if (input.contextType === 'super_admin' || input.contextType === 'face_user') {
+    if (
+      input.contextType === 'super_admin' ||
+      input.contextType === 'face_user'
+    ) {
       return contexts.find((ctx) => ctx.type === input.contextType);
     }
 
@@ -273,7 +264,8 @@ export class AuthService {
     }
 
     return contexts.find(
-      (ctx) => ctx.type === input.contextType && ctx.contextId === input.contextId,
+      (ctx) =>
+        ctx.type === input.contextType && ctx.contextId === input.contextId,
     );
   }
 
@@ -322,7 +314,7 @@ export class AuthService {
     }
   }
 
-  async login(identifier: string, password: string) {
+  async login(identifier: string, password: string): Promise<LoginResult> {
     const user = await this.validateCredentials(identifier, password);
     if (!user) {
       throw new UnauthorizedException('Credenciais inválidas.');
@@ -341,7 +333,10 @@ export class AuthService {
     return { user, contexts, identityToken };
   }
 
-  async selectContext(userId: string, input: SelectContextInput) {
+  async selectContext(
+    userId: string,
+    input: SelectContextInput,
+  ): Promise<SelectContextResult> {
     const [userRow] = await this.database.db
       .select()
       .from(users)
@@ -376,7 +371,7 @@ export class AuthService {
     };
   }
 
-  async joinContext(input: unknown) {
+  async joinContext(input: unknown): Promise<JoinContextResult> {
     const parsed = joinContextSchema.safeParse(input);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
@@ -452,7 +447,9 @@ export class AuthService {
   private async applyCompanyInviteToExistingUser(
     existing: typeof users.$inferSelect,
     data: RegisterInput,
-    bundle: NonNullable<Awaited<ReturnType<typeof invitesQueries.getInviteByCode>>>,
+    bundle: NonNullable<
+      Awaited<ReturnType<typeof invitesQueries.getInviteByCode>>
+    >,
   ): Promise<void> {
     const { invite, company } = bundle;
     if (invite.expiresAt && invite.expiresAt < new Date()) {
@@ -516,7 +513,9 @@ export class AuthService {
 
   private async registerWithCompanyInvite(
     data: RegisterInput,
-    bundle: NonNullable<Awaited<ReturnType<typeof invitesQueries.getInviteByCode>>>,
+    bundle: NonNullable<
+      Awaited<ReturnType<typeof invitesQueries.getInviteByCode>>
+    >,
   ): Promise<{ success: true }> {
     const { invite, company } = bundle;
     if (invite.expiresAt && invite.expiresAt < new Date()) {
@@ -562,7 +561,10 @@ export class AuthService {
         isActive: true,
       });
 
-      await invitesQueries.incrementInviteUsedCount(this.database.db, invite.id);
+      await invitesQueries.incrementInviteUsedCount(
+        this.database.db,
+        invite.id,
+      );
       return { success: true };
     } catch {
       throw new BadRequestException('Não foi possível concluir o cadastro.');
@@ -637,7 +639,10 @@ export class AuthService {
       throw new BadRequestException('Usuário inativo.');
     }
 
-    const passwordMatch = await bcrypt.compare(data.password, existing.password);
+    const passwordMatch = await bcrypt.compare(
+      data.password,
+      existing.password,
+    );
     if (!passwordMatch) {
       throw new UnauthorizedException(
         'Senha incorreta para o usuário existente.',
@@ -688,7 +693,10 @@ export class AuthService {
       throw new BadRequestException('Usuário inativo.');
     }
 
-    const passwordMatch = await bcrypt.compare(data.password, existing.password);
+    const passwordMatch = await bcrypt.compare(
+      data.password,
+      existing.password,
+    );
     if (!passwordMatch) {
       throw new UnauthorizedException(
         'Senha incorreta para o usuário existente.',
