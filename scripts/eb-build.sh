@@ -25,7 +25,22 @@ if ! grep -rq "select-context" dist/; then
   exit 1
 fi
 
-BUILD_COMMIT="${CODEBUILD_RESOLVED_SOURCE_VERSION:-${GITHUB_SHA:-unknown}}"
+PREVIOUS_COMMIT=""
+if [ -f dist/build-info.json ]; then
+  PREVIOUS_COMMIT="$(node -pe "JSON.parse(require('fs').readFileSync('dist/build-info.json','utf8')).commit" 2>/dev/null || true)"
+fi
+
+BUILD_COMMIT="${CODEBUILD_RESOLVED_SOURCE_VERSION:-${GITHUB_SHA:-}}"
+if [ -z "$BUILD_COMMIT" ] && [ -f deploy-commit.txt ]; then
+  BUILD_COMMIT="$(tr -d '[:space:]' < deploy-commit.txt)"
+fi
+if [ -z "$BUILD_COMMIT" ] && command -v git >/dev/null 2>&1; then
+  BUILD_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
+fi
+if [ -z "$BUILD_COMMIT" ] && [ -n "$PREVIOUS_COMMIT" ] && [ "$PREVIOUS_COMMIT" != "unknown" ]; then
+  BUILD_COMMIT="$PREVIOUS_COMMIT"
+fi
+BUILD_COMMIT="${BUILD_COMMIT:-unknown}"
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 DEPLOY_MARKER="context-auth-build-v2"
 

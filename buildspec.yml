@@ -8,6 +8,7 @@ phases:
       - npm install -g pnpm@8
   build:
     commands:
+      - echo "${CODEBUILD_RESOLVED_SOURCE_VERSION:-unknown}" > deploy-commit.txt
       - chmod +x scripts/eb-build.sh
       - ./scripts/eb-build.sh .
 
