@@ -26,7 +26,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const frontendUrl = configService.get<string>('FRONTEND_URL');
-  /** Em dev reflete a origem (LAN no celular). `FACE2GO_RELAX_CORS=1` força isso mesmo com NODE_ENV=production no .env local. */
+
   const relaxCors =
     process.env.NODE_ENV !== 'production' ||
     process.env.FACE2GO_RELAX_CORS === '1';
