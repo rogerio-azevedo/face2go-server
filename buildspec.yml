@@ -1,0 +1,16 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 24
+    commands:
+      - npm install -g pnpm@8
+  build:
+    commands:
+      - chmod +x scripts/eb-build.sh
+      - ./scripts/eb-build.sh .
+
+artifacts:
+  files:
+    - '**/*'

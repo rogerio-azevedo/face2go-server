@@ -1,10 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-cd /var/app/staging
-
-# pnpm não vem na AMI do EB; npm sempre existe.
-npm install -g pnpm@8
-
-pnpm install --frozen-lockfile
-pnpm run build
+chmod +x /var/app/staging/scripts/eb-build.sh
+/var/app/staging/scripts/eb-build.sh /var/app/staging
