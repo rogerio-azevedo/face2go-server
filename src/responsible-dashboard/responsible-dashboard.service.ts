@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import AxiosDigestAuth from '@mhoc/axios-digest-auth';
+import { inArray } from 'drizzle-orm';
 import type { Model } from 'mongoose';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -18,6 +19,7 @@ import {
 } from '../common/crypto/reader-credentials.cipher';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
+import { facialReaders } from '../database/schema';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as readersQueries from '../database/queries/readers.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
@@ -45,10 +47,13 @@ export type ResponsibleChildSummaryDto = {
 };
 
 export type ResponsibleAccessHistoryItemDto = {
+  id: string;
   readerName: string;
   eventCode: string;
   eventAction: string;
   similarity: number | null;
+  readerDirection: 'in' | 'out' | null;
+  correlationId: string | null;
   eventDate: string | null;
   createdAt: string;
   snapPath: string | null;
@@ -56,6 +61,13 @@ export type ResponsibleAccessHistoryItemDto = {
   subjectName: string | null;
   subjectPhotoUrl: string | null;
 };
+
+function inferDirectionFromReaderName(name: string): 'in' | 'out' | null {
+  const n = name.trim().toLowerCase();
+  if (/\bsa[ií]da\b/.test(n)) return 'out';
+  if (/\bentrada\b/.test(n)) return 'in';
+  return null;
+}
 
 @Injectable()
 export class ResponsibleDashboardService {
@@ -83,24 +95,74 @@ export class ResponsibleDashboardService {
     return row?.timezoneOffsetMinutes ?? 0;
   }
 
+  private async loadReaderDirections(
+    readerIds: string[],
+  ): Promise<Map<string, 'in' | 'out' | null>> {
+    const unique = [...new Set(readerIds.filter((id) => id.trim().length > 0))];
+    if (unique.length === 0) return new Map();
+
+    const rows = await this.database.db
+      .select({
+        id: facialReaders.id,
+        direction: facialReaders.direction,
+      })
+      .from(facialReaders)
+      .where(inArray(facialReaders.id, unique));
+
+    const map = new Map<string, 'in' | 'out' | null>();
+    for (const row of rows) {
+      map.set(
+        row.id,
+        row.direction === 'in' || row.direction === 'out'
+          ? row.direction
+          : null,
+      );
+    }
+    return map;
+  }
+
+  private resolveReaderDirection(
+    stored: 'in' | 'out' | null | undefined,
+    readerId: string | undefined,
+    readerName: string,
+    fromPg: Map<string, 'in' | 'out' | null>,
+  ): 'in' | 'out' | null {
+    if (stored === 'in' || stored === 'out') return stored;
+    if (readerId && fromPg.has(readerId)) {
+      const pg = fromPg.get(readerId);
+      if (pg === 'in' || pg === 'out') return pg;
+    }
+    return inferDirectionFromReaderName(readerName);
+  }
+
   private async mapFacialDocsToDto(
     docs: unknown[],
     subjectByFaceId?: Map<number, { name: string; photoKey: string | null }>,
   ): Promise<ResponsibleAccessHistoryItemDto[]> {
+    type ParsedDoc = FacialAccessDocument & {
+      _id?: { toString(): string };
+      readerId?: string;
+      userId?: number;
+      personName?: string | null;
+      readerName?: string;
+      eventCode?: string;
+      eventAction?: string;
+      similarity?: number | null;
+      readerDirection?: 'in' | 'out' | null;
+      correlationId?: string | null;
+      eventDate?: Date | null;
+      createdAt?: Date;
+      snapPath?: string | null;
+      snapR2Key?: string | null;
+    };
+
+    const parsed = docs as ParsedDoc[];
+    const directionsByReaderId = await this.loadReaderDirections(
+      parsed.map((doc) => doc.readerId ?? ''),
+    );
+
     const out: ResponsibleAccessHistoryItemDto[] = [];
-    for (const raw of docs) {
-      const doc = raw as FacialAccessDocument & {
-        userId?: number;
-        personName?: string | null;
-        readerName?: string;
-        eventCode?: string;
-        eventAction?: string;
-        similarity?: number | null;
-        eventDate?: Date | null;
-        createdAt?: Date;
-        snapPath?: string | null;
-        snapR2Key?: string | null;
-      };
+    for (const doc of parsed) {
 
       let snapPath: string | null =
         typeof doc.snapPath === 'string' && doc.snapPath.trim()
@@ -136,11 +198,25 @@ export class ResponsibleDashboardService {
         subjectName = pn;
       }
 
+      const readerName = doc.readerName ?? '';
+      const readerDirection = this.resolveReaderDirection(
+        doc.readerDirection,
+        doc.readerId,
+        readerName,
+        directionsByReaderId,
+      );
+
       out.push({
-        readerName: doc.readerName ?? '',
+        id: doc._id ? doc._id.toString() : '',
+        readerName,
         eventCode: doc.eventCode ?? '',
         eventAction: doc.eventAction ?? '',
         similarity: doc.similarity ?? null,
+        readerDirection,
+        correlationId:
+          typeof doc.correlationId === 'string' && doc.correlationId.trim()
+            ? doc.correlationId.trim()
+            : null,
         eventDate: doc.eventDate ? doc.eventDate.toISOString() : null,
         createdAt: doc.createdAt
           ? doc.createdAt.toISOString()
