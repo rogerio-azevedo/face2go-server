@@ -18,11 +18,11 @@ import type { JwtPayload } from './interfaces/jwt-payload.interface';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Public()
   @Post('login')
-  @ApiOperation({ summary: 'Login com e-mail ou CPF e senha' })
+  @ApiOperation({ summary: 'Login com e-mail ou CPF e senha.' })
   async login(@Body() dto: LoginDto): Promise<LoginResult> {
     const loginId = dto.identifier?.trim() || dto.email?.trim();
     if (!loginId) {
