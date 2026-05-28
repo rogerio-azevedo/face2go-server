@@ -1,14 +1,14 @@
 import {
   Injectable,
   Logger,
-  OnModuleDestroy,
-  OnModuleInit,
+  NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { and, eq } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import type { Model } from 'mongoose';
+import { Types } from 'mongoose';
 
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
@@ -20,9 +20,19 @@ import type { ReaderStreamContextLike } from './reader-stream-context.type';
 import { FacialAccess, type FacialAccessDocument } from './access.schema';
 import {
   accessControlDataFromRecord,
+  buildFacialCorrelationId,
   dateFromIntelbrasUtc,
   getStreamEventDedupKey,
 } from './stream-event.util';
+
+function isMongoDuplicateKeyError(err: unknown): boolean {
+  return (
+    err !== null &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code?: number }).code === 11000
+  );
+}
 
 export type AccessListItemDto = {
   id: string;
@@ -39,6 +49,12 @@ export type AccessListItemDto = {
   eventDate: string | null;
   createdAt: string;
   snapPath: string | null;
+  snapR2Key: string | null;
+  readerDirection: 'in' | 'out' | null;
+};
+
+export type FacialAccessPhotoUrlDto = {
+  snapUrl: string | null;
 };
 
 export type AccessListResponse = {
@@ -49,11 +65,12 @@ export type AccessListResponse = {
 };
 
 @Injectable()
-export class AccessesService implements OnModuleInit, OnModuleDestroy {
+export class AccessesService {
   private readonly logger = new Logger(AccessesService.name);
-  private readonly processedEventKeys = new Map<string, number>();
-  private readonly DEDUP_TTL_MS = 5 * 60 * 1000;
-  private dedupCleanupTimer?: ReturnType<typeof setInterval>;
+  /** Evita gravar o mesmo evento duas vezes no mesmo processo. */
+  private readonly persistedEventKeys = new Map<string, number>();
+  /** Serializa persistências concorrentes do mesmo leitor. */
+  private readonly persistChains = new Map<string, Promise<void>>();
 
   private static readonly DEFAULT_PAGE_SIZE = 20;
 
@@ -65,32 +82,33 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
     private readonly r2Storage: R2StorageService,
   ) {}
 
-  onModuleInit(): void {
-    this.dedupCleanupTimer = setInterval(() => {
-      this.cleanupExpiredDedupKeys();
-    }, this.DEDUP_TTL_MS);
-  }
-
-  onModuleDestroy(): void {
-    if (this.dedupCleanupTimer) {
-      clearInterval(this.dedupCleanupTimer);
-    }
-  }
-
-  private cleanupExpiredDedupKeys(): void {
-    const cutoff = Date.now() - this.DEDUP_TTL_MS;
-    for (const [key, ts] of this.processedEventKeys) {
-      if (ts < cutoff) {
-        this.processedEventKeys.delete(key);
-      }
-    }
-  }
-
   /**
    * Persiste acesso facial a partir do stream SnapManager (texto + JPEG inline),
    * enviando a imagem para o R2 quando disponível.
    */
-  async recordSnapManagerAccess(
+  recordSnapManagerAccess(
+    event: VideoEvent,
+    ctx: ReaderStreamContextLike,
+    imageJpeg: Buffer | null,
+  ): Promise<void> {
+    const prev = this.persistChains.get(ctx.id) ?? Promise.resolve();
+    const next = prev
+      .then(() => this.persistSnapManagerAccessOnce(event, ctx, imageJpeg))
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `[AccessesService] Persistência falhou: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      })
+      .finally(() => {
+        if (this.persistChains.get(ctx.id) === next) {
+          this.persistChains.delete(ctx.id);
+        }
+      });
+    this.persistChains.set(ctx.id, next);
+    return next;
+  }
+
+  private async persistSnapManagerAccessOnce(
     event: VideoEvent,
     ctx: ReaderStreamContextLike,
     imageJpeg: Buffer | null,
@@ -135,12 +153,11 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const streamKey = getStreamEventDedupKey(ctx.id, data);
-    if (streamKey !== null) {
-      if (this.processedEventKeys.has(streamKey)) {
-        return;
-      }
-      this.processedEventKeys.set(streamKey, Date.now());
+    const correlationId = buildFacialCorrelationId(ctx.id, data);
+    const dedupKey =
+      correlationId ?? getStreamEventDedupKey(ctx.id, data) ?? null;
+    if (dedupKey && this.persistedEventKeys.has(dedupKey)) {
+      return;
     }
 
     const faceIdNum = Number(userId);
@@ -183,22 +200,60 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
 
     const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);
 
+    const docFields = {
+      companyId: ctx.companyId,
+      readerId: ctx.id,
+      readerName: ctx.name,
+      clientId: ctx.clientId,
+      clientName: ctx.clientName,
+      userId: faceIdNum,
+      personName,
+      eventCode: event.code,
+      eventAction: String(event.action),
+      similarity: similarityNum,
+      eventDate: eventDate ?? null,
+      snapPath,
+      snapR2Key,
+      readerDirection: ctx.direction ?? null,
+      correlationId,
+    };
+
     try {
-      const doc = await this.accessModel.create({
-        companyId: ctx.companyId,
-        readerId: ctx.id,
-        readerName: ctx.name,
-        clientId: ctx.clientId,
-        clientName: ctx.clientName,
-        userId: faceIdNum,
-        personName,
-        eventCode: event.code,
-        eventAction: String(event.action),
-        similarity: similarityNum,
-        eventDate: eventDate ?? null,
-        snapPath,
-        snapR2Key,
-      });
+      let doc: FacialAccessDocument | null = null;
+
+      if (correlationId) {
+        const filter = { readerId: ctx.id, correlationId };
+        try {
+          doc = await this.accessModel.findOneAndUpdate(
+            filter,
+            { $set: docFields },
+            {
+              upsert: true,
+              returnDocument: 'after',
+              setDefaultsOnInsert: true,
+            },
+          );
+        } catch (err: unknown) {
+          if (!isMongoDuplicateKeyError(err)) {
+            throw err;
+          }
+          doc = await this.accessModel.findOneAndUpdate(
+            filter,
+            { $set: docFields },
+            { returnDocument: 'after' },
+          );
+        }
+      } else {
+        doc = await this.accessModel.create(docFields);
+      }
+
+      if (!doc) {
+        throw new Error('Persistência facial retornou null inesperadamente');
+      }
+
+      if (dedupKey) {
+        this.persistedEventKeys.set(dedupKey, Date.now());
+      }
 
       this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
         accessId: String(doc._id),
@@ -211,7 +266,7 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
       });
     } catch (err: unknown) {
       this.logger.error(
-        `Mongo create facial_access (snap) falhou: ${err instanceof Error ? err.message : String(err)}`,
+        `Mongo upsert facial_access (snap) falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
       throw err;
     }
@@ -306,9 +361,54 @@ export class AccessesService implements OnModuleInit, OnModuleDestroy {
         snapPath:
           (d as FacialAccessDocument & { snapPath?: string | null }).snapPath ??
           null,
+        snapR2Key:
+          (d as FacialAccessDocument & { snapR2Key?: string | null })
+            .snapR2Key ?? null,
+        readerDirection:
+          (d as FacialAccessDocument & {
+            readerDirection?: 'in' | 'out' | null;
+          }).readerDirection ?? null,
       };
     });
 
     return { items, page, pageSize, total };
+  }
+
+  async getPhotoUrl(
+    id: string,
+    companyId: string,
+  ): Promise<FacialAccessPhotoUrlDto> {
+    const trimmed = typeof id === 'string' ? id.trim() : '';
+    if (!trimmed || !Types.ObjectId.isValid(trimmed)) {
+      throw new NotFoundException('Acesso facial não encontrado.');
+    }
+
+    const doc = await this.accessModel
+      .findOne({
+        _id: new Types.ObjectId(trimmed),
+        companyId,
+      })
+      .lean()
+      .exec();
+
+    if (!doc) {
+      throw new NotFoundException('Acesso facial não encontrado.');
+    }
+
+    const key =
+      typeof doc.snapR2Key === 'string' ? doc.snapR2Key.trim() : '';
+    if (!key) {
+      return { snapUrl: null };
+    }
+
+    try {
+      const snapUrl = await this.r2Storage.createPresignedGetUrl(key);
+      return { snapUrl };
+    } catch (err: unknown) {
+      this.logger.debug(
+        `Presign facial foto falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return { snapUrl: null };
+    }
   }
 }

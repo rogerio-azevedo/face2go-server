@@ -102,5 +102,21 @@ export function getStreamEventDedupKey(
   if (data.recNo != null) {
     return `s:${readerId}:${uid}:${t}:rec:${data.recNo}`;
   }
-  return `s:${readerId}:${uid}:${t}:m:${data.Method ?? ''}:sim:${data.Similarity ?? ''}`;
+  return `s:${readerId}:${uid}:${t}:m:${data.Method ?? ''}`;
+}
+
+/** Chave estável para upsert/idempotência (Start + Pulse do mesmo acesso físico). */
+export function buildFacialCorrelationId(
+  readerId: string,
+  data: AccessControlEventData,
+): string | null {
+  const uid = String(data.UserID ?? '');
+  if (data.recNo != null) {
+    return `${readerId}|rec:${data.recNo}`;
+  }
+  const t = data.CreateTime ?? data.UTC;
+  if (t && uid) {
+    return `${readerId}|u:${uid}|t:${t}`;
+  }
+  return null;
 }

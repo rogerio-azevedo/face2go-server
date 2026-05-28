@@ -46,9 +46,21 @@ export class FacialAccess {
   /** Chave no R2 da foto capturada (stream SnapManager). */
   @Prop({ type: String, default: null })
   snapR2Key: string | null;
+
+  /** Sentido do leitor no momento do acesso (`in` = entrada, `out` = saída). */
+  @Prop({ type: String, default: null })
+  readerDirection: 'in' | 'out' | null;
+
+  /** Id de correlação do evento no leitor (idempotência Start/Pulse). */
+  @Prop({ type: String, default: null })
+  correlationId: string | null;
 }
 
 export const FacialAccessSchema = SchemaFactory.createForClass(FacialAccess);
 
 FacialAccessSchema.index({ companyId: 1, createdAt: -1 });
 FacialAccessSchema.index({ companyId: 1, clientId: 1, createdAt: -1 });
+FacialAccessSchema.index(
+  { readerId: 1, correlationId: 1 },
+  { unique: true, sparse: true },
+);

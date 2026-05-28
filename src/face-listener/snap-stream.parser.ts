@@ -313,6 +313,10 @@ export function snapFlatMapToVideoEvent(
         : undefined),
     Type: pickStr('Events[0].Type'),
     SnapPath: pickStr('Events[0].SnapPath'),
+    RecNo: pickNum('Events[0].RecNo'),
+    PartInfo: {
+      Sequence: pickNum('Events[0].PartInfo.Sequence'),
+    },
   };
 
   if (data.UserID === undefined || data.UserID === null) {
