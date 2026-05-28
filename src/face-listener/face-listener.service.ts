@@ -541,6 +541,14 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     return p;
   }
 
+  /** Descarta pending só com imagem órfã (sem evento AccessControl válido). */
+  private discardOrphanImagePending(readerId: string): void {
+    const pend = this.pendingByReader.get(readerId);
+    if (!pend) return;
+    if (pend.event) return;
+    this.pendingByReader.delete(readerId);
+  }
+
   private tryFlushSnapPending(
     readerId: string,
     ctx: ReaderStreamContext,
@@ -597,9 +605,14 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           pend.event = evt;
           pend.slices = collectImageSlices(map);
           this.tryFlushSnapPending(ctx.id, ctx);
+        } else if (map.size > 0) {
+          this.discardOrphanImagePending(ctx.id);
         }
       } else if (ct.startsWith('image/')) {
-        const pend = this.getOrCreateSnapPending(ctx.id);
+        const pend = this.pendingByReader.get(ctx.id);
+        if (!pend?.event) {
+          continue;
+        }
         pend.image = part.body;
         this.tryFlushSnapPending(ctx.id, ctx);
       }
