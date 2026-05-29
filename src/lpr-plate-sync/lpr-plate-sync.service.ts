@@ -104,6 +104,87 @@ export class LprPlateSyncService {
     return clientId;
   }
 
+  /**
+   * Empurra placa às câmeras LPR sem persistir em `vehicles` (ex.: convidado de retirada temporária).
+   */
+  async pushPlateToLprCameras(params: {
+    clientId: string;
+    plate: string;
+    ownerDisplayName: string;
+    vehicleColor?: string | null;
+    logContext?: string;
+  }): Promise<SyncVehiclePlateResult> {
+    const { clientId, plate, ownerDisplayName, vehicleColor, logContext } =
+      params;
+    const pl = plate.trim();
+    const logPrefix = logContext ? `${logContext} ` : '';
+
+    if (!pl) {
+      return {
+        lprSyncStatus: 'sync_failed',
+        lprSyncError: 'Placa obrigatória para sincronizar com LPR.',
+      };
+    }
+
+    const cams =
+      await camerasQueries.listCamerasForLprPlateSyncByClient(
+        this.database.db,
+        clientId,
+      );
+
+    if (cams.length === 0) {
+      const msg =
+        'Nenhuma câmera LPR Intelbras ativa com credenciais para este cliente.';
+      return { lprSyncStatus: 'sync_failed', lprSyncError: msg };
+    }
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+
+    const failures: string[] = [];
+    const outcomes = await Promise.all(
+      cams.map(async (r) => {
+        try {
+          const plain = toPlainCameraCredential(
+            r,
+            cipher.decrypt(r.passwordEncrypted),
+          );
+          await intelbrasInsertPlate(
+            plain,
+            pl,
+            ownerDisplayName.trim() ? ownerDisplayName : 'CONDUTOR',
+            vehicleColor,
+          );
+          return null;
+        } catch (e) {
+          const msg = formatCameraLprPlateError(r.name, e);
+          const raw =
+            e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+          this.log.warn(
+            `${logPrefix}LPR push plate=${pl} cam=${r.name}: ${raw}`,
+          );
+          return msg;
+        }
+      }),
+    );
+
+    for (const m of outcomes) {
+      if (m !== null) failures.push(m);
+    }
+
+    if (failures.length === cams.length) {
+      const err = `Não foi possível sincronizar com ${failures.length} de ${cams.length} câmera(s).`;
+      return { lprSyncStatus: 'sync_failed', lprSyncError: err };
+    }
+
+    const warn =
+      failures.length > 0
+        ? `Sincronizado parcialmente (${cams.length - failures.length} de ${cams.length} câmera(s)).`
+        : null;
+    return { lprSyncStatus: 'synced', lprSyncError: warn };
+  }
+
   /** Insere/atualiza a placa nas câmeras LPR Intelbras ativas do cliente e persiste o status global. */
   async syncVehiclePlateOnCameras(params: {
     clientId: string;

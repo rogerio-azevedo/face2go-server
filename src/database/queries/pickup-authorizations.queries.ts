@@ -1,19 +1,41 @@
-import { and, desc, eq, lte, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, type SQL } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { temporaryPickupAuthorizations } from '../schema';
+import {
+  pickupAuthorizationStudents,
+  students,
+  temporaryPickupAuthorizations,
+} from '../schema';
 
 export type PickupAuthRow = typeof temporaryPickupAuthorizations.$inferSelect;
 
-export async function pickupAuthInsert(
+export type PickupAuthStudentLink = {
+  studentId: string;
+  studentName: string;
+};
+
+export async function pickupAuthInsertWithStudents(
   db: AppDb,
-  values: typeof temporaryPickupAuthorizations.$inferInsert,
-) {
-  const rows = await db
-    .insert(temporaryPickupAuthorizations)
-    .values(values)
-    .returning();
-  return rows[0];
+  auth: typeof temporaryPickupAuthorizations.$inferInsert,
+  studentIds: string[],
+): Promise<PickupAuthRow | undefined> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(temporaryPickupAuthorizations)
+      .values(auth)
+      .returning();
+    const row = rows[0];
+    if (!row) return undefined;
+    if (studentIds.length > 0) {
+      await tx.insert(pickupAuthorizationStudents).values(
+        studentIds.map((studentId) => ({
+          authorizationId: row.id,
+          studentId,
+        })),
+      );
+    }
+    return row;
+  });
 }
 
 export async function pickupAuthGetById(
@@ -34,6 +56,49 @@ export async function pickupAuthGetById(
   return rows[0];
 }
 
+export async function pickupAuthGetByGuestLinkCode(db: AppDb, code: string) {
+  const rows = await db
+    .select()
+    .from(temporaryPickupAuthorizations)
+    .where(eq(temporaryPickupAuthorizations.guestLinkCode, code.trim()))
+    .limit(1);
+  return rows[0];
+}
+
+export async function pickupAuthListStudentsForAuth(
+  db: AppDb,
+  authorizationId: string,
+): Promise<PickupAuthStudentLink[]> {
+  return db
+    .select({
+      studentId: pickupAuthorizationStudents.studentId,
+      studentName: students.name,
+    })
+    .from(pickupAuthorizationStudents)
+    .innerJoin(students, eq(pickupAuthorizationStudents.studentId, students.id))
+    .where(eq(pickupAuthorizationStudents.authorizationId, authorizationId))
+    .orderBy(students.name);
+}
+
+export async function pickupAuthListStudentsForAuthIds(
+  db: AppDb,
+  authorizationIds: string[],
+): Promise<Array<PickupAuthStudentLink & { authorizationId: string }>> {
+  if (authorizationIds.length === 0) return [];
+  return db
+    .select({
+      authorizationId: pickupAuthorizationStudents.authorizationId,
+      studentId: pickupAuthorizationStudents.studentId,
+      studentName: students.name,
+    })
+    .from(pickupAuthorizationStudents)
+    .innerJoin(students, eq(pickupAuthorizationStudents.studentId, students.id))
+    .where(
+      inArray(pickupAuthorizationStudents.authorizationId, authorizationIds),
+    )
+    .orderBy(students.name);
+}
+
 export async function pickupAuthListByClient(
   db: AppDb,
   clientId: string,
@@ -42,13 +107,31 @@ export async function pickupAuthListByClient(
   const conditions: SQL[] = [
     eq(temporaryPickupAuthorizations.clientId, clientId),
   ];
-  if (filters.studentId) {
-    conditions.push(
-      eq(temporaryPickupAuthorizations.studentId, filters.studentId),
-    );
-  }
   if (filters.status && isPickupStatus(filters.status)) {
     conditions.push(eq(temporaryPickupAuthorizations.status, filters.status));
+  }
+
+  if (filters.studentId) {
+    return db
+      .select({
+        auth: temporaryPickupAuthorizations,
+      })
+      .from(temporaryPickupAuthorizations)
+      .innerJoin(
+        pickupAuthorizationStudents,
+        eq(
+          pickupAuthorizationStudents.authorizationId,
+          temporaryPickupAuthorizations.id,
+        ),
+      )
+      .where(
+        and(
+          ...conditions,
+          eq(pickupAuthorizationStudents.studentId, filters.studentId),
+        ),
+      )
+      .orderBy(desc(temporaryPickupAuthorizations.createdAt))
+      .then((rows) => rows.map((r) => r.auth));
   }
 
   return db
@@ -58,9 +141,7 @@ export async function pickupAuthListByClient(
     .orderBy(desc(temporaryPickupAuthorizations.createdAt));
 }
 
-function isPickupStatus(
-  s: string,
-): s is PickupAuthRow['status'] {
+function isPickupStatus(s: string): s is PickupAuthRow['status'] {
   return (
     s === 'active' ||
     s === 'used' ||
@@ -113,6 +194,71 @@ export async function pickupAuthUpdateStatus(
   return rows[0];
 }
 
+export async function pickupAuthUpdateGuestLinkCode(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  guestLinkCode: string,
+) {
+  const rows = await db
+    .update(temporaryPickupAuthorizations)
+    .set({ guestLinkCode, updatedAt: new Date() })
+    .where(
+      and(
+        eq(temporaryPickupAuthorizations.id, id),
+        eq(temporaryPickupAuthorizations.clientId, clientId),
+      ),
+    )
+    .returning();
+  return rows[0];
+}
+
+export async function pickupAuthUpdateGuestFaceSubmitted(
+  db: AppDb,
+  id: string,
+  guestFaceImageKey: string,
+) {
+  const rows = await db
+    .update(temporaryPickupAuthorizations)
+    .set({
+      guestFaceImageKey,
+      guestApprovalStatus: 'submitted',
+      updatedAt: new Date(),
+    })
+    .where(eq(temporaryPickupAuthorizations.id, id))
+    .returning();
+  return rows[0];
+}
+
+export async function pickupAuthUpdateGuestApproval(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  patch: Partial<{
+    guestApprovalStatus: PickupAuthRow['guestApprovalStatus'];
+    guestFaceImageKey: string | null;
+    guestFaceId: number | null;
+    guestFaceSyncStatus: PickupAuthRow['guestFaceSyncStatus'];
+    guestFaceSyncedAt: Date | null;
+    guestFaceSyncError: string | null;
+    guestVehicleLprSyncStatus: PickupAuthRow['guestVehicleLprSyncStatus'];
+    guestVehicleLprSyncedAt: Date | null;
+    guestVehicleLprSyncError: string | null;
+  }>,
+) {
+  const rows = await db
+    .update(temporaryPickupAuthorizations)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(
+      and(
+        eq(temporaryPickupAuthorizations.id, id),
+        eq(temporaryPickupAuthorizations.clientId, clientId),
+      ),
+    )
+    .returning();
+  return rows[0];
+}
+
 export async function pickupAuthExpireStaleActives(db: AppDb, clientId: string) {
   await db
     .update(temporaryPickupAuthorizations)
@@ -124,4 +270,52 @@ export async function pickupAuthExpireStaleActives(db: AppDb, clientId: string) 
         lte(temporaryPickupAuthorizations.validUntil, new Date()),
       ),
     );
+}
+
+/** Autorização ativa com placa do convidado (para LPR na portaria). */
+export async function pickupAuthFindActiveGuestByPlate(
+  db: AppDb,
+  clientId: string,
+  plate: string,
+): Promise<{
+  id: string;
+  guestName: string;
+  guestFaceImageKey: string | null;
+  guestVehiclePlate: string | null;
+} | null> {
+  const normalizedPlate = plate.trim().toUpperCase();
+  if (!normalizedPlate) return null;
+
+  const now = new Date();
+  const [row] = await db
+    .select({
+      id: temporaryPickupAuthorizations.id,
+      guestName: temporaryPickupAuthorizations.guestName,
+      guestFaceImageKey: temporaryPickupAuthorizations.guestFaceImageKey,
+      guestVehiclePlate: temporaryPickupAuthorizations.guestVehiclePlate,
+    })
+    .from(temporaryPickupAuthorizations)
+    .where(
+      and(
+        eq(temporaryPickupAuthorizations.clientId, clientId),
+        eq(temporaryPickupAuthorizations.status, 'active'),
+        eq(temporaryPickupAuthorizations.guestApprovalStatus, 'approved'),
+        eq(temporaryPickupAuthorizations.guestVehiclePlate, normalizedPlate),
+        lte(temporaryPickupAuthorizations.validFrom, now),
+        gte(temporaryPickupAuthorizations.validUntil, now),
+      ),
+    )
+    .orderBy(desc(temporaryPickupAuthorizations.createdAt))
+    .limit(1);
+
+  return row ?? null;
+}
+
+export function isGuestLinkCodeTaken(db: AppDb, code: string): Promise<boolean> {
+  return db
+    .select({ id: temporaryPickupAuthorizations.id })
+    .from(temporaryPickupAuthorizations)
+    .where(eq(temporaryPickupAuthorizations.guestLinkCode, code))
+    .limit(1)
+    .then((rows) => rows.length > 0);
 }

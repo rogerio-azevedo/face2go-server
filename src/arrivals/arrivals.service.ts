@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
+import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import * as vehiclesQueries from '../database/queries/vehicles.queries';
 import type {
   AccessFacialRecordedPayload,
@@ -200,23 +201,59 @@ export class ArrivalsService {
         payload.clientId,
       );
 
-      if (!responsible) {
+      if (responsible) {
+        const personPhotoUrl = await this.presignPortraitPhoto(
+          responsible.photoKey,
+        );
+        const students = await this.resolveStudentsResponsible(
+          payload.clientId,
+          responsible.id,
+        );
+
+        const out: ArrivalSsePayload = {
+          type: 'arrival',
+          kind: 'responsible',
+          accessId: payload.accessId,
+          personName: responsible.name,
+          personPhotoUrl,
+          readerName: payload.cameraName,
+          eventDate: payload.snapTime?.toISOString() ?? null,
+          vehiclePlate: payload.plateNumber,
+          students,
+        };
+
+        this.emitToHub(payload.clientId, out);
+        return;
+      }
+
+      const guestAuth = await pickupQueries.pickupAuthFindActiveGuestByPlate(
+        this.database.db,
+        payload.clientId,
+        payload.plateNumber,
+      );
+
+      if (!guestAuth) {
         return;
       }
 
       const personPhotoUrl = await this.presignPortraitPhoto(
-        responsible.photoKey,
+        guestAuth.guestFaceImageKey,
       );
-      const students = await this.resolveStudentsResponsible(
-        payload.clientId,
-        responsible.id,
+      const studentLinks = await pickupQueries.pickupAuthListStudentsForAuth(
+        this.database.db,
+        guestAuth.id,
       );
+      const students: ArrivalSseStudent[] = studentLinks.map((s) => ({
+        name: s.studentName,
+        photoUrl: null,
+        className: null,
+      }));
 
       const out: ArrivalSsePayload = {
         type: 'arrival',
         kind: 'responsible',
         accessId: payload.accessId,
-        personName: responsible.name,
+        personName: guestAuth.guestName,
         personPhotoUrl,
         readerName: payload.cameraName,
         eventDate: payload.snapTime?.toISOString() ?? null,

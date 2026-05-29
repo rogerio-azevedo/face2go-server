@@ -80,6 +80,42 @@ export class PickupAuthorizationsResponsibleController {
     return this.svc.createFromResponsible(user, body);
   }
 
+  @Post('pickup-authorizations/:id/guest-link')
+  @ApiOperation({ summary: 'Gerar link de cadastro de face do convidado' })
+  generateGuestLink(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.generateGuestLink(user, id);
+  }
+
+  @Get('pickup-authorizations/:id/guest-face-url')
+  @ApiOperation({ summary: 'URL assinada da foto enviada pelo convidado' })
+  guestFaceUrl(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.getGuestFacePreviewUrl(user, id);
+  }
+
+  @Post('pickup-authorizations/:id/approve-guest-face')
+  @ApiOperation({ summary: 'Aprovar face do convidado e sincronizar leitores/LPR' })
+  approveGuestFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.approveGuestFace(user, id);
+  }
+
+  @Post('pickup-authorizations/:id/reject-guest-face')
+  @ApiOperation({ summary: 'Recusar face do convidado' })
+  rejectGuestFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.rejectGuestFace(user, id);
+  }
+
   @Patch('pickup-authorizations/:id/cancel')
   @ApiOperation({ summary: 'Cancelar minha autorização ativa' })
   cancel(

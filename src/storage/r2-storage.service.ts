@@ -72,6 +72,15 @@ export class R2StorageService {
     return `${companyId}/${clientId}/${registrationId}/face.${ext}`;
   }
 
+  buildPickupGuestFaceKey(
+    companyId: string,
+    clientId: string,
+    authorizationId: string,
+    ext: string,
+  ): string {
+    return `${companyId}/${clientId}/pickup/${authorizationId}/face.${ext}`;
+  }
+
   async createPresignedPutUrl(
     key: string,
     contentType: string,
