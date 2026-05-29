@@ -24,6 +24,7 @@ import { HealthModule } from './health/health.module';
 import { IenhModule } from './ienh/ienh.module';
 import { LegalDocumentsModule } from './legal-documents/legal-documents.module';
 import { LprAccessesModule } from './lpr-accesses/lpr-accesses.module';
+import { ManagedResponsiblesModule } from './managed-responsibles/managed-responsibles.module';
 import { MeModule } from './me/me.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SimulateModule } from './simulate/simulate.module';
@@ -71,6 +72,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     StudentsModule,
     ResponsiblesModule,
     PickupAuthorizationsModule,
+    ManagedResponsiblesModule,
     VehiclesModule,
     ResponsibleDashboardModule,
     FaceEnrollmentModule,

@@ -14,6 +14,8 @@ import {
   type AccessFacialRecordedPayload,
   PICKUP_GUEST_FACE_SUBMITTED,
   type PickupGuestFaceSubmittedPayload,
+  RESPONSIBLE_INVITATION_SUBMITTED,
+  type ResponsibleInvitationSubmittedPayload,
 } from './notifications.events';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -79,6 +81,35 @@ export class NotificationsService {
     } catch (err: unknown) {
       this.logger.warn(
         `Push pickup face falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  @OnEvent(RESPONSIBLE_INVITATION_SUBMITTED, { async: true })
+  async handleResponsibleInvitationSubmitted(
+    payload: ResponsibleInvitationSubmittedPayload,
+  ): Promise<void> {
+    try {
+      const token = await responsiblesQueries.getResponsiblePushToken(
+        this.database.db,
+        payload.inviterResponsibleId,
+      );
+      if (!token) {
+        return;
+      }
+      await this.dispatchExpoPush(
+        [token],
+        'Cadastro de responsável pendente',
+        `${payload.guestName} enviou o cadastro. Abra o app para aprovar.`,
+        {
+          type: 'responsible_invitation_submitted',
+          invitationId: payload.invitationId,
+          clientId: payload.clientId,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push responsible invitation falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

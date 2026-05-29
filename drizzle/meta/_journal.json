@@ -225,6 +225,13 @@
       "when": 1779010000000,
       "tag": "0031_pickup_authorization_refactor",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1779020000000,
+      "tag": "0032_responsible_invitations",
+      "breakpoints": true
     }
   ]
 }

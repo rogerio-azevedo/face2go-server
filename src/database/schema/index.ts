@@ -11,6 +11,7 @@ export * from './schools';
 export * from './students';
 export * from './responsibles';
 export * from './pickup-authorizations';
+export * from './responsible-invitations';
 export * from './vehicles';
 export * from './shifts';
 export * from './legal-documents';

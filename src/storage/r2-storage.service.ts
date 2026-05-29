@@ -81,6 +81,15 @@ export class R2StorageService {
     return `${companyId}/${clientId}/pickup/${authorizationId}/face.${ext}`;
   }
 
+  buildResponsibleInvitationFaceKey(
+    companyId: string,
+    clientId: string,
+    invitationId: string,
+    ext: string,
+  ): string {
+    return `${companyId}/${clientId}/responsible-invitation/${invitationId}/face.${ext}`;
+  }
+
   async createPresignedPutUrl(
     key: string,
     contentType: string,
