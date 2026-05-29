@@ -318,6 +318,25 @@ export async function updateResponsiblePushTokenById(
   return row;
 }
 
+export async function getResponsiblePushToken(
+  db: AppDb,
+  responsibleId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ pushToken: responsibles.pushToken })
+    .from(responsibles)
+    .where(
+      and(
+        eq(responsibles.id, responsibleId),
+        eq(responsibles.isActive, true),
+        isNotNull(responsibles.pushToken),
+        ne(responsibles.pushToken, ''),
+      ),
+    )
+    .limit(1);
+  return row?.pushToken ?? null;
+}
+
 export async function findResponsiblesWithPushTokenForStudent(
   db: AppDb,
   studentId: string,

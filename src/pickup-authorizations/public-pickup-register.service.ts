@@ -4,11 +4,16 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { z } from 'zod';
 
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import { DatabaseService } from '../database/database.service';
+import {
+  PICKUP_GUEST_FACE_SUBMITTED,
+  type PickupGuestFaceSubmittedPayload,
+} from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { PickupAuthorizationsService } from './pickup-authorizations.service';
@@ -27,6 +32,7 @@ export class PublicPickupRegisterService {
     private readonly database: DatabaseService,
     private readonly r2: R2StorageService,
     private readonly pickupAuthorizations: PickupAuthorizationsService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private async resolveActiveAuth(code: string) {
@@ -173,6 +179,13 @@ export class PublicPickupRegisterService {
     if (!updated) {
       throw new NotFoundException('Autorização não encontrada.');
     }
+
+    this.eventEmitter.emit(PICKUP_GUEST_FACE_SUBMITTED, {
+      authorizationId: row.id,
+      clientId: row.clientId,
+      requestedByResponsibleId: row.requestedByResponsibleId,
+      guestName: row.guestName,
+    } satisfies PickupGuestFaceSubmittedPayload);
 
     return {
       success: true as const,

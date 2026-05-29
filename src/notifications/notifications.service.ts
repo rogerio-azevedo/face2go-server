@@ -12,6 +12,8 @@ import * as studentsQueries from '../database/queries/students.queries';
 import {
   ACCESS_FACIAL_RECORDED,
   type AccessFacialRecordedPayload,
+  PICKUP_GUEST_FACE_SUBMITTED,
+  type PickupGuestFaceSubmittedPayload,
 } from './notifications.events';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -48,6 +50,35 @@ export class NotificationsService {
     } catch (err: unknown) {
       this.logger.warn(
         `Push pós-acesso falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  @OnEvent(PICKUP_GUEST_FACE_SUBMITTED, { async: true })
+  async handlePickupGuestFaceSubmitted(
+    payload: PickupGuestFaceSubmittedPayload,
+  ): Promise<void> {
+    try {
+      const token = await responsiblesQueries.getResponsiblePushToken(
+        this.database.db,
+        payload.requestedByResponsibleId,
+      );
+      if (!token) {
+        return;
+      }
+      await this.dispatchExpoPush(
+        [token],
+        'Cadastro de face pendente',
+        `${payload.guestName} enviou a foto. Abra o app para aprovar.`,
+        {
+          type: 'pickup_guest_face_submitted',
+          authorizationId: payload.authorizationId,
+          clientId: payload.clientId,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push pickup face falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

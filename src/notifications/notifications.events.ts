@@ -20,3 +20,12 @@ export type AccessLprRecordedPayload = {
   cameraName: string;
   snapTime: Date | null;
 };
+
+export const PICKUP_GUEST_FACE_SUBMITTED = 'pickup.guest.face.submitted';
+
+export type PickupGuestFaceSubmittedPayload = {
+  authorizationId: string;
+  clientId: string;
+  requestedByResponsibleId: string;
+  guestName: string;
+};
