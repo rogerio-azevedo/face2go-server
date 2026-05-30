@@ -26,6 +26,9 @@ import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { R2StorageService } from '../storage/r2-storage.service';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type LastAccessDto = {
   eventDate: string | null;
   readerName: string;
@@ -98,7 +101,9 @@ export class ResponsibleDashboardService {
   private async loadReaderDirections(
     readerIds: string[],
   ): Promise<Map<string, 'in' | 'out' | null>> {
-    const unique = [...new Set(readerIds.filter((id) => id.trim().length > 0))];
+    const unique = [
+      ...new Set(readerIds.filter((id) => UUID_RE.test(id.trim()))),
+    ];
     if (unique.length === 0) return new Map();
 
     const rows = await this.database.db

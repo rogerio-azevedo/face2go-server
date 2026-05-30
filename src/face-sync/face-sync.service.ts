@@ -20,6 +20,7 @@ import { R2StorageService } from '../storage/r2-storage.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
 import {
   formatReaderFaceSyncError,
+  intelbrasRemoveUserFromReader,
   intelbrasUpsertFaceOnReader,
   toPlainReaderCredential,
 } from './intelbras-device.client';
@@ -237,6 +238,63 @@ export class FaceSyncService {
         ? `Sincronizado parcialmente (${intelbrasReaders.length - failures.length} de ${intelbrasReaders.length} leitor(es)).`
         : null;
     return { deviceSyncStatus: 'synced', deviceSyncError: warn };
+  }
+
+  /** Remove face_id dos leitores Intelbras ativos do cliente (exclusão de responsável). */
+  async removePersonFromReaders(params: {
+    clientId: string;
+    faceId: number;
+    logContext?: string;
+    /** Quando true (padrão), falha se algum leitor não remover a face. */
+    requireAll?: boolean;
+  }): Promise<{ removed: number; total: number; failures: string[] }> {
+    const { clientId, faceId, logContext, requireAll = true } = params;
+    const intelbrasReaders =
+      await readersQueries.listReadersForFaceSyncByClient(
+        this.database.db,
+        clientId,
+      );
+    if (intelbrasReaders.length === 0) {
+      return { removed: 0, total: 0, failures: [] };
+    }
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+    const logPrefix = logContext ? `${logContext} ` : '';
+    const failures: string[] = [];
+
+    await Promise.all(
+      intelbrasReaders.map(async (r) => {
+        try {
+          const plain = toPlainReaderCredential(
+            r,
+            cipher.decrypt(r.passwordEncrypted!),
+          );
+          await intelbrasRemoveUserFromReader(plain, faceId);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          failures.push(`${r.name}: ${msg}`);
+          this.log.warn(
+            `${logPrefix}Falha ao remover face ${faceId} do leitor ${r.name}: ${msg}`,
+          );
+        }
+      }),
+    );
+
+    const result = {
+      removed: intelbrasReaders.length - failures.length,
+      total: intelbrasReaders.length,
+      failures,
+    };
+
+    if (failures.length > 0 && requireAll) {
+      throw new BadRequestException(
+        `Não foi possível remover a face de todos os leitores (${failures.length} de ${intelbrasReaders.length} falhou). ${failures.join('; ')}`,
+      );
+    }
+
+    return result;
   }
 
   /** Sincroniza um cadastro aprovado (foto no R2) com todos os leitores Intelbras ativos do cliente. */

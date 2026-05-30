@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -35,6 +36,15 @@ export class ManagedResponsiblesController {
   @ApiOperation({ summary: 'Listar responsáveis do núcleo familiar' })
   listManaged(@CurrentUser() user: JwtPayload) {
     return this.svc.listManagedResponsibles(user);
+  }
+
+  @Delete('managed-responsibles/:id')
+  @ApiOperation({ summary: 'Excluir responsável do núcleo familiar (apenas pai/mãe)' })
+  deleteManaged(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.deleteManagedResponsible(user, id);
   }
 
   @Post('responsible-invitations')

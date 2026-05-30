@@ -253,6 +253,41 @@ export async function vehicleDeleteById(
   return rows[0];
 }
 
+export async function vehicleListByResponsible(
+  db: AppDb,
+  responsibleId: string,
+  clientId: string,
+) {
+  return db
+    .select({
+      id: vehicles.id,
+      plate: vehicles.plate,
+    })
+    .from(vehicles)
+    .where(
+      and(
+        eq(vehicles.responsibleId, responsibleId),
+        eq(vehicles.clientId, clientId),
+      ),
+    );
+}
+
+export async function vehicleDeleteAllForResponsible(
+  db: AppDb,
+  responsibleId: string,
+  clientId: string,
+) {
+  return db
+    .delete(vehicles)
+    .where(
+      and(
+        eq(vehicles.responsibleId, responsibleId),
+        eq(vehicles.clientId, clientId),
+      ),
+    )
+    .returning({ id: vehicles.id, plate: vehicles.plate });
+}
+
 export async function vehicleGetWithDriver(
   db: AppDb,
   id: string,

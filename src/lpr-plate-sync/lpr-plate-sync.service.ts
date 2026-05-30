@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -327,21 +328,25 @@ export class LprPlateSyncService {
     clientId: string,
     plate: string,
     logContext?: string,
-  ): Promise<void> {
+    options?: { requireAll?: boolean },
+  ): Promise<{ removed: number; total: number; failures: string[] }> {
     const pl = plate.trim();
-    if (!pl) return;
+    if (!pl) return { removed: 0, total: 0, failures: [] };
+
+    const requireAll = options?.requireAll ?? false;
 
     const cams =
       await camerasQueries.listCamerasForLprPlateSyncByClient(
         this.database.db,
         clientId,
       );
-    if (cams.length === 0) return;
+    if (cams.length === 0) return { removed: 0, total: 0, failures: [] };
 
     const cipher = createReaderCredentialsCipher(
       this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
     );
     const logPrefix = logContext ? `${logContext} ` : '';
+    const failures: string[] = [];
 
     await Promise.all(
       cams.map(async (r) => {
@@ -354,10 +359,25 @@ export class LprPlateSyncService {
         } catch (e) {
           const raw =
             e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+          failures.push(`${r.name}: ${raw}`);
           this.log.warn(`${logPrefix}LPR remove plate=${pl} cam=${r.name}: ${raw}`);
         }
       }),
     );
+
+    const result = {
+      removed: cams.length - failures.length,
+      total: cams.length,
+      failures,
+    };
+
+    if (failures.length > 0 && requireAll) {
+      throw new BadRequestException(
+        `Não foi possível remover a placa ${pl} de todas as câmeras (${failures.length} de ${cams.length} falhou). ${failures.join('; ')}`,
+      );
+    }
+
+    return result;
   }
 
   async syncVehicleForCompany(user: JwtPayload, clientId: string, vehicleId: string) {

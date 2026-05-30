@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -52,6 +53,8 @@ export type ResponsibleInvitationResponse = ResponsibleInvitationRow & {
 
 @Injectable()
 export class ManagedResponsiblesService {
+  private readonly log = new Logger(ManagedResponsiblesService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly configService: ConfigService,
@@ -501,6 +504,103 @@ export class ManagedResponsiblesService {
       ),
     );
     return rows.filter(Boolean);
+  }
+
+  async deleteManagedResponsible(user: JwtPayload, targetResponsibleId: string) {
+    this.assertResponsibleJwt(user);
+
+    if (targetResponsibleId === user.responsibleId) {
+      throw new BadRequestException('Você não pode excluir a própria conta.');
+    }
+
+    const isParent = await responsiblesQueries.responsibleHasParentRelationship(
+      this.database.db,
+      user.responsibleId,
+    );
+    if (!isParent) {
+      throw new ForbiddenException(
+        'Apenas pai ou mãe podem excluir outro responsável.',
+      );
+    }
+
+    const householdIds = await responsiblesQueries.listHouseholdResponsibleIds(
+      this.database.db,
+      user.responsibleId,
+      user.clientId,
+    );
+    if (!householdIds.includes(targetResponsibleId)) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    const target = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      targetResponsibleId,
+      user.clientId,
+    );
+    if (!target || !target.isActive) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    const targetVehicles = await vehicleQueries.vehicleListByResponsible(
+      this.database.db,
+      targetResponsibleId,
+      user.clientId,
+    );
+
+    const faceId = target.faceId;
+    const logContext = `delete-responsible=${targetResponsibleId}`;
+
+    if (faceId != null) {
+      await this.faceSync.removePersonFromReaders({
+        clientId: user.clientId,
+        faceId,
+        logContext,
+        requireAll: true,
+      });
+    }
+
+    for (const vehicle of targetVehicles) {
+      await this.lprPlateSync.removePlateFromAllLprCameras(
+        user.clientId,
+        vehicle.plate,
+        logContext,
+        { requireAll: true },
+      );
+    }
+
+    await this.database.db.transaction(async (tx) => {
+      await responsiblesQueries.deleteAllResponsibleStudentLinks(
+        tx as never,
+        targetResponsibleId,
+      );
+      await vehicleQueries.vehicleDeleteAllForResponsible(
+        tx as never,
+        targetResponsibleId,
+        user.clientId,
+      );
+      await responsiblesQueries.updateResponsible(
+        tx as never,
+        targetResponsibleId,
+        user.clientId,
+        {
+          isActive: false,
+          pushToken: null,
+          faceId: null,
+          photoKey: null,
+          deviceSyncStatus: null,
+          deviceSyncedAt: null,
+          deviceSyncError: null,
+        },
+      );
+      if (target.userId) {
+        await tx
+          .update(users)
+          .set({ isActive: false })
+          .where(eq(users.id, target.userId));
+      }
+    });
+
+    return { removed: true, id: targetResponsibleId };
   }
 
   async createInvitation(user: JwtPayload, body: unknown) {

@@ -440,6 +440,34 @@ export async function deleteResponsibleStudentLink(
   return rows[0];
 }
 
+/** Verifica se o responsável é pai ou mãe de pelo menos um aluno. */
+export async function responsibleHasParentRelationship(
+  db: AppDb,
+  responsibleId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: responsibleStudents.id })
+    .from(responsibleStudents)
+    .where(
+      and(
+        eq(responsibleStudents.responsibleId, responsibleId),
+        inArray(responsibleStudents.relationshipType, ['father', 'mother']),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function deleteAllResponsibleStudentLinks(
+  db: AppDb,
+  responsibleId: string,
+) {
+  return db
+    .delete(responsibleStudents)
+    .where(eq(responsibleStudents.responsibleId, responsibleId))
+    .returning({ id: responsibleStudents.id });
+}
+
 type ResponsibleStudentPatch = Partial<
   Pick<
     typeof responsibleStudents.$inferInsert,
