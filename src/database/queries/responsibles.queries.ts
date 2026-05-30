@@ -1,14 +1,44 @@
-import { and, asc, eq, inArray, isNotNull, ne } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  ne,
+  type SQL,
+} from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import {
   responsibleStudents,
   responsibles,
   students,
+  users,
 } from '../schema';
 
 import * as studentClassesQueries from './student-classes.queries';
 import * as studentsQueries from './students.queries';
+
+export type ResponsibleListQueryOptions = {
+  search?: string;
+  offset?: number;
+  limit?: number;
+};
+
+function responsibleNameSearchCondition(search?: string): SQL | undefined {
+  const term = search?.trim();
+  if (!term) return undefined;
+  return ilike(responsibles.name, `%${term}%`);
+}
+
+function responsibleClientWhere(clientId: string, search?: string) {
+  const nameCond = responsibleNameSearchCondition(search);
+  return nameCond
+    ? and(eq(responsibles.clientId, clientId), nameCond)
+    : eq(responsibles.clientId, clientId);
+}
 
 export async function listResponsiblesByClient(db: AppDb, clientId: string) {
   return db
@@ -16,6 +46,59 @@ export async function listResponsiblesByClient(db: AppDb, clientId: string) {
     .from(responsibles)
     .where(eq(responsibles.clientId, clientId))
     .orderBy(asc(responsibles.name));
+}
+
+export async function countResponsiblesByClient(
+  db: AppDb,
+  clientId: string,
+  options: Pick<ResponsibleListQueryOptions, 'search'> = {},
+) {
+  const [row] = await db
+    .select({ total: count() })
+    .from(responsibles)
+    .where(responsibleClientWhere(clientId, options.search));
+  return Number(row?.total ?? 0);
+}
+
+export async function listResponsiblesByClientWithEmail(
+  db: AppDb,
+  clientId: string,
+  options: ResponsibleListQueryOptions = {},
+) {
+  const q = db
+    .select({
+      responsible: responsibles,
+      email: users.email,
+    })
+    .from(responsibles)
+    .leftJoin(users, eq(responsibles.userId, users.id))
+    .where(responsibleClientWhere(clientId, options.search))
+    .orderBy(asc(responsibles.name));
+
+  if (options.limit !== undefined) {
+    q.limit(options.limit);
+  }
+  if (options.offset !== undefined) {
+    q.offset(options.offset);
+  }
+
+  const rows = await q;
+  return rows.map((r) => ({
+    ...r.responsible,
+    email: r.email ?? null,
+  }));
+}
+
+export async function getResponsibleEmailByUserId(
+  db: AppDb,
+  userId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.email ?? null;
 }
 
 /** Gestão web: todos os responsáveis da escola como opções de condutor (uso em veículos LPR). */
@@ -539,5 +622,41 @@ export async function listResponsibleStudentLinksWithStudents(
     link: r.link,
     student: r.student,
     schoolClass: firstClassByStudent.get(r.student.id) ?? null,
+  }));
+}
+
+export async function listStudentResponsibleLinksWithResponsibles(
+  db: AppDb,
+  studentId: string,
+  clientId: string,
+) {
+  const rows = await db
+    .select({
+      link: responsibleStudents,
+      responsible: responsibles,
+      email: users.email,
+    })
+    .from(responsibleStudents)
+    .innerJoin(
+      responsibles,
+      eq(responsibleStudents.responsibleId, responsibles.id),
+    )
+    .leftJoin(users, eq(responsibles.userId, users.id))
+    .innerJoin(students, eq(responsibleStudents.studentId, students.id))
+    .where(
+      and(
+        eq(responsibleStudents.studentId, studentId),
+        eq(students.clientId, clientId),
+        eq(responsibles.clientId, clientId),
+      ),
+    )
+    .orderBy(asc(responsibles.name));
+
+  return rows.map((r) => ({
+    link: r.link,
+    responsible: {
+      ...r.responsible,
+      email: r.email ?? null,
+    },
   }));
 }

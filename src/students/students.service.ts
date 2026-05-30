@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as schoolClassQueries from '../database/queries/school-classes.queries';
 import * as studentClassesQueries from '../database/queries/student-classes.queries';
 import * as studentsQueries from '../database/queries/students.queries';
@@ -13,10 +14,20 @@ import { DatabaseService } from '../database/database.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
+  buildPaginatedResult,
+  parseListPaginationParams,
+  type ListPaginationParams,
+  type PaginatedResult,
+} from '../common/pagination';
+import {
   createStudentSchema,
   updateStudentSchema,
 } from '../validation/students.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
+
+type StudentListQueryInput = ListPaginationParams & {
+  classId?: string;
+};
 
 function mapStudentClassLinkToApi(
   link: studentClassesQueries.StudentClassLinkRow,
@@ -64,15 +75,33 @@ export class StudentsService {
     }));
   }
 
+  private async mapStudentWithPhoto<
+    T extends { photoKey: string | null },
+  >(row: T) {
+    return {
+      ...row,
+      photoUrl: await this.optionalPhotoUrl(row.photoKey),
+    };
+  }
+
   async list(
     user: JwtPayload,
     clientId: string,
-    classId?: string,
+    query: StudentListQueryInput = {},
   ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const { page, pageSize, search, offset } = parseListPaginationParams(
+      query.page !== undefined ? String(query.page) : undefined,
+      query.pageSize !== undefined ? String(query.pageSize) : undefined,
+      query.search,
+    );
+    const listOpts = { search, offset, limit: pageSize };
+    const classId = query.classId;
+
     let rows: Awaited<
       ReturnType<(typeof studentsQueries)['listStudentsByClient']>
     >;
+    let total: number;
 
     if (classId) {
       const klass = await schoolClassQueries.getSchoolClassById(
@@ -83,26 +112,37 @@ export class StudentsService {
       if (!klass) {
         throw new NotFoundException('Turma não encontrada.');
       }
+      total = await studentsQueries.countStudentsByClass(
+        this.database.db,
+        clientId,
+        classId,
+        { search },
+      );
       rows = await studentsQueries.listStudentsByClass(
         this.database.db,
         clientId,
         classId,
+        listOpts,
       );
     } else {
+      total = await studentsQueries.countStudentsByClient(
+        this.database.db,
+        clientId,
+        { search },
+      );
       rows = await studentsQueries.listStudentsByClient(
         this.database.db,
         clientId,
+        listOpts,
       );
     }
 
     const withClasses = await this.attachClassesToStudents(rows);
-
-    return Promise.all(
-      withClasses.map(async (row) => ({
-        ...row,
-        photoUrl: await this.optionalPhotoUrl(row.photoKey),
-      })),
+    const data = await Promise.all(
+      withClasses.map((row) => this.mapStudentWithPhoto(row)),
     );
+
+    return buildPaginatedResult(data, total, page, pageSize);
   }
 
   private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
@@ -116,6 +156,54 @@ export class StudentsService {
       );
       return null;
     }
+  }
+
+  private async optionalResponsiblePhotoUrl(
+    photoKey: string | null,
+  ): Promise<string | null> {
+    if (!photoKey) return null;
+    try {
+      return await this.r2Storage.createPresignedPortraitGetUrl(photoKey);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.log.warn(
+        `URL assinada (responsável/R2): falha para key="${photoKey}": ${msg}`,
+      );
+      return null;
+    }
+  }
+
+  async listLinkedResponsibles(
+    user: JwtPayload,
+    clientId: string,
+    studentId: string,
+  ) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const student = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!student) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+    const rows =
+      await responsiblesQueries.listStudentResponsibleLinksWithResponsibles(
+        this.database.db,
+        studentId,
+        clientId,
+      );
+    return Promise.all(
+      rows.map(async (item) => ({
+        link: item.link,
+        responsible: {
+          ...item.responsible,
+          photoUrl: await this.optionalResponsiblePhotoUrl(
+            item.responsible.photoKey,
+          ),
+        },
+      })),
+    );
   }
 
   async getById(user: JwtPayload, clientId: string, studentId: string) {

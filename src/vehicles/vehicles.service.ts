@@ -14,6 +14,11 @@ import type { VehicleWithDriverRow } from '../database/queries/vehicles.queries'
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import {
+  buildPaginatedResult,
+  parseListPaginationParams,
+  type ListPaginationParams,
+} from '../common/pagination';
+import {
   createVehicleSchema,
   updateVehicleSchema,
 } from '../validation/vehicles.schema';
@@ -303,13 +308,29 @@ export class VehiclesService {
     }
   }
 
-  /** Gestão empresa / cliente escola na web — lista todos os veículos do cliente. */
+  /** Gestão empresa / cliente escola na web — lista veículos do cliente (paginado). */
   async listVehiclesForCompanyClient(
     user: JwtPayload,
     clientId: string,
-  ): Promise<VehicleWithDriverRow[]> {
+    query: ListPaginationParams = {},
+  ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    return vehicleQueries.vehicleListForClient(this.database.db, clientId);
+    const { page, pageSize, search, offset } = parseListPaginationParams(
+      query.page !== undefined ? String(query.page) : undefined,
+      query.pageSize !== undefined ? String(query.pageSize) : undefined,
+      query.search,
+    );
+    const [total, data] = await Promise.all([
+      vehicleQueries.countVehiclesForClient(this.database.db, clientId, {
+        search,
+      }),
+      vehicleQueries.vehicleListForClient(this.database.db, clientId, {
+        search,
+        offset,
+        limit: pageSize,
+      }),
+    ]);
+    return buildPaginatedResult(data, total, page, pageSize);
   }
 
   async listDriverOptionsForCompanyClient(

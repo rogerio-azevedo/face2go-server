@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -44,12 +45,21 @@ export class ClientVehiclesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Listar veículos da escola (LPR)' })
+  @ApiOperation({
+    summary: 'Listar veículos da escola paginados (?page, ?pageSize, ?search)',
+  })
   list(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
-  ): Promise<VehicleWithDriverRow[]> {
-    return this.vehiclesService.listVehiclesForCompanyClient(user, clientId);
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.vehiclesService.listVehiclesForCompanyClient(user, clientId, {
+      page: page !== undefined ? Number(page) : undefined,
+      pageSize: pageSize !== undefined ? Number(pageSize) : undefined,
+      search,
+    });
   }
 
   @Post()

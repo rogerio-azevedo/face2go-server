@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -27,12 +28,21 @@ export class ResponsiblesController {
   constructor(private readonly responsiblesService: ResponsiblesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar responsáveis da escola' })
+  @ApiOperation({
+    summary: 'Listar responsáveis da escola paginados (?page, ?pageSize, ?search)',
+  })
   list(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
   ) {
-    return this.responsiblesService.list(user, clientId);
+    return this.responsiblesService.list(user, clientId, {
+      page: page !== undefined ? Number(page) : undefined,
+      pageSize: pageSize !== undefined ? Number(pageSize) : undefined,
+      search,
+    });
   }
 
   @Post()

@@ -16,6 +16,11 @@ import { users } from '../database/schema';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
+  buildPaginatedResult,
+  parseListPaginationParams,
+  type ListPaginationParams,
+} from '../common/pagination';
+import {
   createResponsibleSchema,
   linkResponsibleStudentSchema,
   updateResponsibleSchema,
@@ -33,18 +38,30 @@ export class ResponsiblesService {
     private readonly r2Storage: R2StorageService,
   ) {}
 
-  async list(user: JwtPayload, clientId: string) {
+  async list(user: JwtPayload, clientId: string, query: ListPaginationParams = {}) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
-    const rows = await responsiblesQueries.listResponsiblesByClient(
-      this.database.db,
-      clientId,
+    const { page, pageSize, search, offset } = parseListPaginationParams(
+      query.page !== undefined ? String(query.page) : undefined,
+      query.pageSize !== undefined ? String(query.pageSize) : undefined,
+      query.search,
     );
-    return Promise.all(
+    const [total, rows] = await Promise.all([
+      responsiblesQueries.countResponsiblesByClient(this.database.db, clientId, {
+        search,
+      }),
+      responsiblesQueries.listResponsiblesByClientWithEmail(
+        this.database.db,
+        clientId,
+        { search, offset, limit: pageSize },
+      ),
+    ]);
+    const data = await Promise.all(
       rows.map(async (row) => ({
         ...row,
         photoUrl: await this.optionalPhotoUrl(row.photoKey),
       })),
     );
+    return buildPaginatedResult(data, total, page, pageSize);
   }
 
   private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
@@ -70,7 +87,17 @@ export class ResponsiblesService {
     if (!row) {
       throw new NotFoundException('Responsável não encontrado.');
     }
-    return row;
+    const email = row.userId
+      ? await responsiblesQueries.getResponsibleEmailByUserId(
+          this.database.db,
+          row.userId,
+        )
+      : null;
+    return {
+      ...row,
+      email,
+      photoUrl: await this.optionalPhotoUrl(row.photoKey),
+    };
   }
 
   async create(user: JwtPayload, clientId: string, body: unknown) {
@@ -131,6 +158,7 @@ export class ResponsiblesService {
     const d = parsed.data;
     if (
       d.name === undefined &&
+      d.email === undefined &&
       d.phone === undefined &&
       d.document === undefined &&
       d.password === undefined &&
@@ -146,6 +174,24 @@ export class ResponsiblesService {
     );
     if (!existing) {
       throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    if (d.email !== undefined) {
+      if (!existing.userId) {
+        throw new BadRequestException(
+          'Responsável sem conta de login; não é possível alterar e-mail.',
+        );
+      }
+      const emailTaken = await this.database.db.query.users.findFirst({
+        where: eq(users.email, d.email),
+      });
+      if (emailTaken && emailTaken.id !== existing.userId) {
+        throw new ConflictException('E-mail já cadastrado.');
+      }
+      await this.database.db
+        .update(users)
+        .set({ email: d.email })
+        .where(eq(users.id, existing.userId));
     }
 
     if (d.password !== undefined) {
@@ -184,7 +230,18 @@ export class ResponsiblesService {
         .where(eq(users.id, existing.userId));
     }
 
-    return updated;
+    const email = updated.userId
+      ? await responsiblesQueries.getResponsibleEmailByUserId(
+          this.database.db,
+          updated.userId,
+        )
+      : null;
+
+    return {
+      ...updated,
+      email,
+      photoUrl: await this.optionalPhotoUrl(updated.photoKey),
+    };
   }
 
   async listLinkedStudents(

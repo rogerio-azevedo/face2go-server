@@ -28,14 +28,37 @@ export class StudentsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Listar alunos (opcional: filtrar por turma com ?classId=)',
+    summary:
+      'Listar alunos paginados (?page, ?pageSize, ?search, ?classId)',
   })
   list(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Query('classId') classId?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
   ) {
-    return this.studentsService.list(user, clientId, classId);
+    return this.studentsService.list(user, clientId, {
+      classId,
+      page: page !== undefined ? Number(page) : undefined,
+      pageSize: pageSize !== undefined ? Number(pageSize) : undefined,
+      search,
+    });
+  }
+
+  @Get(':studentId/responsibles')
+  @ApiOperation({ summary: 'Listar responsáveis vinculados ao aluno' })
+  listLinkedResponsibles(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.studentsService.listLinkedResponsibles(
+      user,
+      clientId,
+      studentId,
+    );
   }
 
   @Get(':studentId')

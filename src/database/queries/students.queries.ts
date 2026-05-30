@@ -1,24 +1,104 @@
-import { and, asc, eq, inArray, notInArray } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  ilike,
+  inArray,
+  notInArray,
+  type SQL,
+} from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { responsibleStudents, studentClasses, students } from '../schema';
 
 import * as studentClassesQueries from './student-classes.queries';
 
-export async function listStudentsByClient(db: AppDb, clientId: string) {
-  return db
+export type StudentListQueryOptions = {
+  search?: string;
+  offset?: number;
+  limit?: number;
+};
+
+function studentNameSearchCondition(search?: string): SQL | undefined {
+  const term = search?.trim();
+  if (!term) return undefined;
+  return ilike(students.name, `%${term}%`);
+}
+
+function studentClientWhere(clientId: string, search?: string) {
+  const nameCond = studentNameSearchCondition(search);
+  return nameCond
+    ? and(eq(students.clientId, clientId), nameCond)
+    : eq(students.clientId, clientId);
+}
+
+export async function countStudentsByClient(
+  db: AppDb,
+  clientId: string,
+  options: Pick<StudentListQueryOptions, 'search'> = {},
+) {
+  const [row] = await db
+    .select({ total: count() })
+    .from(students)
+    .where(studentClientWhere(clientId, options.search));
+  return Number(row?.total ?? 0);
+}
+
+export async function listStudentsByClient(
+  db: AppDb,
+  clientId: string,
+  options: StudentListQueryOptions = {},
+) {
+  const q = db
     .select()
     .from(students)
-    .where(eq(students.clientId, clientId))
+    .where(studentClientWhere(clientId, options.search))
     .orderBy(asc(students.name));
+
+  if (options.limit !== undefined) {
+    q.limit(options.limit);
+  }
+  if (options.offset !== undefined) {
+    q.offset(options.offset);
+  }
+  return q;
+}
+
+export async function countStudentsByClass(
+  db: AppDb,
+  clientId: string,
+  classId: string,
+  options: Pick<StudentListQueryOptions, 'search'> = {},
+) {
+  const nameCond = studentNameSearchCondition(options.search);
+  const [row] = await db
+    .select({ total: count() })
+    .from(students)
+    .innerJoin(
+      studentClasses,
+      and(
+        eq(studentClasses.studentId, students.id),
+        eq(studentClasses.classId, classId),
+        eq(studentClasses.isActive, true),
+      ),
+    )
+    .where(
+      nameCond
+        ? and(eq(students.clientId, clientId), nameCond)
+        : eq(students.clientId, clientId),
+    );
+  return Number(row?.total ?? 0);
 }
 
 export async function listStudentsByClass(
   db: AppDb,
   clientId: string,
   classId: string,
+  options: StudentListQueryOptions = {},
 ) {
-  return db
+  const nameCond = studentNameSearchCondition(options.search);
+  const q = db
     .select({
       id: students.id,
       clientId: students.clientId,
@@ -46,8 +126,20 @@ export async function listStudentsByClass(
         eq(studentClasses.isActive, true),
       ),
     )
-    .where(eq(students.clientId, clientId))
+    .where(
+      nameCond
+        ? and(eq(students.clientId, clientId), nameCond)
+        : eq(students.clientId, clientId),
+    )
     .orderBy(asc(students.name));
+
+  if (options.limit !== undefined) {
+    q.limit(options.limit);
+  }
+  if (options.offset !== undefined) {
+    q.offset(options.offset);
+  }
+  return q;
 }
 
 export async function getStudentById(

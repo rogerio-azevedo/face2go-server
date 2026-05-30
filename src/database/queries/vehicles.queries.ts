@@ -1,4 +1,13 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  or,
+  type SQL,
+} from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { listHouseholdResponsibleIds } from './responsibles.queries';
@@ -186,31 +195,80 @@ export async function vehicleDeleteForHousehold(
   return rows[0];
 }
 
-/** Lista todos os veículos da escola (gestão empresa / web). */
+export type VehicleListQueryOptions = {
+  search?: string;
+  offset?: number;
+  limit?: number;
+};
+
+function vehicleSearchCondition(search?: string): SQL | undefined {
+  const term = search?.trim();
+  if (!term) return undefined;
+  const pattern = `%${term}%`;
+  return or(
+    ilike(vehicles.plate, pattern),
+    ilike(vehicles.brand, pattern),
+    ilike(vehicles.model, pattern),
+  );
+}
+
+function vehicleClientWhere(clientId: string, search?: string) {
+  const searchCond = vehicleSearchCondition(search);
+  return searchCond
+    ? and(eq(vehicles.clientId, clientId), searchCond)
+    : eq(vehicles.clientId, clientId);
+}
+
+const vehicleListSelect = {
+  id: vehicles.id,
+  clientId: vehicles.clientId,
+  responsibleId: vehicles.responsibleId,
+  plate: vehicles.plate,
+  brand: vehicles.brand,
+  model: vehicles.model,
+  color: vehicles.color,
+  createdAt: vehicles.createdAt,
+  updatedAt: vehicles.updatedAt,
+  lprSyncStatus: vehicles.lprSyncStatus,
+  lprSyncError: vehicles.lprSyncError,
+  lprSyncedAt: vehicles.lprSyncedAt,
+  driverName: responsibles.name,
+};
+
+export async function countVehiclesForClient(
+  db: AppDb,
+  clientId: string,
+  options: Pick<VehicleListQueryOptions, 'search'> = {},
+) {
+  const [row] = await db
+    .select({ total: count() })
+    .from(vehicles)
+    .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .where(vehicleClientWhere(clientId, options.search));
+  return Number(row?.total ?? 0);
+}
+
+/** Lista veículos da escola (gestão empresa / web), com paginação opcional. */
 export async function vehicleListForClient(
   db: AppDb,
   clientId: string,
+  options: VehicleListQueryOptions = {},
 ): Promise<VehicleWithDriverRow[]> {
-  const rows = await db
-    .select({
-      id: vehicles.id,
-      clientId: vehicles.clientId,
-      responsibleId: vehicles.responsibleId,
-      plate: vehicles.plate,
-      brand: vehicles.brand,
-      model: vehicles.model,
-      color: vehicles.color,
-      createdAt: vehicles.createdAt,
-      updatedAt: vehicles.updatedAt,
-      lprSyncStatus: vehicles.lprSyncStatus,
-      lprSyncError: vehicles.lprSyncError,
-      lprSyncedAt: vehicles.lprSyncedAt,
-      driverName: responsibles.name,
-    })
+  const q = db
+    .select(vehicleListSelect)
     .from(vehicles)
     .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
-    .where(eq(vehicles.clientId, clientId))
+    .where(vehicleClientWhere(clientId, options.search))
     .orderBy(desc(vehicles.createdAt));
+
+  if (options.limit !== undefined) {
+    q.limit(options.limit);
+  }
+  if (options.offset !== undefined) {
+    q.offset(options.offset);
+  }
+
+  const rows = await q;
   return rows as VehicleWithDriverRow[];
 }
 

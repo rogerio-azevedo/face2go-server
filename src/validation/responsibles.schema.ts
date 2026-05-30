@@ -20,6 +20,7 @@ export const createResponsibleSchema = z.object({
 
 export const updateResponsibleSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
+  email: z.email('E-mail inválido.').optional(),
   phone: z.string().trim().max(32).nullable().optional(),
   document: z.string().trim().max(32).nullable().optional(),
   password: z
