@@ -1,11 +1,12 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
-  Body,
   Query,
 } from '@nestjs/common';
 import {
@@ -45,6 +46,33 @@ export class StudentsController {
       pageSize: pageSize !== undefined ? Number(pageSize) : undefined,
       search,
     });
+  }
+
+  @Post(':studentId/classes')
+  @ApiOperation({ summary: 'Vincular turma ao aluno' })
+  linkClass(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() body: unknown,
+  ) {
+    return this.studentsService.linkClass(user, clientId, studentId, body);
+  }
+
+  @Delete(':studentId/classes/:classId')
+  @ApiOperation({ summary: 'Remover vínculo aluno–turma' })
+  unlinkClass(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Param('classId', ParseUUIDPipe) classId: string,
+  ) {
+    return this.studentsService.unlinkClass(
+      user,
+      clientId,
+      studentId,
+      classId,
+    );
   }
 
   @Get(':studentId/responsibles')

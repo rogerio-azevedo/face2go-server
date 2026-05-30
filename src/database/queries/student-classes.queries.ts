@@ -190,6 +190,26 @@ export async function dedupeActiveStudentClassLinksByClassNameYear(
   return deactivated.length;
 }
 
+export async function deactivateStudentClassLink(
+  db: AppDb,
+  studentId: string,
+  classId: string,
+): Promise<boolean> {
+  const rows = await db
+    .update(studentClasses)
+    .set({ isActive: false })
+    .where(
+      and(
+        eq(studentClasses.studentId, studentId),
+        eq(studentClasses.classId, classId),
+        eq(studentClasses.isActive, true),
+      ),
+    )
+    .returning({ id: studentClasses.id });
+
+  return rows.length > 0;
+}
+
 export async function deactivateStudentClassLinksNotInList(
   db: AppDb,
   studentId: string,

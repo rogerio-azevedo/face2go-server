@@ -21,6 +21,7 @@ import {
 } from '../common/pagination';
 import {
   createStudentSchema,
+  linkStudentClassSchema,
   updateStudentSchema,
 } from '../validation/students.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
@@ -240,6 +241,30 @@ export class StudentsService {
       accessSchedule: d.accessSchedule ?? null,
       isActive: d.isActive,
     });
+
+    if (d.classIds?.length) {
+      const uniqueClassIds = [...new Set(d.classIds)];
+      for (const classId of uniqueClassIds) {
+        const klass = await schoolClassQueries.getSchoolClassById(
+          this.database.db,
+          classId,
+          clientId,
+        );
+        if (!klass) {
+          throw new BadRequestException('Turma não encontrada nesta escola.');
+        }
+        if (!klass.isActive) {
+          throw new BadRequestException('Turma inativa não pode ser vinculada.');
+        }
+        await studentClassesQueries.upsertStudentClassLink(this.database.db, {
+          studentId: row!.id,
+          classId,
+          situacaoMatricula: 'enrolled',
+          isActive: true,
+        });
+      }
+    }
+
     const [withClasses] = await this.attachClassesToStudents([row!]);
     return withClasses;
   }
@@ -280,5 +305,98 @@ export class StudentsService {
     }
     const [withClasses] = await this.attachClassesToStudents([updated]);
     return withClasses;
+  }
+
+  async linkClass(
+    user: JwtPayload,
+    clientId: string,
+    studentId: string,
+    body: unknown,
+  ) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const parsed = linkStudentClassSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const student = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!student) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+
+    const klass = await schoolClassQueries.getSchoolClassById(
+      this.database.db,
+      parsed.data.classId,
+      clientId,
+    );
+    if (!klass) {
+      throw new BadRequestException('Turma não encontrada nesta escola.');
+    }
+    if (!klass.isActive) {
+      throw new BadRequestException('Turma inativa não pode ser vinculada.');
+    }
+
+    const result = await studentClassesQueries.upsertStudentClassLink(
+      this.database.db,
+      {
+        studentId,
+        classId: parsed.data.classId,
+        situacaoMatricula: 'enrolled',
+        isActive: true,
+      },
+    );
+
+    const links = await studentClassesQueries.listClassesByStudent(
+      this.database.db,
+      studentId,
+    );
+    const link = links.find((item) => item.id === result.id);
+    if (!link) {
+      throw new NotFoundException('Vínculo não encontrado após criação.');
+    }
+
+    return mapStudentClassLinkToApi(link);
+  }
+
+  async unlinkClass(
+    user: JwtPayload,
+    clientId: string,
+    studentId: string,
+    classId: string,
+  ) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+
+    const student = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!student) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+
+    const klass = await schoolClassQueries.getSchoolClassById(
+      this.database.db,
+      classId,
+      clientId,
+    );
+    if (!klass) {
+      throw new NotFoundException('Turma não encontrada.');
+    }
+
+    const removed = await studentClassesQueries.deactivateStudentClassLink(
+      this.database.db,
+      studentId,
+      classId,
+    );
+    if (!removed) {
+      throw new NotFoundException('Vínculo não encontrado.');
+    }
+
+    return { success: true };
   }
 }

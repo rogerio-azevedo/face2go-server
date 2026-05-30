@@ -24,6 +24,11 @@ export const createStudentSchema = z.object({
   photoKey: z.string().trim().max(2048).nullable().optional(),
   accessSchedule: accessScheduleSchema,
   isActive: z.boolean().optional().default(true),
+  classIds: z.array(z.uuid('Turma inválida.')).optional(),
 });
 
 export const updateStudentSchema = createStudentSchema.partial();
+
+export const linkStudentClassSchema = z.object({
+  classId: z.uuid('Turma inválida.'),
+});
