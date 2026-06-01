@@ -232,6 +232,20 @@
       "when": 1779020000000,
       "tag": "0032_responsible_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1779030000000,
+      "tag": "0033_camera_direction",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1779040000000,
+      "tag": "0034_client_display_devices",
+      "breakpoints": true
     }
   ]
 }
