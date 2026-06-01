@@ -3,6 +3,7 @@ export * from './companies';
 export * from './invite-links';
 export * from './permissions';
 export * from './clients';
+export * from './client-display-devices';
 export * from './readers';
 export * from './cameras';
 export * from './faces';

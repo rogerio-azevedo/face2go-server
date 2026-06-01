@@ -222,6 +222,7 @@ export class SimulateService {
         faceId: student.faceId,
         clientId: dto.clientId,
         personName,
+        readerId: simReader.mongoReaderId,
         readerName: simReader.readerName,
         readerDirection: simReader.readerDirection,
         eventDate:
@@ -289,6 +290,7 @@ export class SimulateService {
       faceId: responsible.faceId,
       clientId: dto.clientId,
       personName,
+      readerId: simReader.mongoReaderId,
       readerName: simReader.readerName,
       readerDirection: simReader.readerDirection,
       eventDate:

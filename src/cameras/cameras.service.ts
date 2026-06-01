@@ -139,6 +139,7 @@ export class CamerasService {
       companyId,
       clientId: d.clientId,
       type: d.type,
+      direction: d.direction ?? null,
       brand: d.brand,
       name: d.name,
       description: d.description ?? null,
@@ -169,6 +170,7 @@ export class CamerasService {
     if (
       d.clientId === undefined &&
       d.type === undefined &&
+      d.direction === undefined &&
       d.brand === undefined &&
       d.name === undefined &&
       d.description === undefined &&
@@ -199,6 +201,9 @@ export class CamerasService {
     const patch: camerasQueries.CameraUpdateInput = {
       ...(d.clientId !== undefined ? { clientId: d.clientId } : {}),
       ...(d.type !== undefined ? { type: d.type } : {}),
+      ...(d.direction !== undefined
+        ? { direction: d.direction ?? null }
+        : {}),
       ...(d.brand !== undefined ? { brand: d.brand } : {}),
       ...(d.name !== undefined ? { name: d.name } : {}),
       ...(d.description !== undefined

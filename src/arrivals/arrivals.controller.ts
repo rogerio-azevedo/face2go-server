@@ -16,6 +16,7 @@ import * as clientsQueries from '../database/queries/clients.queries';
 import { ArrivalsService } from './arrivals.service';
 import type {
   ArrivalSseConnectedPayload,
+  ArrivalSseDequeuePayload,
   ArrivalSseEnvelope,
   ArrivalSseHeartbeatPayload,
   ArrivalSsePayload,
@@ -65,7 +66,7 @@ export class ArrivalsController {
       clientId,
     } satisfies ArrivalSseConnectedPayload);
 
-    const sink = (payload: ArrivalSsePayload) => {
+    const sink = (payload: ArrivalSsePayload | ArrivalSseDequeuePayload) => {
       writeEnvelope(payload);
     };
 

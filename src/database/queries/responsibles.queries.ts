@@ -420,6 +420,16 @@ export async function getResponsiblePushToken(
   return row?.pushToken ?? null;
 }
 
+export async function findResponsibleIdsByStudentId(
+  db: AppDb,
+  studentId: string,
+): Promise<Array<{ responsibleId: string }>> {
+  return db
+    .select({ responsibleId: responsibleStudents.responsibleId })
+    .from(responsibleStudents)
+    .where(eq(responsibleStudents.studentId, studentId));
+}
+
 export async function findResponsiblesWithPushTokenForStudent(
   db: AppDb,
   studentId: string,

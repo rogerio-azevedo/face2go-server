@@ -12,6 +12,7 @@ import {
 import { sql } from 'drizzle-orm';
 
 import { clients } from './clients';
+import { readerDirectionEnum } from './readers';
 
 export const cameraTypeEnum = pgEnum('camera_type', ['lpr', 'ptz', 'general']);
 
@@ -23,6 +24,7 @@ export const cameras = pgTable(
       .notNull()
       .references(() => clients.id, { onDelete: 'cascade' }),
     type: cameraTypeEnum('type').notNull().default('general'),
+    direction: readerDirectionEnum('direction'),
     brand: varchar('brand', { length: 32 }).notNull().default('intelbras'),
     name: varchar('name', { length: 255 }).notNull(),
     description: text('description'),

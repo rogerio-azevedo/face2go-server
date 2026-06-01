@@ -10,6 +10,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import type { FeatureSlug } from '../common/features.constants';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
+import * as clientDisplayDevicesQueries from '../database/queries/client-display-devices.queries';
 import * as clientInviteLinksQueries from '../database/queries/client-invite-links.queries';
 import * as clientUsersQueries from '../database/queries/client-users.queries';
 import { PermissionsService } from '../permissions/permissions.service';
@@ -18,6 +19,7 @@ import {
   updateClientSchema,
 } from '../validation/clients.schema';
 import { generateClientInviteSchema } from '../validation/client-invites.schema';
+import { setClientDisplayDevicesSchema } from '../validation/client-display-devices.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 
 const toggleActiveSchema = z.object({
@@ -189,6 +191,55 @@ export class ClientsService {
       throw new NotFoundException('Cliente não encontrado.');
     }
     return { token: result.token, shortCode: short.shortCode };
+  }
+
+  /** Lista câmeras LPR e leitores faciais com flag de habilitação no display. */
+  async getDisplayDevices(user: JwtPayload, clientId: string) {
+    await this.assertReadAccessToClient(user, clientId);
+    return clientDisplayDevicesQueries.getDisplayDevicesForClient(
+      this.database.db,
+      clientId,
+    );
+  }
+
+  /** Substitui a lista de dispositivos que alimentam o display TV. */
+  async setDisplayDevices(user: JwtPayload, clientId: string, body: unknown) {
+    await this.assertReadAccessToClient(user, clientId);
+
+    const parsed = setClientDisplayDevicesSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const devices = parsed.data.devices;
+    const uniqueKeys = new Set(
+      devices.map((d) => `${d.deviceType}:${d.deviceId}`),
+    );
+    if (uniqueKeys.size !== devices.length) {
+      throw new BadRequestException('Dispositivos duplicados na lista.');
+    }
+
+    const valid = await clientDisplayDevicesQueries.validateDisplayDevicesForClient(
+      this.database.db,
+      clientId,
+      devices,
+    );
+    if (!valid) {
+      throw new BadRequestException(
+        'Um ou mais dispositivos não pertencem a este cliente.',
+      );
+    }
+
+    await clientDisplayDevicesQueries.setDisplayDevices(
+      this.database.db,
+      clientId,
+      devices,
+    );
+
+    return clientDisplayDevicesQueries.getDisplayDevicesForClient(
+      this.database.db,
+      clientId,
+    );
   }
 
   /** Escrita: apenas company_admin (comportamento atual do Next.js). */

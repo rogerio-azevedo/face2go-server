@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
@@ -59,6 +60,30 @@ export class ClientsController {
     @Param('clientId', ParseUUIDPipe) clientId: string,
   ) {
     return this.clientsService.regenerateTvDisplayToken(user, clientId);
+  }
+
+  @Get(':clientId/display-devices')
+  @ApiOperation({
+    summary:
+      'Listar câmeras LPR e leitores faciais habilitados para o display TV',
+  })
+  getDisplayDevices(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.clientsService.getDisplayDevices(user, clientId);
+  }
+
+  @Put(':clientId/display-devices')
+  @ApiOperation({
+    summary: 'Configurar quais dispositivos alimentam o display TV',
+  })
+  setDisplayDevices(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Body() body: unknown,
+  ) {
+    return this.clientsService.setDisplayDevices(user, clientId, body);
   }
 
   @Get(':clientId/client-users')

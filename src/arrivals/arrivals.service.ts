@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
+import * as displayDeviceQueries from '../database/queries/client-display-devices.queries';
+import type { ClientDisplayDeviceType } from '../database/queries/client-display-devices.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
@@ -13,17 +15,25 @@ import { R2StorageService } from '../storage/r2-storage.service';
 
 import type {
   ArrivalDisplayKind,
+  ArrivalSseDequeuePayload,
   ArrivalSsePayload,
   ArrivalSseStudent,
 } from './arrivals.types';
 
-type SinkFn = (data: ArrivalSsePayload) => void;
+type SinkFn = (data: ArrivalSsePayload | ArrivalSseDequeuePayload) => void;
+
+type DisplayDeviceCacheEntry = {
+  devices: displayDeviceQueries.ClientDisplayDeviceRow[];
+  expiresAt: number;
+};
 
 @Injectable()
 export class ArrivalsService {
   private readonly logger = new Logger(ArrivalsService.name);
   /** Por escola/cliente (UUID). */
   private readonly hubs = new Map<string, Set<SinkFn>>();
+  private readonly displayDeviceCache = new Map<string, DisplayDeviceCacheEntry>();
+  private static readonly DISPLAY_DEVICE_CACHE_TTL_MS = 30_000;
 
   constructor(
     private readonly database: DatabaseService,
@@ -48,7 +58,10 @@ export class ArrivalsService {
     };
   }
 
-  private emitToHub(clientId: string, payload: ArrivalSsePayload): void {
+  private emitToHub(
+    clientId: string,
+    payload: ArrivalSsePayload | ArrivalSseDequeuePayload,
+  ): void {
     const set = this.hubs.get(clientId);
     if (!set?.size) {
       return;
@@ -114,10 +127,80 @@ export class ArrivalsService {
     return enriched;
   }
 
+  private async getConfiguredDisplayDevices(
+    clientId: string,
+  ): Promise<displayDeviceQueries.ClientDisplayDeviceRow[]> {
+    const now = Date.now();
+    const cached = this.displayDeviceCache.get(clientId);
+    if (cached && cached.expiresAt > now) {
+      return cached.devices;
+    }
+
+    const devices = await displayDeviceQueries.listDisplayDevices(
+      this.database.db,
+      clientId,
+    );
+    this.displayDeviceCache.set(clientId, {
+      devices,
+      expiresAt: now + ArrivalsService.DISPLAY_DEVICE_CACHE_TTL_MS,
+    });
+    return devices;
+  }
+
+  private async isDeviceAllowed(
+    clientId: string,
+    deviceType: ClientDisplayDeviceType,
+    deviceId: string,
+  ): Promise<boolean> {
+    const configured = await this.getConfiguredDisplayDevices(clientId);
+    if (configured.length === 0) {
+      return true;
+    }
+    return configured.some(
+      (d) => d.deviceType === deviceType && d.deviceId === deviceId,
+    );
+  }
+
+  private async broadcastStudentDequeue(
+    payload: AccessFacialRecordedPayload,
+  ): Promise<void> {
+    const student = await studentsQueries.findStudentByFaceIdAndClientId(
+      this.database.db,
+      payload.faceId,
+      payload.clientId,
+    );
+    if (!student) {
+      return;
+    }
+
+    const links = await responsiblesQueries.findResponsibleIdsByStudentId(
+      this.database.db,
+      student.id,
+    );
+    for (const { responsibleId } of links) {
+      this.emitToHub(payload.clientId, {
+        type: 'dequeue',
+        responsibleId,
+      });
+    }
+  }
+
   async broadcastFacialRecorded(
     payload: AccessFacialRecordedPayload,
   ): Promise<void> {
     try {
+      await this.broadcastStudentDequeue(payload);
+
+      if (
+        !(await this.isDeviceAllowed(
+          payload.clientId,
+          'facial_reader',
+          payload.readerId,
+        ))
+      ) {
+        return;
+      }
+
       const responsible =
         await responsiblesQueries.findResponsibleByFaceIdAndClientId(
           this.database.db,
@@ -126,6 +209,7 @@ export class ArrivalsService {
         );
 
       let kind: ArrivalDisplayKind;
+      let responsibleId: string | null = null;
       let personName = payload.personName?.trim() || null;
       let personPhotoUrl: string | null = null;
       let students: ArrivalSseStudent[] = [];
@@ -133,6 +217,7 @@ export class ArrivalsService {
 
       if (responsible) {
         kind = 'responsible';
+        responsibleId = responsible.id;
         if (!personName) {
           personName = responsible.name;
         }
@@ -175,6 +260,7 @@ export class ArrivalsService {
         type: 'arrival',
         kind,
         accessId: payload.accessId,
+        responsibleId,
         personName,
         personPhotoUrl,
         readerName: payload.readerName,
@@ -195,6 +281,16 @@ export class ArrivalsService {
     payload: AccessLprRecordedPayload,
   ): Promise<void> {
     try {
+      if (
+        !(await this.isDeviceAllowed(
+          payload.clientId,
+          'lpr_camera',
+          payload.cameraId,
+        ))
+      ) {
+        return;
+      }
+
       const responsible = await vehiclesQueries.findResponsibleByPlate(
         this.database.db,
         payload.plateNumber,
@@ -214,6 +310,7 @@ export class ArrivalsService {
           type: 'arrival',
           kind: 'responsible',
           accessId: payload.accessId,
+          responsibleId: responsible.id,
           personName: responsible.name,
           personPhotoUrl,
           readerName: payload.cameraName,
@@ -253,6 +350,7 @@ export class ArrivalsService {
         type: 'arrival',
         kind: 'responsible',
         accessId: payload.accessId,
+        responsibleId: null,
         personName: guestAuth.guestName,
         personPhotoUrl,
         readerName: payload.cameraName,

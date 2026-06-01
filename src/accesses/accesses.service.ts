@@ -260,6 +260,7 @@ export class AccessesService {
         faceId: faceIdNum,
         clientId: ctx.clientId,
         personName,
+        readerId: ctx.id,
         readerName: ctx.name,
         readerDirection: ctx.direction ?? null,
         eventDate: eventDate ?? null,

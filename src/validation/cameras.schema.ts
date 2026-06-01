@@ -29,9 +29,12 @@ const optionalTrimmed = z
 
 export const CAMERA_TYPES = ['lpr', 'ptz', 'general'] as const;
 
+export const CAMERA_DIRECTIONS = ['in', 'out'] as const;
+
 export const cameraSchema = z.object({
   clientId: z.string().uuid('Cliente inválido.'),
   type: z.enum(CAMERA_TYPES, { message: 'Tipo de câmera inválido.' }),
+  direction: z.enum(CAMERA_DIRECTIONS).optional().nullable(),
   brand: z
     .string()
     .trim()

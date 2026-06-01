@@ -5,6 +5,7 @@ export type AccessFacialRecordedPayload = {
   faceId: number;
   clientId: string;
   personName: string | null;
+  readerId: string;
   readerName: string;
   readerDirection: 'in' | 'out' | null;
   eventDate: Date | null;

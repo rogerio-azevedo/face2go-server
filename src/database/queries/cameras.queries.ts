@@ -7,11 +7,14 @@ import { clients } from '../schema';
 
 export type CameraType = 'lpr' | 'ptz' | 'general';
 
+export type CameraDirection = 'in' | 'out';
+
 export type CameraListRow = {
   id: string;
   clientId: string;
   clientName: string;
   type: CameraType;
+  direction: CameraDirection | null;
   brand: string;
   name: string;
   description: string | null;
@@ -49,6 +52,7 @@ export async function listCameras(
       clientId: cameras.clientId,
       clientName: clients.name,
       type: cameras.type,
+      direction: cameras.direction,
       brand: cameras.brand,
       name: cameras.name,
       description: cameras.description,
@@ -73,6 +77,7 @@ export async function listCameras(
   return rows.map(({ passwordEncrypted, ...r }) => ({
     ...r,
     type: (r.type ?? 'general') as CameraType,
+    direction: (r.direction ?? null) as CameraDirection | null,
     hasCredentials: !!(
       r.username?.trim() &&
       passwordEncrypted != null &&
@@ -92,6 +97,7 @@ export async function getCameraById(
       clientId: cameras.clientId,
       companyId: clients.companyId,
       type: cameras.type,
+      direction: cameras.direction,
       brand: cameras.brand,
       name: cameras.name,
       description: cameras.description,
@@ -119,6 +125,7 @@ export async function getCameraById(
   return {
     ...rest,
     type: (row.type ?? 'general') as CameraType,
+    direction: (row.direction ?? null) as CameraDirection | null,
     hasCredentials: !!(
       row.username?.trim() &&
       passwordEncrypted != null &&
@@ -131,6 +138,7 @@ export type CameraCreateInput = {
   companyId: string;
   clientId: string;
   type: CameraType;
+  direction?: CameraDirection | null;
   brand: string;
   name: string;
   description?: string | null;
@@ -160,6 +168,7 @@ export async function createCamera(db: AppDb, input: CameraCreateInput) {
     .values({
       clientId: input.clientId,
       type: input.type,
+      direction: input.direction ?? null,
       brand: input.brand.trim().toLowerCase(),
       name: input.name.trim(),
       description: input.description?.trim() || null,
@@ -184,6 +193,7 @@ export async function createCamera(db: AppDb, input: CameraCreateInput) {
 export type CameraUpdateInput = Partial<{
   clientId: string;
   type: CameraType;
+  direction: CameraDirection | null;
   brand: string;
   name: string;
   description: string | null;
@@ -224,6 +234,7 @@ export async function updateCamera(
 
   if (input.clientId !== undefined) setPayload.clientId = input.clientId;
   if (input.type !== undefined) setPayload.type = input.type;
+  if (input.direction !== undefined) setPayload.direction = input.direction;
   if (input.brand !== undefined) {
     setPayload.brand = input.brand.trim().toLowerCase();
   }
