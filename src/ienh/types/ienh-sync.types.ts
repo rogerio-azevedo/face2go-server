@@ -10,6 +10,7 @@ export interface IenhSyncResult {
   studentsDeactivated: number;
   responsiblesCreated: number;
   responsiblesUpdated: number;
+  accountsCreated: number;
   classesCreated: number;
   classesMerged: number;
   classLinksCreated: number;

@@ -123,6 +123,8 @@ export class IenhController {
     );
   }
 
+  private static readonly SSE_HEARTBEAT_MS = 15_000;
+
   private async runIenhSyncSse(
     res: Response,
     run: (write: (data: Record<string, unknown>) => void) => Promise<unknown>,
@@ -131,11 +133,16 @@ export class IenhController {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
     const write = (data: Record<string, unknown>) => {
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
+
+    const heartbeat = setInterval(() => {
+      write({ type: 'heartbeat' });
+    }, IenhController.SSE_HEARTBEAT_MS);
 
     try {
       await run(write);
@@ -154,6 +161,7 @@ export class IenhController {
       }
       write({ type: 'error', message });
     } finally {
+      clearInterval(heartbeat);
       res.end();
     }
   }

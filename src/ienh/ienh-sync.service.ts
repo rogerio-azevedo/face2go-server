@@ -4,6 +4,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
+import { eq } from 'drizzle-orm';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -14,6 +16,7 @@ import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as schoolClassQueries from '../database/queries/school-classes.queries';
 import * as studentClassesQueries from '../database/queries/student-classes.queries';
 import * as studentsQueries from '../database/queries/students.queries';
+import { users } from '../database/schema';
 import { syncFromSnapshotSchema, syncIenhSchema } from '../validation/ienh.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import {
@@ -38,8 +41,18 @@ import type { TotvsIenhRecord, TotvsIenhSnapshot } from './types/totvs-ienh.type
 const PROGRESS_EMIT_INTERVAL = 10;
 const PROCESS_CONCURRENCY = 10;
 const SNAPSHOT_FILENAME_RE = /^ienh-snapshot-\d{8}-\d{4}\.json$/;
+const DEFAULT_RESPONSIBLE_PASSWORD = 'F4c32G0!';
+const DEFAULT_RESPONSIBLE_PASSWORD_HASH = bcrypt.hashSync(
+  DEFAULT_RESPONSIBLE_PASSWORD,
+  10,
+);
 
 export type IenhSyncEmit = (evt: Record<string, unknown>) => void;
+
+type ResponsibleCacheEntry = {
+  id: string;
+  userId: string | null;
+};
 
 @Injectable()
 export class IenhSyncService {
@@ -248,6 +261,7 @@ export class IenhSyncService {
       studentsDeactivated: 0,
       responsiblesCreated: 0,
       responsiblesUpdated: 0,
+      accountsCreated: 0,
       classesCreated: 0,
       classesMerged: 0,
       classLinksCreated: 0,
@@ -269,7 +283,8 @@ export class IenhSyncService {
     const activeClassIdsByStudent = new Map<string, Set<string>>();
     const classCache = new Map<string, string>();
     const classResolveInflight = new Map<string, Promise<string>>();
-    const responsibleCache = new Map<string, string>();
+    const responsibleCache = new Map<string, ResponsibleCacheEntry>();
+    const accountCreationInflight = new Map<string, Promise<void>>();
 
     let processed = 0;
 
@@ -285,6 +300,7 @@ export class IenhSyncService {
           classCache,
           classResolveInflight,
           responsibleCache,
+          accountCreationInflight,
         });
       } catch (err: unknown) {
         const enrollment = normalizeEnrollment(item.record.CODALUNO);
@@ -333,7 +349,10 @@ export class IenhSyncService {
       result.studentsDeactivated += deactivated;
     }
 
-    for (const [studentId, classIds] of activeClassIdsByStudent) {
+    const studentCleanupEntries = [...activeClassIdsByStudent.entries()];
+    let cleanupProcessed = 0;
+
+    for (const [studentId, classIds] of studentCleanupEntries) {
       const deactivated =
         await studentClassesQueries.deactivateStudentClassLinksNotInList(
           this.database.db,
@@ -348,6 +367,18 @@ export class IenhSyncService {
           studentId,
         );
       result.classLinksDeduped += deduped;
+
+      cleanupProcessed += 1;
+      if (
+        cleanupProcessed % PROGRESS_EMIT_INTERVAL === 0 ||
+        cleanupProcessed === studentCleanupEntries.length
+      ) {
+        emit?.({
+          type: 'deactivate_progress',
+          processed: cleanupProcessed,
+          total: studentCleanupEntries.length,
+        });
+      }
     }
 
     result.durationMs = Date.now() - startedAt;
@@ -410,7 +441,8 @@ export class IenhSyncService {
     activeClassIdsByStudent: Map<string, Set<string>>;
     classCache: Map<string, string>;
     classResolveInflight: Map<string, Promise<string>>;
-    responsibleCache: Map<string, string>;
+    responsibleCache: Map<string, ResponsibleCacheEntry>;
+    accountCreationInflight: Map<string, Promise<void>>;
   }): Promise<void> {
     const {
       item,
@@ -422,6 +454,7 @@ export class IenhSyncService {
       classCache,
       classResolveInflight,
       responsibleCache,
+      accountCreationInflight,
     } = args;
     const record = item.record;
     const filial =
@@ -511,6 +544,7 @@ export class IenhSyncService {
       side: 'mother',
       result,
       responsibleCache,
+      accountCreationInflight,
     });
     await this.syncParent({
       record,
@@ -519,6 +553,7 @@ export class IenhSyncService {
       side: 'father',
       result,
       responsibleCache,
+      accountCreationInflight,
     });
   }
 
@@ -573,10 +608,18 @@ export class IenhSyncService {
     studentId: string;
     side: 'mother' | 'father';
     result: IenhSyncResult;
-    responsibleCache: Map<string, string>;
+    responsibleCache: Map<string, ResponsibleCacheEntry>;
+    accountCreationInflight: Map<string, Promise<void>>;
   }): Promise<void> {
-    const { record, clientId, studentId, side, result, responsibleCache } =
-      args;
+    const {
+      record,
+      clientId,
+      studentId,
+      side,
+      result,
+      responsibleCache,
+      accountCreationInflight,
+    } = args;
     const isMother = side === 'mother';
     const name = (isMother ? record.NOMEMAE : record.NOMEPAI)?.trim();
     const cpfRaw = isMother ? record.CPFMAE : record.CPFPAI;
@@ -587,9 +630,13 @@ export class IenhSyncService {
 
     const cacheKey = `${clientId}:${document}`;
     const phone = normalizePhone(phoneRaw);
-    let responsibleId = responsibleCache.get(cacheKey);
+    let cached = responsibleCache.get(cacheKey);
+    let responsibleId: string;
+    let userId: string | null;
 
-    if (responsibleId) {
+    if (cached) {
+      responsibleId = cached.id;
+      userId = cached.userId;
       await responsiblesQueries.updateResponsible(
         this.database.db,
         responsibleId,
@@ -609,7 +656,9 @@ export class IenhSyncService {
         },
       );
       responsibleId = upsert.row.id;
-      responsibleCache.set(cacheKey, responsibleId);
+      userId = upsert.row.userId ?? null;
+      cached = { id: responsibleId, userId };
+      responsibleCache.set(cacheKey, cached);
       if (upsert.created) {
         result.responsiblesCreated += 1;
       } else {
@@ -626,5 +675,111 @@ export class IenhSyncService {
       },
     );
     if (link.created) result.linksCreated += 1;
+
+    const linkedUserId = await this.ensureResponsibleAccount({
+      record,
+      clientId,
+      responsibleId,
+      responsibleCacheKey: cacheKey,
+      name,
+      side,
+      userId,
+      result,
+      responsibleCache,
+      accountCreationInflight,
+    });
+    if (linkedUserId) {
+      cached.userId = linkedUserId;
+    }
+  }
+
+  private async ensureResponsibleAccount(args: {
+    record: TotvsIenhRecord;
+    clientId: string;
+    responsibleId: string;
+    responsibleCacheKey: string;
+    name: string;
+    side: 'mother' | 'father';
+    userId: string | null;
+    result: IenhSyncResult;
+    responsibleCache: Map<string, ResponsibleCacheEntry>;
+    accountCreationInflight: Map<string, Promise<void>>;
+  }): Promise<string | null> {
+    const {
+      record,
+      clientId,
+      responsibleId,
+      responsibleCacheKey,
+      name,
+      side,
+      userId: knownUserId,
+      result,
+      responsibleCache,
+      accountCreationInflight,
+    } = args;
+    const isMother = side === 'mother';
+    const emailRaw = isMother ? record.EMAILMAE : record.EMAILPAI;
+    const email = emailRaw?.trim().toLowerCase() || null;
+    if (!email) return knownUserId;
+
+    if (knownUserId) return knownUserId;
+
+    let inflight = accountCreationInflight.get(email);
+    if (!inflight) {
+      inflight = (async () => {
+        const emailTaken = await this.database.db.query.users.findFirst({
+          where: eq(users.email, email),
+        });
+        if (emailTaken) return;
+
+        const fresh = await responsiblesQueries.getResponsibleById(
+          this.database.db,
+          responsibleId,
+          clientId,
+        );
+        if (fresh?.userId) {
+          const entry = responsibleCache.get(responsibleCacheKey);
+          if (entry) entry.userId = fresh.userId;
+          return;
+        }
+
+        const newUserId = crypto.randomUUID();
+        try {
+          await this.database.db.insert(users).values({
+            id: newUserId,
+            email,
+            password: DEFAULT_RESPONSIBLE_PASSWORD_HASH,
+            name,
+            role: 'member',
+            isActive: true,
+          });
+          await responsiblesQueries.linkUserToResponsible(
+            this.database.db,
+            responsibleId,
+            clientId,
+            newUserId,
+          );
+          result.accountsCreated += 1;
+          const entry = responsibleCache.get(responsibleCacheKey);
+          if (entry) entry.userId = newUserId;
+        } catch (err: unknown) {
+          const afterRace = await responsiblesQueries.getResponsibleById(
+            this.database.db,
+            responsibleId,
+            clientId,
+          );
+          if (afterRace?.userId) {
+            const entry = responsibleCache.get(responsibleCacheKey);
+            if (entry) entry.userId = afterRace.userId;
+            return;
+          }
+          throw err;
+        }
+      })();
+      accountCreationInflight.set(email, inflight);
+    }
+
+    await inflight;
+    return responsibleCache.get(responsibleCacheKey)?.userId ?? knownUserId;
   }
 }

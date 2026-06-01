@@ -21,7 +21,7 @@ export class TotvsIenhClient {
 
   constructor(
     private readonly configService: ConfigService<EnvVars, true>,
-  ) {}
+  ) { }
 
   async fetchRecords(params: TotvsIenhFetchParams): Promise<TotvsIenhRecord[]> {
     const baseUrl = this.configService.get('IENH_API_URL', { infer: true });
@@ -38,7 +38,7 @@ export class TotvsIenhClient {
 
     const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
 
-    const parameters = `PERLET=${params.perlet};FILIAL=${params.filial};NIVEL=${params.nivel}`;
+    const parameters = `NIVEL=${params.nivel};PERLET=${params.perlet};FILIAL=${params.filial}`;
     const url = `${normalizedBaseUrl}/1/S?parameters=${parameters}`;
 
     const auth = Buffer.from(`${user}:${password}`, 'utf8').toString('base64');
@@ -46,7 +46,7 @@ export class TotvsIenhClient {
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     this.logger.log(
-      `TOTVS IENH: fetch FILIAL=${params.filial} NIVEL=${params.nivel} PERLET=${params.perlet}`,
+      `TOTVS IENH: fetch FILIAL=${params.filial} NIVEL=${params.nivel} PERLET=${params.perlet} → ${url}`,
     );
 
     try {
@@ -58,6 +58,8 @@ export class TotvsIenhClient {
         },
         signal: controller.signal,
       });
+
+      this.logger.log(`TOTVS IENH: resposta HTTP ${res.status} para FILIAL=${params.filial} NIVEL=${params.nivel}`);
 
       if (res.status === 401) {
         throw new UnauthorizedException(
@@ -72,7 +74,19 @@ export class TotvsIenhClient {
         );
       }
 
-      const body: unknown = await res.json();
+      const rawText = await res.text();
+      this.logger.log(
+        `TOTVS IENH: corpo da resposta (primeiros 500 chars) FILIAL=${params.filial} NIVEL=${params.nivel}: ${rawText.slice(0, 500)}`,
+      );
+
+      let body: unknown;
+      try {
+        body = JSON.parse(rawText);
+      } catch {
+        throw new BadGatewayException(
+          `TOTVS IENH: resposta não é JSON válido — ${rawText.slice(0, 300)}`,
+        );
+      }
       return this.parseRecords(body);
     } catch (err: unknown) {
       if (err instanceof UnauthorizedException || err instanceof BadGatewayException) {

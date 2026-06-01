@@ -29,7 +29,7 @@ export interface FetchAndSaveResult {
 export class IenhService {
   private readonly logger = new Logger(IenhService.name);
 
-  constructor(private readonly totvsClient: TotvsIenhClient) {}
+  constructor(private readonly totvsClient: TotvsIenhClient) { }
 
   async fetchAllRecordsTagged(input: {
     perlet: string;

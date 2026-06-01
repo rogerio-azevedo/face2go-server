@@ -462,6 +462,22 @@ export async function insertResponsible(
   return rows[0];
 }
 
+export async function linkUserToResponsible(
+  db: AppDb,
+  responsibleId: string,
+  clientId: string,
+  userId: string,
+) {
+  const [row] = await db
+    .update(responsibles)
+    .set({ userId, updatedAt: new Date() })
+    .where(
+      and(eq(responsibles.id, responsibleId), eq(responsibles.clientId, clientId)),
+    )
+    .returning();
+  return row;
+}
+
 export async function updateResponsible(
   db: AppDb,
   id: string,

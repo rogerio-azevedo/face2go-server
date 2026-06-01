@@ -167,7 +167,7 @@ export class ResponsiblesService {
       throw new BadRequestException('Nada para atualizar.');
     }
 
-    const existing = await responsiblesQueries.getResponsibleById(
+    let existing = await responsiblesQueries.getResponsibleById(
       this.database.db,
       responsibleId,
       clientId,
@@ -178,26 +178,55 @@ export class ResponsiblesService {
 
     if (d.email !== undefined) {
       if (!existing.userId) {
-        throw new BadRequestException(
-          'Responsável sem conta de login; não é possível alterar e-mail.',
+        if (d.password === undefined) {
+          throw new BadRequestException(
+            'Informe a senha para criar a conta de login.',
+          );
+        }
+        const emailTaken = await this.database.db.query.users.findFirst({
+          where: eq(users.email, d.email),
+        });
+        if (emailTaken) {
+          throw new ConflictException('E-mail já cadastrado.');
+        }
+        const userId = crypto.randomUUID();
+        const hashed = await bcrypt.hash(d.password, 10);
+        await this.database.db.insert(users).values({
+          id: userId,
+          email: d.email,
+          password: hashed,
+          name: d.name ?? existing.name,
+          role: 'member',
+          isActive: true,
+        });
+        await responsiblesQueries.linkUserToResponsible(
+          this.database.db,
+          responsibleId,
+          clientId,
+          userId,
         );
+        existing = {
+          ...existing,
+          userId,
+        };
+      } else {
+        const emailTaken = await this.database.db.query.users.findFirst({
+          where: eq(users.email, d.email),
+        });
+        if (emailTaken && emailTaken.id !== existing.userId) {
+          throw new ConflictException('E-mail já cadastrado.');
+        }
+        await this.database.db
+          .update(users)
+          .set({ email: d.email })
+          .where(eq(users.id, existing.userId));
       }
-      const emailTaken = await this.database.db.query.users.findFirst({
-        where: eq(users.email, d.email),
-      });
-      if (emailTaken && emailTaken.id !== existing.userId) {
-        throw new ConflictException('E-mail já cadastrado.');
-      }
-      await this.database.db
-        .update(users)
-        .set({ email: d.email })
-        .where(eq(users.id, existing.userId));
     }
 
     if (d.password !== undefined) {
       if (!existing.userId) {
         throw new BadRequestException(
-          'Responsável sem conta de login; não é possível alterar senha.',
+          'Informe o e-mail para criar a conta de login.',
         );
       }
       const hashed = await bcrypt.hash(d.password, 10);
@@ -223,17 +252,18 @@ export class ResponsiblesService {
       throw new NotFoundException('Responsável não encontrado.');
     }
 
-    if (d.name !== undefined && existing.userId) {
+    const effectiveUserId = updated.userId ?? existing.userId;
+    if (d.name !== undefined && effectiveUserId) {
       await this.database.db
         .update(users)
         .set({ name: d.name })
-        .where(eq(users.id, existing.userId));
+        .where(eq(users.id, effectiveUserId));
     }
 
-    const email = updated.userId
+    const email = effectiveUserId
       ? await responsiblesQueries.getResponsibleEmailByUserId(
           this.database.db,
-          updated.userId,
+          effectiveUserId,
         )
       : null;
 
