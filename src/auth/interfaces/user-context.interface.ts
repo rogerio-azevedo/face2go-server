@@ -5,6 +5,11 @@ export type UserContextType =
   | 'responsible'
   | 'face_user';
 
+export type TenantBranding = {
+  logoUrl: string | null;
+  primaryColor: string | null;
+};
+
 export type UserContext =
   | {
       type: 'super_admin';
@@ -29,6 +34,7 @@ export type UserContext =
       clientName: string;
       companyId: string;
       role: 'client_admin' | 'client_operator';
+      branding: TenantBranding;
       label: string;
     }
   | {
@@ -37,6 +43,7 @@ export type UserContext =
       responsibleId: string;
       clientId: string;
       clientName: string;
+      branding: TenantBranding;
       label: string;
     }
   | {

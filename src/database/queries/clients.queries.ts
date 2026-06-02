@@ -40,6 +40,7 @@ export type ClientListRow = {
   phone: string | null;
   email: string | null;
   logoUrl: string | null;
+  primaryColor: string | null;
   timezoneOffsetMinutes: number;
   ienhFilialCode: number | null;
   isActive: boolean;
@@ -121,6 +122,7 @@ export async function listClients(
       phone: clients.phone,
       email: clients.email,
       logoUrl: clients.logoUrl,
+      primaryColor: clients.primaryColor,
       timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
       ienhFilialCode: clients.ienhFilialCode,
       isActive: clients.isActive,
@@ -168,6 +170,7 @@ export type ClientCreateInput = {
   phone?: string | null;
   email?: string | null;
   logoUrl?: string | null;
+  primaryColor?: string | null;
   timezoneOffsetMinutes?: number;
   isActive?: boolean;
 };
@@ -187,6 +190,7 @@ export async function createClient(db: AppDb, input: ClientCreateInput) {
       phone: input.phone ?? null,
       email: input.email ?? null,
       logoUrl: input.logoUrl ?? null,
+      primaryColor: input.primaryColor ?? null,
       timezoneOffsetMinutes: input.timezoneOffsetMinutes ?? 0,
       isActive: input.isActive ?? true,
       updatedAt: now,
@@ -203,6 +207,7 @@ export type ClientUpdateInput = Partial<{
   phone: string | null;
   email: string | null;
   logoUrl: string | null;
+  primaryColor: string | null;
   timezoneOffsetMinutes: number;
   ienhFilialCode: number | null;
   isActive: boolean;
@@ -239,6 +244,7 @@ export async function updateClient(
   if (input.phone !== undefined) setPayload.phone = input.phone;
   if (input.email !== undefined) setPayload.email = input.email;
   if (input.logoUrl !== undefined) setPayload.logoUrl = input.logoUrl;
+  if (input.primaryColor !== undefined) setPayload.primaryColor = input.primaryColor;
   if (input.timezoneOffsetMinutes !== undefined) {
     setPayload.timezoneOffsetMinutes = input.timezoneOffsetMinutes;
   }

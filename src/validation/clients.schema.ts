@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const CNPJ_REGEX = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
+const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
 
 const optionalTrimmed = z
   .string()
@@ -55,6 +56,12 @@ const baseClientShape = {
     {
       message:
         'Opcional — se preencher, use uma URL completa com http ou https.',
+    },
+  ),
+  primaryColor: optionalTrimmed.refine(
+    (val) => val === undefined || HEX_COLOR_REGEX.test(val),
+    {
+      message: 'Opcional — use cor hexadecimal (#RRGGBB).',
     },
   ),
   isActive: z.boolean(),

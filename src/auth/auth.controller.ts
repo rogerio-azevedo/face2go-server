@@ -63,6 +63,22 @@ export class AuthController {
     return await this.authService.joinContext(body);
   }
 
+  @Public()
+  @Post('request-password')
+  @ApiOperation({
+    summary: 'Solicita e-mail para redefinir senha (e-mail ou CPF)',
+  })
+  async requestPassword(@Body() body: Record<string, unknown>) {
+    return await this.authService.requestPassword(body);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Redefine senha com token recebido por e-mail' })
+  async resetPassword(@Body() body: Record<string, unknown>) {
+    return await this.authService.resetPassword(body);
+  }
+
   @AllowIdentity()
   @Get('me')
   @ApiBearerAuth()

@@ -15,5 +15,7 @@ export interface AuthServiceContract {
   ): Promise<SelectContextResult>;
   joinContext(input: unknown): Promise<JoinContextResult>;
   register(input: unknown): Promise<{ success: true }>;
+  requestPassword(input: unknown): Promise<{ ok: true }>;
+  resetPassword(input: unknown): Promise<{ ok: true }>;
   profileFromPayload(user: JwtPayload): AuthenticatedUser;
 }

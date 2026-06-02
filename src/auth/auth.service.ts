@@ -5,12 +5,14 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { randomBytes } from 'node:crypto';
 
 import { DatabaseService } from '../database/database.service';
 import * as invitesQueries from '../database/queries/invites.queries';
 import * as clientInviteLinksQueries from '../database/queries/client-invite-links.queries';
 import * as clientUsersQueries from '../database/queries/client-users.queries';
+import * as verificationTokensQueries from '../database/queries/verification-tokens.queries';
 import {
   clients,
   clientUsers,
@@ -38,7 +40,12 @@ import {
   type RegisterInput,
 } from '../validation/register.schema';
 import { joinContextSchema } from '../validation/join-context.schema';
+import {
+  requestPasswordSchema,
+} from '../validation/request-password.schema';
+import { resetPasswordSchema } from '../validation/reset-password.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
+import { EmailService } from '../email/email.service';
 
 export type {
   AuthenticatedUser,
@@ -49,12 +56,14 @@ export type {
 } from './interfaces/auth-types.interface';
 
 const IDENTITY_TOKEN_EXPIRES_IN = '5m';
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService implements AuthServiceContract {
   constructor(
     private readonly database: DatabaseService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   private toIdentityPayload(user: IdentityUser): JwtPayload {
@@ -104,12 +113,26 @@ export class AuthService implements AuthServiceContract {
       return null;
     }
 
-    const [row] = await db
+    const [byUserCpf] = await db
       .select()
       .from(users)
       .where(eq(users.cpf, parsed.value))
       .limit(1);
-    return row;
+    if (byUserCpf) return byUserCpf;
+
+    const [byResponsibleDocument] = await db
+      .select({ user: users })
+      .from(users)
+      .innerJoin(responsibles, eq(responsibles.userId, users.id))
+      .where(
+        and(
+          eq(responsibles.isActive, true),
+          sql`regexp_replace(${responsibles.document}, '[^0-9]', '', 'g') = ${parsed.value}`,
+        ),
+      )
+      .limit(1);
+
+    return byResponsibleDocument?.user ?? null;
   }
 
   async validateCredentials(
@@ -189,6 +212,8 @@ export class AuthService implements AuthServiceContract {
         role: clientUsers.role,
         clientName: clients.name,
         companyId: clients.companyId,
+        logoUrl: clients.logoUrl,
+        primaryColor: clients.primaryColor,
         clientActive: clients.isActive,
       })
       .from(clientUsers)
@@ -207,6 +232,10 @@ export class AuthService implements AuthServiceContract {
         clientName: link.clientName,
         companyId: link.companyId,
         role: link.role,
+        branding: {
+          logoUrl: link.logoUrl,
+          primaryColor: link.primaryColor,
+        },
         label: `${link.clientName} (${link.role === 'client_admin' ? 'Admin' : 'Operador'})`,
       });
     }
@@ -217,6 +246,8 @@ export class AuthService implements AuthServiceContract {
         clientId: responsibles.clientId,
         responsibleName: responsibles.name,
         clientName: clients.name,
+        logoUrl: clients.logoUrl,
+        primaryColor: clients.primaryColor,
         clientActive: clients.isActive,
       })
       .from(responsibles)
@@ -233,6 +264,10 @@ export class AuthService implements AuthServiceContract {
         responsibleId: link.responsibleId,
         clientId: link.clientId,
         clientName: link.clientName,
+        branding: {
+          logoUrl: link.logoUrl,
+          primaryColor: link.primaryColor,
+        },
         label: `Responsável — ${link.clientName}`,
       });
     }
@@ -731,6 +766,63 @@ export class AuthService implements AuthServiceContract {
       invite.id,
     );
     return { success: true };
+  }
+
+  async requestPassword(input: unknown): Promise<{ ok: true }> {
+    const parsed = requestPasswordSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const userRow = await this.findUserByIdentifier(parsed.data.identifier);
+    if (userRow?.isActive && userRow.email) {
+      const token = randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+
+      await verificationTokensQueries.insertVerificationToken(
+        this.database.db,
+        userRow.email,
+        token,
+        expiresAt,
+      );
+
+      await this.emailService.sendPasswordResetEmail(
+        userRow.email,
+        userRow.name,
+        token,
+      );
+    }
+
+    return { ok: true };
+  }
+
+  async resetPassword(input: unknown): Promise<{ ok: true }> {
+    const parsed = resetPasswordSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const row = await verificationTokensQueries.findValidVerificationToken(
+      this.database.db,
+      parsed.data.token,
+    );
+    if (!row) {
+      throw new BadRequestException('Link inválido ou expirado.');
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+    await this.database.db
+      .update(users)
+      .set({ password: passwordHash })
+      .where(eq(users.email, row.identifier));
+
+    await verificationTokensQueries.deleteVerificationToken(
+      this.database.db,
+      row.identifier,
+      row.token,
+    );
+
+    return { ok: true };
   }
 
   profileFromPayload(payload: JwtPayload): AuthenticatedUser {

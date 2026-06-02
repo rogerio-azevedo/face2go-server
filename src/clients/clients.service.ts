@@ -260,6 +260,7 @@ export class ClientsService {
       phone: parsed.data.phone,
       email: parsed.data.email,
       logoUrl: parsed.data.logoUrl,
+      primaryColor: parsed.data.primaryColor,
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
     });
@@ -283,6 +284,7 @@ export class ClientsService {
       d.phone === undefined &&
       d.email === undefined &&
       d.logoUrl === undefined &&
+      d.primaryColor === undefined &&
       d.timezoneOffsetMinutes === undefined &&
       d.isActive === undefined &&
       d.ienhFilialCode === undefined
@@ -308,6 +310,7 @@ export class ClientsService {
         ...(d.phone !== undefined ? { phone: d.phone } : {}),
         ...(d.email !== undefined ? { email: d.email } : {}),
         ...(d.logoUrl !== undefined ? { logoUrl: d.logoUrl } : {}),
+        ...(d.primaryColor !== undefined ? { primaryColor: d.primaryColor } : {}),
         ...(d.timezoneOffsetMinutes !== undefined
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
           : {}),

@@ -40,6 +40,8 @@ export const clients = pgTable(
     phone: varchar('phone', { length: 20 }),
     email: varchar('email', { length: 255 }),
     logoUrl: varchar('logo_url', { length: 500 }),
+    /** Cor primária da marca do cliente (hex, ex.: #00c7b7). */
+    primaryColor: varchar('primary_color', { length: 7 }),
     /** Segredo público só para SSE do display TV (opcional até gerar/regenerar). */
     displayToken: uuid('display_token'),
     /** Código curto público para URL do display (ex.: /display/eA1tP). */
