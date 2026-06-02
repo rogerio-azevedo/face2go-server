@@ -6,11 +6,7 @@ import {
   Post,
   Res,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -23,10 +19,13 @@ import { FaceSyncService } from './face-sync.service';
 @Roles('company_admin', 'company_operator')
 @Controller('clients/:clientId/faces')
 export class CompanyFaceSyncController {
-  constructor(private readonly faceSync: FaceSyncService) {}
+  constructor(private readonly faceSync: FaceSyncService) { }
 
   @Post(':registrationId/sync')
-  @ApiOperation({ summary: 'Sincronizar face de um cadastro aprovado com os leitores do cliente' })
+  @ApiOperation({
+    summary:
+      'Sincronizar face de um cadastro aprovado com os leitores do cliente',
+  })
   async syncOne(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
@@ -60,7 +59,7 @@ export class CompanyFaceSyncController {
 
     try {
       await this.faceSync.syncAllPendingForCompany(user, clientId, (evt) =>
-        write(evt as Record<string, unknown>),
+        write(evt),
       );
     } catch (e: unknown) {
       write({
@@ -78,7 +77,7 @@ export class CompanyFaceSyncController {
 @Roles('client_admin', 'client_operator')
 @Controller('client/faces')
 export class ClientFaceSyncController {
-  constructor(private readonly faceSync: FaceSyncService) {}
+  constructor(private readonly faceSync: FaceSyncService) { }
 
   @Post(':registrationId/sync')
   @ApiOperation({ summary: 'Sincronizar face com os leitores do meu cliente' })
@@ -112,7 +111,7 @@ export class ClientFaceSyncController {
 
     try {
       await this.faceSync.syncAllPendingForClientTenant(user, (evt) =>
-        write(evt as Record<string, unknown>),
+        write(evt),
       );
     } catch (e: unknown) {
       write({

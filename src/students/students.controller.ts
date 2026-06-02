@@ -89,6 +89,18 @@ export class StudentsController {
     );
   }
 
+  @Post(':studentId/face/sync')
+  @ApiOperation({
+    summary: 'Sincronizar face do aluno com os leitores Intelbras',
+  })
+  syncFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.studentsService.syncFaceByCompany(user, clientId, studentId);
+  }
+
   @Get(':studentId')
   @ApiOperation({ summary: 'Detalhe do aluno' })
   getOne(

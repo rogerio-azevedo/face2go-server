@@ -7,12 +7,13 @@ import {
   ClientFaceSyncController,
   CompanyFaceSyncController,
 } from './face-sync.controller';
+import { AccessTimeZoneService } from './access-time-zone.service';
 import { FaceSyncService } from './face-sync.service';
 
 @Module({
   imports: [DatabaseModule, PermissionsModule, StorageModule],
   controllers: [CompanyFaceSyncController, ClientFaceSyncController],
-  providers: [FaceSyncService],
-  exports: [FaceSyncService],
+  providers: [FaceSyncService, AccessTimeZoneService],
+  exports: [FaceSyncService, AccessTimeZoneService],
 })
 export class FaceSyncModule {}

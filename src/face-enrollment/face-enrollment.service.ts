@@ -11,6 +11,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
 
@@ -51,6 +52,7 @@ export class FaceEnrollmentService {
     private readonly database: DatabaseService,
     private readonly r2: R2StorageService,
     private readonly faceSync: FaceSyncService,
+    private readonly accessTimeZone: AccessTimeZoneService,
   ) {}
 
   private assertResponsibleScope(
@@ -220,6 +222,10 @@ export class FaceEnrollmentService {
       faceId,
       name: responsible.name,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
+        clientId,
+        responsibleId,
+      ),
       logContext: `responsible=${responsibleId}`,
     });
 
@@ -334,6 +340,10 @@ export class FaceEnrollmentService {
       faceId,
       name: student.name,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
+        clientId,
+        studentId,
+      ),
       logContext: `student=${studentId}`,
     });
 
@@ -417,6 +427,10 @@ export class FaceEnrollmentService {
       faceId: row.faceId,
       name: responsible.name,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
+        clientId,
+        responsibleId,
+      ),
       logContext: `responsible=${responsibleId}`,
     });
 
@@ -489,6 +503,10 @@ export class FaceEnrollmentService {
       faceId: student.faceId,
       name: student.name,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
+        clientId,
+        studentId,
+      ),
       logContext: `student=${studentId}`,
     });
 

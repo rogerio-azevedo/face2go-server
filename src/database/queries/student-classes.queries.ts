@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, notInArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { schoolClasses, shifts, studentClasses } from '../schema';
+import { responsibles, responsibleStudents, schoolClasses, shifts, studentClasses } from '../schema';
 
 export type StudentClassLinkRow = {
   id: string;
@@ -242,4 +242,68 @@ export async function deactivateStudentClassLinksNotInList(
     .returning({ id: studentClasses.id });
 
   return rows.length;
+}
+
+/** Índices de zona (AccessTimeSchedule) dos turnos das turmas ativas do aluno. */
+export async function listActiveShiftZoneIndicesForStudent(
+  db: AppDb,
+  studentId: string,
+): Promise<number[]> {
+  const rows = await db
+    .select({ timeZoneIndex: shifts.timeZoneIndex })
+    .from(studentClasses)
+    .innerJoin(schoolClasses, eq(studentClasses.classId, schoolClasses.id))
+    .innerJoin(shifts, eq(schoolClasses.shiftId, shifts.id))
+    .where(
+      and(
+        eq(studentClasses.studentId, studentId),
+        eq(studentClasses.isActive, true),
+        eq(schoolClasses.isActive, true),
+        eq(shifts.isActive, true),
+        isNotNull(shifts.timeZoneIndex),
+      ),
+    );
+
+  const indices = rows
+    .map((r) => r.timeZoneIndex)
+    .filter((n): n is number => n != null);
+
+  return [...new Set(indices)].sort((a, b) => a - b);
+}
+
+/** Turnos completos (com schedule) das turmas ativas do aluno — para ensureShiftZone. */
+export async function listActiveShiftsForStudent(
+  db: AppDb,
+  studentId: string,
+) {
+  const rows = await db
+    .select({
+      id: shifts.id,
+      clientId: shifts.clientId,
+      name: shifts.name,
+      schedule: shifts.schedule,
+      timeZoneIndex: shifts.timeZoneIndex,
+      isActive: shifts.isActive,
+      createdAt: shifts.createdAt,
+      updatedAt: shifts.updatedAt,
+    })
+    .from(studentClasses)
+    .innerJoin(schoolClasses, eq(studentClasses.classId, schoolClasses.id))
+    .innerJoin(shifts, eq(schoolClasses.shiftId, shifts.id))
+    .where(
+      and(
+        eq(studentClasses.studentId, studentId),
+        eq(studentClasses.isActive, true),
+        eq(schoolClasses.isActive, true),
+        eq(shifts.isActive, true),
+        isNotNull(schoolClasses.shiftId),
+      ),
+    )
+    .orderBy(asc(shifts.timeZoneIndex));
+
+  const byId = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    byId.set(row.id, row);
+  }
+  return [...byId.values()];
 }

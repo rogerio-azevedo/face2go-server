@@ -46,7 +46,7 @@ export class TotvsIenhClient {
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     this.logger.log(
-      `TOTVS IENH: fetch FILIAL=${params.filial} NIVEL=${params.nivel} PERLET=${params.perlet} → ${url}`,
+      `TOTVS IENH: fetch FILIAL=${params.filial} NIVEL=${params.nivel} PERLET=${params.perlet}`,
     );
 
     try {
@@ -58,8 +58,6 @@ export class TotvsIenhClient {
         },
         signal: controller.signal,
       });
-
-      this.logger.log(`TOTVS IENH: resposta HTTP ${res.status} para FILIAL=${params.filial} NIVEL=${params.nivel}`);
 
       if (res.status === 401) {
         throw new UnauthorizedException(
@@ -74,19 +72,7 @@ export class TotvsIenhClient {
         );
       }
 
-      const rawText = await res.text();
-      this.logger.log(
-        `TOTVS IENH: corpo da resposta (primeiros 500 chars) FILIAL=${params.filial} NIVEL=${params.nivel}: ${rawText.slice(0, 500)}`,
-      );
-
-      let body: unknown;
-      try {
-        body = JSON.parse(rawText);
-      } catch {
-        throw new BadGatewayException(
-          `TOTVS IENH: resposta não é JSON válido — ${rawText.slice(0, 300)}`,
-        );
-      }
+      const body: unknown = await res.json();
       return this.parseRecords(body);
     } catch (err: unknown) {
       if (err instanceof UnauthorizedException || err instanceof BadGatewayException) {

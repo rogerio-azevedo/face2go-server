@@ -47,3 +47,24 @@ export function normalizeNameForFacialReader(
 
   return normalizedName;
 }
+
+/** Nome da zona de tempo no leitor (AccessTimeSchedule[n].Name). */
+export function normalizeZoneNameForReader(
+  name: string,
+  zoneIndex: number,
+  maxLength = 32,
+): string {
+  const trimmed = name.trim();
+  const base =
+    trimmed.length > 0
+      ? trimmed
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/ç/gi, 'c')
+          .replace(/[^\w\s-]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      : `Zona ${zoneIndex}`;
+
+  return base.length > maxLength ? base.slice(0, maxLength).trim() : base;
+}

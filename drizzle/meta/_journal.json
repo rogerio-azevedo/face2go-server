@@ -246,6 +246,13 @@
       "when": 1779040000000,
       "tag": "0034_client_display_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1779050000000,
+      "tag": "0035_shifts_time_zone_index",
+      "breakpoints": true
     }
   ]
 }

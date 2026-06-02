@@ -24,6 +24,7 @@ import * as vehicleQueries from '../database/queries/vehicles.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import {
   RESPONSIBLE_INVITATION_SUBMITTED,
@@ -60,6 +61,7 @@ export class ManagedResponsiblesService {
     private readonly configService: ConfigService,
     private readonly r2: R2StorageService,
     private readonly faceSync: FaceSyncService,
+    private readonly accessTimeZone: AccessTimeZoneService,
     private readonly lprPlateSync: LprPlateSyncService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
@@ -285,6 +287,10 @@ export class ManagedResponsiblesService {
       faceId,
       name: row.submittedName!,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
+        row.clientId,
+        responsible.id,
+      ),
       logContext: `responsible-invitation=${row.id}`,
     });
 
@@ -439,6 +445,10 @@ export class ManagedResponsiblesService {
           faceId,
           name: d.name,
           imageBuffer: buffer,
+          timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
+            user.clientId,
+            responsible.id,
+          ),
           logContext: `managed-responsible=${responsible.id}`,
         });
         await responsiblesQueries.updateResponsibleFace(

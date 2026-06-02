@@ -15,6 +15,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import * as studentsQueries from '../database/queries/students.queries';
 import { DatabaseService } from '../database/database.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { ALWAYS_TIME_ZONE_INDEX } from '../face-sync/intelbras-time-zone.constants';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -306,6 +307,7 @@ export class PickupAuthorizationsService {
       faceId,
       name: row.guestName,
       imageBuffer: buffer,
+      timeSectionIds: [ALWAYS_TIME_ZONE_INDEX],
       logContext: `pickup-guest=${id}`,
     });
 

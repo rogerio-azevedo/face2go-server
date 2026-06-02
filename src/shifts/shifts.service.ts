@@ -10,6 +10,7 @@ import type { FeatureSlug } from '../common/features.constants';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as shiftsQueries from '../database/queries/shifts.queries';
 import { DatabaseService } from '../database/database.service';
+import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import {
   createShiftSchema,
@@ -22,6 +23,7 @@ export class ShiftsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly permissionsService: PermissionsService,
+    private readonly accessTimeZone: AccessTimeZoneService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -116,12 +118,16 @@ export class ShiftsService {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
     const d = parsed.data;
-    return shiftsQueries.insertShift(this.database.db, {
+    const row = await shiftsQueries.insertShift(this.database.db, {
       clientId,
       name: d.name,
       schedule: d.schedule,
       isActive: d.isActive,
     });
+    if (row) {
+      await this.accessTimeZone.ensureShiftZone(clientId, row);
+    }
+    return row;
   }
 
   async update(user: JwtPayload, clientId: string, shiftId: string, body: unknown) {
@@ -150,6 +156,9 @@ export class ShiftsService {
     );
     if (!updated) {
       throw new NotFoundException('Turno não encontrado.');
+    }
+    if (d.schedule !== undefined || d.isActive !== undefined) {
+      await this.accessTimeZone.ensureShiftZone(clientId, updated);
     }
     return updated;
   }

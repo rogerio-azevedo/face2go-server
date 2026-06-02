@@ -686,3 +686,47 @@ export async function listStudentResponsibleLinksWithResponsibles(
     },
   }));
 }
+
+export async function listResponsibleIdsForStudent(
+  db: AppDb,
+  studentId: string,
+  clientId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ responsibleId: responsibleStudents.responsibleId })
+    .from(responsibleStudents)
+    .innerJoin(
+      responsibles,
+      eq(responsibleStudents.responsibleId, responsibles.id),
+    )
+    .where(
+      and(
+        eq(responsibleStudents.studentId, studentId),
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.isActive, true),
+      ),
+    );
+  return [...new Set(rows.map((r) => r.responsibleId))];
+}
+
+/** União dos índices de zona dos turnos dos alunos vinculados ao responsável. */
+export async function listActiveShiftZoneIndicesForResponsible(
+  db: AppDb,
+  responsibleId: string,
+): Promise<number[]> {
+  const studentLinks = await db
+    .select({ studentId: responsibleStudents.studentId })
+    .from(responsibleStudents)
+    .where(eq(responsibleStudents.responsibleId, responsibleId));
+
+  const indices = new Set<number>();
+  for (const link of studentLinks) {
+    const zones = await studentClassesQueries.listActiveShiftZoneIndicesForStudent(
+      db,
+      link.studentId,
+    );
+    for (const z of zones) indices.add(z);
+  }
+
+  return [...indices].sort((a, b) => a - b);
+}

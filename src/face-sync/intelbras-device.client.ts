@@ -1,11 +1,23 @@
 import AxiosDigestAuth from '@mhoc/axios-digest-auth';
 
 import type { ReaderFaceSyncRow } from '../database/queries/readers.queries';
+import type { ShiftScheduleJson } from '../database/schema/shifts';
 import {
   DEFAULT_INTELBRAS_VALID_DATE_END,
   DEFAULT_INTELBRAS_VALID_DATE_START,
 } from './intelbras-valid-date.util';
+import {
+  buildAccessTimeScheduleQueryString,
+  buildTimeSectionsRecordUpdaterParams,
+  formatTimeSectionsQueryValue,
+} from './intelbras-time-schedule.util';
 import { normalizeNameForFacialReader } from './normalize-name-for-reader';
+import {
+  readerLabel,
+  syncLog,
+  syncLogError,
+  truncateForLog,
+} from './intelbras-sync-debug.util';
 
 export type PlainReaderCredential = {
   id: string;
@@ -272,84 +284,421 @@ async function digestRequest(
     headers?: Record<string, string>;
   },
 ): Promise<ApiDigestResponse> {
-  return auth.request({
-    ...init,
-    timeout: READER_HTTP_TIMEOUT_MS,
-  } as Parameters<AxiosDigestAuth['request']>[0]) as Promise<ApiDigestResponse>;
+  try {
+    const response = (await auth.request({
+      ...init,
+      timeout: READER_HTTP_TIMEOUT_MS,
+    } as Parameters<AxiosDigestAuth['request']>[0])) as ApiDigestResponse;
+
+    syncLog('digestRequest:ok', {
+      method: init.method,
+      url: init.url,
+      status: response.status,
+      dataPreview: truncateForLog(response.data),
+    });
+
+    return response;
+  } catch (err) {
+    syncLogError('digestRequest', err, {
+      method: init.method,
+      url: init.url,
+      hasBody: init.data != null,
+    });
+    throw err;
+  }
 }
 
 /**
- * Cria/atualiza cartão de acesso e envia a foto ao leitor Intelbras/Dahua (CGI + Digest).
+ * Localiza RecNo do cartão AccessControlCard pelo UserID (face_id numérico).
+ * Pagina o recordFinder — usuários além dos primeiros 500 também são encontrados.
+ */
+export async function intelbrasFindCardByUserId(
+  reader: PlainReaderCredential,
+  userId: string,
+): Promise<DeviceUser | null> {
+  const label = readerLabel(reader);
+  syncLog('findCardByUserId:inicio', { reader: label, userId });
+
+  try {
+    const pageSize = 500;
+    let offset = 0;
+    let totalFound = Number.POSITIVE_INFINITY;
+
+    while (offset < totalFound) {
+      const { found, records } = await intelbrasGetDeviceUsers(
+        reader,
+        pageSize,
+        offset,
+      );
+      totalFound = found;
+
+      const match = records.find((r) => r.UserID === userId);
+      if (match?.RecNo) {
+        const recNo = parseInt(match.RecNo, 10);
+        if (Number.isFinite(recNo) && recNo > 0) {
+          syncLog('findCardByUserId:encontrado', {
+            reader: label,
+            userId,
+            recNo,
+            cardName: match.CardName,
+            timeSectionIndices: match.timeSectionIndices,
+          });
+          return match;
+        }
+      }
+
+      if (records.length === 0) break;
+      offset += records.length;
+      if (offset >= found) break;
+    }
+
+    syncLog('findCardByUserId:naoEncontrado', { reader: label, userId });
+    return null;
+  } catch (err) {
+    syncLogError('findCardByUserId', err, { reader: label, userId });
+    throw err;
+  }
+}
+
+/** @deprecated Use {@link intelbrasFindCardByUserId}. */
+export async function intelbrasFindCardRecNo(
+  reader: PlainReaderCredential,
+  userId: string,
+): Promise<number | null> {
+  const card = await intelbrasFindCardByUserId(reader, userId);
+  if (!card?.RecNo) return null;
+  const recNo = parseInt(card.RecNo, 10);
+  return Number.isFinite(recNo) && recNo > 0 ? recNo : null;
+}
+
+function parseAccessControlCardFinderText(text: string): DeviceUsersListResult {
+  let found = 0;
+  const recordsMap = new Map<string, Partial<DeviceUser>>();
+
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith('found=')) {
+      found = parseInt(trimmed.substring(6), 10) || 0;
+      continue;
+    }
+
+    const match = /^records\[(\d+)\]\.(.+?)=(.*)$/.exec(trimmed);
+    if (!match) continue;
+
+    const index = match[1];
+    const key = match[2];
+    const value = match[3];
+
+    let record = recordsMap.get(index);
+    if (!record) {
+      record = {};
+      recordsMap.set(index, record);
+    }
+
+    if (key === 'UserID') record.UserID = value;
+    else if (key === 'CardName') record.CardName = value;
+    else if (key === 'CardNo') record.CardNo = value;
+    else if (key === 'RecNo') record.RecNo = value;
+    else if (key === 'ValidDateStart') record.ValidDateStart = value;
+    else if (key === 'ValidDateEnd') record.ValidDateEnd = value;
+    else if (key === 'TimeSections') record.TimeSections = value;
+    else if (/^TimeSections\[(\d+)\]$/.test(key)) {
+      const idx = parseInt(/^TimeSections\[(\d+)\]$/.exec(key)![1], 10);
+      if (!record.timeSectionIndices) record.timeSectionIndices = [];
+      const zone = parseInt(value, 10);
+      if (Number.isFinite(zone)) record.timeSectionIndices[idx] = zone;
+    }
+  }
+
+  const records = Array.from(recordsMap.values()).map((r) => ({
+    UserID: r.UserID || '',
+    CardName: r.CardName || '',
+    CardNo: r.CardNo || '',
+    RecNo: r.RecNo,
+    ValidDateStart: r.ValidDateStart,
+    ValidDateEnd: r.ValidDateEnd,
+    TimeSections: r.TimeSections,
+    timeSectionIndices: r.timeSectionIndices,
+  }));
+
+  return { found, records };
+}
+
+/** Sincroniza uma zona AccessTimeSchedule[n] no leitor a partir do schedule interno. */
+export async function intelbrasSetTimeScheduleZone(
+  reader: PlainReaderCredential,
+  zoneIndex: number,
+  schedule: ShiftScheduleJson,
+  zoneName: string,
+): Promise<void> {
+  const label = readerLabel(reader);
+  syncLog('setTimeScheduleZone:inicio', { reader: label, zoneIndex, zoneName });
+
+  try {
+    const auth = new AxiosDigestAuth({
+      username: reader.username,
+      password: reader.plainPassword,
+    });
+    const base = deviceUrl(reader);
+    const query = buildAccessTimeScheduleQueryString(
+      schedule,
+      zoneIndex,
+      zoneName,
+    );
+    const url = `${base}/cgi-bin/configManager.cgi?${query}`;
+
+    syncLog('setTimeScheduleZone:request', {
+      reader: label,
+      zoneIndex,
+      urlPreview: truncateForLog(url),
+    });
+
+    await digestRequest(auth, { method: 'GET', url });
+
+    syncLog('setTimeScheduleZone:ok', { reader: label, zoneIndex });
+  } catch (err) {
+    syncLogError('setTimeScheduleZone', err, { reader: label, zoneIndex });
+    throw err;
+  }
+}
+
+function buildAccessCardInsertParams(args: {
+  faceId: string;
+  normalizedName: string;
+  timeSectionIds: number[];
+}): string {
+  const qsStart = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_START);
+  const qsEnd = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_END);
+  const timeSections = buildTimeSectionsRecordUpdaterParams(args.timeSectionIds);
+  const cardName = encodeURIComponent(args.normalizedName);
+
+  return (
+    `action=insert&name=AccessControlCard` +
+    `&CardName=${cardName}` +
+    `&CardNo=${args.faceId}` +
+    `&UserID=${args.faceId}` +
+    `&CardStatus=0` +
+    `&CardType=0` +
+    `&Doors[0]=0` +
+    `&${timeSections}` +
+    `&ValidDateStart=${qsStart}` +
+    `&ValidDateEnd=${qsEnd}`
+  );
+}
+
+/** Doc Intelbras: update usa recno (minúsculo) e não altera UserID/CardNo. */
+function buildAccessCardUpdateParams(args: {
+  recNo: number;
+  normalizedName: string;
+  timeSectionIds: number[];
+}): string {
+  const cardName = encodeURIComponent(args.normalizedName);
+  const timeSections = buildTimeSectionsRecordUpdaterParams(args.timeSectionIds);
+
+  return (
+    `action=update&name=AccessControlCard&recno=${args.recNo}` +
+    `&CardName=${cardName}` +
+    `&Doors[0]=0` +
+    `&${timeSections}`
+  );
+}
+
+/**
+ * Cria/atualiza cartão de acesso (nome + zonas) e envia a foto ao leitor Intelbras/Dahua.
+ * Pré-requisito: AccessTimeSchedule[n] já configurada no leitor quando timeSectionIds ≠ [255]
+ * (use AccessTimeZoneService.ensureZonesOnSingleReader antes desta chamada).
  */
 export async function intelbrasUpsertFaceOnReader(
   reader: PlainReaderCredential,
   faceIdNumeric: number,
   displayName: string,
   rawBase64: string,
+  timeSectionIds: number[] = [255],
 ): Promise<void> {
+  const label = readerLabel(reader);
   const normalizedName =
     normalizeNameForFacialReader(displayName.trim() || 'USUARIO') || 'USUARIO';
-  const auth = new AxiosDigestAuth({
-    username: reader.username,
-    password: reader.plainPassword,
-  });
-
-  const base = deviceUrl(reader);
   const faceId = String(faceIdNumeric);
   const cleanBase64 = stripDataUriBase64(rawBase64).trim();
-
   const decBytes = Buffer.from(cleanBase64, 'base64').length;
-  if (decBytes > 100 * 1024) {
-    throw new Error(
-      `Arquivo muito grande (${(decBytes / 1024).toFixed(1)} KB). Limite: 100 KB`,
-    );
-  }
 
-  const checkUserUrl = `${base}/cgi-bin/AccessUser.cgi?action=list&UserIDList[0]=${faceId}`;
-  let userExists = false;
-  try {
-    const r = await digestRequest(auth, { method: 'GET', url: checkUserUrl });
-    userExists = (r.status ?? 0) >= 200 && (r.status ?? 0) < 300;
-  } catch {
-    userExists = false;
-  }
-
-  if (!userExists) {
-    const qsStart = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_START);
-    const qsEnd = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_END);
-    const createUserUrl =
-      `${base}/cgi-bin/recordUpdater.cgi?action=insert&name=AccessControlCard` +
-      `&CardName=${encodeURIComponent(normalizedName)}&CardNo=${faceId}&UserID=${faceId}&CardStatus=0&UserType=0&Authority=2&Doors=[0]&TimeSections=[255]&ValidDateStart=${qsStart}&ValidDateEnd=${qsEnd}`;
-    await digestRequest(auth, { method: 'GET', url: createUserUrl });
-  }
-
-  const checkFaceUrl = `${base}/cgi-bin/FaceInfoManager.cgi?action=startFind&Condition.UserID=${faceId}`;
-  let faceExists = false;
-  try {
-    const faceResp = await digestRequest(auth, { method: 'GET', url: checkFaceUrl });
-    const payload = faceResp.data as { Total?: number } | undefined;
-    if (
-      payload &&
-      typeof payload === 'object' &&
-      payload.Total !== undefined &&
-      Number(payload.Total) > 0
-    ) {
-      faceExists = true;
-    }
-  } catch {
-    faceExists = false;
-  }
-
-  const action = faceExists ? 'updateMulti' : 'insertMulti';
-  const faceUrl = `${base}/cgi-bin/AccessFace.cgi?action=${action}`;
-  await digestRequest(auth, {
-    method: 'POST',
-    url: faceUrl,
-    data: {
-      FaceList: [{ UserID: faceId, PhotoData: [cleanBase64] }],
-    },
-    headers: { 'Content-Type': 'application/json' },
+  syncLog('upsertFace:inicio', {
+    reader: label,
+    faceId,
+    name: normalizedName,
+    timeSectionIds,
+    photoKb: (decBytes / 1024).toFixed(1),
   });
+
+  try {
+    if (decBytes > 100 * 1024) {
+      throw new Error(
+        `Arquivo muito grande (${(decBytes / 1024).toFixed(1)} KB). Limite: 100 KB`,
+      );
+    }
+
+    const auth = new AxiosDigestAuth({
+      username: reader.username,
+      password: reader.plainPassword,
+    });
+    const base = deviceUrl(reader);
+
+    let existingCard: DeviceUser | null;
+    try {
+      existingCard = await intelbrasFindCardByUserId(reader, faceId);
+    } catch (err) {
+      syncLogError('upsertFace:findCardByUserId', err, { reader: label, faceId });
+      throw err;
+    }
+
+    const recNo =
+      existingCard?.RecNo != null
+        ? parseInt(existingCard.RecNo, 10)
+        : Number.NaN;
+    const hasExisting = Number.isFinite(recNo) && recNo > 0;
+
+    const cardParams = hasExisting
+      ? buildAccessCardUpdateParams({
+          recNo,
+          normalizedName,
+          timeSectionIds,
+        })
+      : buildAccessCardInsertParams({
+          faceId,
+          normalizedName,
+          timeSectionIds,
+        });
+    const cardUrl = `${base}/cgi-bin/recordUpdater.cgi?${cardParams}`;
+    const cardAction = hasExisting ? 'update' : 'insert';
+
+    syncLog('upsertFace:cardSync:inicio', {
+      reader: label,
+      faceId,
+      cardAction,
+      recNo: hasExisting ? recNo : undefined,
+      cardUrl,
+    });
+
+    try {
+      const cardResp = await digestRequest(auth, { method: 'GET', url: cardUrl });
+      syncLog('upsertFace:cardSync:ok', {
+        reader: label,
+        faceId,
+        cardAction,
+        recNo: hasExisting ? recNo : undefined,
+        status: cardResp.status,
+        body: truncateForLog(cardResp.data),
+      });
+    } catch (err) {
+      syncLogError('upsertFace:cardSync', err, {
+        reader: label,
+        faceId,
+        cardAction,
+        recNo: hasExisting ? recNo : undefined,
+        cardUrl,
+      });
+      throw attachReaderSyncStepError(err, 'cartão de acesso');
+    }
+
+    const checkFaceUrl = `${base}/cgi-bin/FaceInfoManager.cgi?action=startFind&Condition.UserID=${faceId}`;
+    let faceExists = false;
+
+    syncLog('upsertFace:checkFace:inicio', { reader: label, faceId, checkFaceUrl });
+
+    try {
+      const faceResp = await digestRequest(auth, {
+        method: 'GET',
+        url: checkFaceUrl,
+      });
+      const payload = faceResp.data as { Total?: number } | undefined;
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        payload.Total !== undefined &&
+        Number(payload.Total) > 0
+      ) {
+        faceExists = true;
+      }
+      syncLog('upsertFace:checkFace:ok', {
+        reader: label,
+        faceId,
+        faceExists,
+        total: payload?.Total,
+        body: truncateForLog(faceResp.data),
+      });
+    } catch (err) {
+      syncLogError('upsertFace:checkFace', err, { reader: label, faceId });
+      faceExists = false;
+    }
+
+    const action = faceExists ? 'updateMulti' : 'insertMulti';
+    const faceUrl = `${base}/cgi-bin/AccessFace.cgi?action=${action}`;
+
+    syncLog('upsertFace:faceSync:inicio', {
+      reader: label,
+      faceId,
+      action,
+      faceUrl,
+    });
+
+    try {
+      const faceSyncResp = await digestRequest(auth, {
+        method: 'POST',
+        url: faceUrl,
+        data: {
+          FaceList: [{ UserID: faceId, PhotoData: [cleanBase64] }],
+        },
+        headers: { 'Content-Type': 'application/json' },
+      });
+      syncLog('upsertFace:faceSync:ok', {
+        reader: label,
+        faceId,
+        action,
+        status: faceSyncResp.status,
+        body: truncateForLog(faceSyncResp.data),
+      });
+    } catch (err) {
+      syncLogError('upsertFace:faceSync', err, {
+        reader: label,
+        faceId,
+        action,
+        faceUrl,
+      });
+      throw attachReaderSyncStepError(err, 'foto facial');
+    }
+
+    syncLog('upsertFace:concluido', { reader: label, faceId });
+  } catch (err) {
+    syncLogError('upsertFace', err, {
+      reader: label,
+      faceId,
+      timeSectionIds,
+    });
+    throw err;
+  }
+}
+
+function attachReaderSyncStepError(err: unknown, step: string): Error {
+  const msg =
+    step === 'cartão de acesso'
+      ? mapReaderCardError(err)
+      : mapReaderError(err);
+  const wrapped = new Error(`${step}: ${msg}`);
+  if (err instanceof Error) {
+    wrapped.cause = err;
+  }
+  return wrapped;
+}
+
+/** HTTP 400 no recordUpdater — parâmetros do cartão, não foto facial. */
+function mapReaderCardError(err: unknown): string {
+  const http = httpStatusFromError(err);
+  if (http === 400) {
+    return 'Leitor recusou atualização do cartão (HTTP 400). Verifique zonas de horário e dados do usuário.';
+  }
+  return mapReaderError(err);
 }
 
 export async function intelbrasRemoveUserFromReader(
@@ -370,8 +719,11 @@ export type DeviceUser = {
   UserID: string;
   CardName: string;
   CardNo: string;
+  RecNo?: string;
   ValidDateStart?: string;
   ValidDateEnd?: string;
+  TimeSections?: string;
+  timeSectionIndices?: number[];
 };
 
 export type DeviceUsersListResult = {
@@ -384,61 +736,42 @@ export async function intelbrasGetDeviceUsers(
   count: number,
   offset: number,
 ): Promise<DeviceUsersListResult> {
-  const auth = new AxiosDigestAuth({
-    username: reader.username,
-    password: reader.plainPassword,
-  });
-  const base = deviceUrl(reader);
-  const url = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=AccessControlCard&count=${count}&offset=${offset}`;
-  const response = await digestRequest(auth, { method: 'GET', url });
+  const label = readerLabel(reader);
 
-  if (typeof response.data !== 'string') {
-    return { found: 0, records: [] };
-  }
+  try {
+    const auth = new AxiosDigestAuth({
+      username: reader.username,
+      password: reader.plainPassword,
+    });
+    const base = deviceUrl(reader);
+    const url = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=AccessControlCard&count=${count}&offset=${offset}`;
 
-  const text = response.data;
-  let found = 0;
-  const recordsMap = new Map<string, Partial<DeviceUser>>();
+    syncLog('getDeviceUsers:inicio', { reader: label, count, offset });
 
-  const lines = text.split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    if (trimmed.startsWith('found=')) {
-      found = parseInt(trimmed.substring(6), 10) || 0;
-      continue;
+    const response = await digestRequest(auth, { method: 'GET', url });
+    if (typeof response.data !== 'string') {
+      syncLog('getDeviceUsers:respostaNaoTexto', {
+        reader: label,
+        count,
+        offset,
+        dataType: typeof response.data,
+      });
+      return { found: 0, records: [] };
     }
 
-    const match = /^records\[(\d+)\]\.(.+?)=(.*)$/.exec(trimmed);
-    if (match) {
-      const index = match[1];
-      const key = match[2];
-      const value = match[3];
-
-      let record = recordsMap.get(index);
-      if (!record) {
-        record = {};
-        recordsMap.set(index, record);
-      }
-
-      if (key === 'UserID') record.UserID = value;
-      else if (key === 'CardName') record.CardName = value;
-      else if (key === 'CardNo') record.CardNo = value;
-      else if (key === 'ValidDateStart') record.ValidDateStart = value;
-      else if (key === 'ValidDateEnd') record.ValidDateEnd = value;
-    }
+    const parsed = parseAccessControlCardFinderText(response.data);
+    syncLog('getDeviceUsers:ok', {
+      reader: label,
+      count,
+      offset,
+      found: parsed.found,
+      records: parsed.records.length,
+    });
+    return parsed;
+  } catch (err) {
+    syncLogError('getDeviceUsers', err, { reader: label, count, offset });
+    throw err;
   }
-
-  const records = Array.from(recordsMap.values()).map((r) => ({
-    UserID: r.UserID || '',
-    CardName: r.CardName || '',
-    CardNo: r.CardNo || '',
-    ValidDateStart: r.ValidDateStart,
-    ValidDateEnd: r.ValidDateEnd,
-  }));
-
-  return { found, records };
 }
 
 export async function intelbrasGetFaceImage(

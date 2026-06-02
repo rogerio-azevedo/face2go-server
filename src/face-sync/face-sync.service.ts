@@ -24,16 +24,19 @@ import {
   intelbrasUpsertFaceOnReader,
   toPlainReaderCredential,
 } from './intelbras-device.client';
+import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
+import { AccessTimeZoneService } from './access-time-zone.service';
+import { readerLabel, syncLog, syncLogError } from './intelbras-sync-debug.util';
 
 export type FaceSyncProgressEvent =
   | { type: 'start'; total: number }
   | {
-      type: 'item';
-      registrationId: string;
-      name: string | null;
-      ok: boolean;
-      error?: string;
-    }
+    type: 'item';
+    registrationId: string;
+    name: string | null;
+    ok: boolean;
+    error?: string;
+  }
   | { type: 'done' }
   | { type: 'error'; message: string };
 
@@ -46,7 +49,8 @@ export class FaceSyncService {
     private readonly r2: R2StorageService,
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly permissionsService: PermissionsService,
-  ) {}
+    private readonly accessTimeZone: AccessTimeZoneService,
+  ) { }
 
   private ensureCompany(user: JwtPayload): string {
     const companyId = user.companyId ?? undefined;
@@ -74,7 +78,7 @@ export class FaceSyncService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -158,86 +162,172 @@ export class FaceSyncService {
     faceId: number;
     name: string;
     imageBuffer: Buffer;
+    timeSectionIds?: number[];
     logContext?: string;
   }): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed';
     deviceSyncError: string | null;
   }> {
     const { clientId, faceId, name, imageBuffer, logContext } = params;
-    const intelbrasReaders =
-      await readersQueries.listReadersForFaceSyncByClient(
-        this.database.db,
-        clientId,
-      );
-
-    if (intelbrasReaders.length === 0) {
-      return {
-        deviceSyncStatus: 'sync_failed',
-        deviceSyncError:
-          'Nenhum leitor Intelbras ativo com credenciais para este cliente.',
-      };
-    }
-
-    let base64: string;
-    try {
-      base64 = await imageBufferToReaderBase64Jpeg(imageBuffer);
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Falha ao obter/comprimir a foto.';
-      return { deviceSyncStatus: 'sync_failed', deviceSyncError: msg };
-    }
-
-    const cipher = createReaderCredentialsCipher(
-      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
-    );
-
-    const failures: string[] = [];
+    const timeSectionIds =
+      params.timeSectionIds && params.timeSectionIds.length > 0
+        ? params.timeSectionIds
+        : [ALWAYS_TIME_ZONE_INDEX];
     const logPrefix = logContext ? `${logContext} ` : '';
 
-    const outcomes = await Promise.all(
-      intelbrasReaders.map(async (r) => {
-        try {
-          const plain = toPlainReaderCredential(
-            r,
-            cipher.decrypt(r.passwordEncrypted),
-          );
-          await intelbrasUpsertFaceOnReader(
-            plain,
-            faceId,
-            name || 'USUARIO',
-            base64,
-          );
-          return null;
-        } catch (e) {
-          const msg = formatReaderFaceSyncError(r.name, e);
-          const raw =
-            e instanceof Error
-              ? e.message
-              : typeof e === 'string'
-                ? e
-                : String(e);
-          this.log.warn(`Sync face ${logPrefix}reader=${r.name}: ${raw}`);
-          return msg;
-        }
-      }),
-    );
+    syncLog('syncPersonOnReaders:inicio', {
+      clientId,
+      faceId,
+      name,
+      timeSectionIds,
+      logContext: logPrefix.trim() || undefined,
+      imageBytes: imageBuffer.length,
+    });
 
-    for (const m of outcomes) {
-      if (m !== null) failures.push(m);
+    try {
+      const intelbrasReaders =
+        await readersQueries.listReadersForFaceSyncByClient(
+          this.database.db,
+          clientId,
+        );
+
+      syncLog('syncPersonOnReaders:leitores', {
+        clientId,
+        faceId,
+        total: intelbrasReaders.length,
+        readers: intelbrasReaders.map((r) => readerLabel(r)),
+      });
+
+      if (intelbrasReaders.length === 0) {
+        syncLog('syncPersonOnReaders:semLeitores', { clientId, faceId });
+        return {
+          deviceSyncStatus: 'sync_failed',
+          deviceSyncError:
+            'Nenhum leitor Intelbras ativo com credenciais para este cliente.',
+        };
+      }
+
+      let base64: string;
+      try {
+        syncLog('syncPersonOnReaders:compressImage', { clientId, faceId });
+        base64 = await imageBufferToReaderBase64Jpeg(imageBuffer);
+        syncLog('syncPersonOnReaders:compressImageOk', {
+          clientId,
+          faceId,
+          base64Chars: base64.length,
+        });
+      } catch (e) {
+        syncLogError('syncPersonOnReaders:compressImage', e, {
+          clientId,
+          faceId,
+        });
+        const msg =
+          e instanceof Error ? e.message : 'Falha ao obter/comprimir a foto.';
+        return { deviceSyncStatus: 'sync_failed', deviceSyncError: msg };
+      }
+
+      const cipher = createReaderCredentialsCipher(
+        this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+      );
+
+      const shiftsByZone =
+        await this.accessTimeZone.loadShiftsByZoneIndex(clientId);
+
+      syncLog('syncPersonOnReaders:schedulesCarregados', {
+        clientId,
+        faceId,
+        zonas: [...shiftsByZone.keys()],
+      });
+
+      const failures: string[] = [];
+
+      const outcomes = await Promise.all(
+        intelbrasReaders.map(async (r) => {
+          const label = readerLabel(r);
+          try {
+            syncLog('syncPersonOnReaders:leitorInicio', {
+              clientId,
+              faceId,
+              reader: label,
+            });
+            const plain = toPlainReaderCredential(
+              r,
+              cipher.decrypt(r.passwordEncrypted),
+            );
+
+            // 1) Zona no leitor → 2) Cartão → 3) Foto (ordem exigida pelo firmware)
+            await this.accessTimeZone.ensureZonesOnSingleReader(
+              plain,
+              timeSectionIds,
+              shiftsByZone,
+            );
+
+            await intelbrasUpsertFaceOnReader(
+              plain,
+              faceId,
+              name || 'USUARIO',
+              base64,
+              timeSectionIds,
+            );
+            syncLog('syncPersonOnReaders:leitorOk', {
+              clientId,
+              faceId,
+              reader: label,
+            });
+            return null;
+          } catch (e) {
+            const msg = formatReaderFaceSyncError(r.name, e);
+            const raw =
+              e instanceof Error
+                ? e.message
+                : typeof e === 'string'
+                  ? e
+                  : String(e);
+            syncLogError('syncPersonOnReaders:leitor', e, {
+              clientId,
+              faceId,
+              reader: label,
+            });
+            this.log.warn(`Sync face ${logPrefix}reader=${r.name}: ${raw}`);
+            return msg;
+          }
+        }),
+      );
+
+      for (const m of outcomes) {
+        if (m !== null) failures.push(m);
+      }
+
+      if (failures.length === intelbrasReaders.length) {
+        const failedCount = failures.length;
+        const total = intelbrasReaders.length;
+        const err = `Não foi possível sincronizar com ${failedCount} de ${total} leitor(es).`;
+        syncLog('syncPersonOnReaders:todosFalharam', {
+          clientId,
+          faceId,
+          failures,
+        });
+        return { deviceSyncStatus: 'sync_failed', deviceSyncError: err };
+      }
+
+      const warn =
+        failures.length > 0
+          ? `Sincronizado parcialmente (${intelbrasReaders.length - failures.length} de ${intelbrasReaders.length} leitor(es)).`
+          : null;
+
+      syncLog('syncPersonOnReaders:concluido', {
+        clientId,
+        faceId,
+        synced: intelbrasReaders.length - failures.length,
+        total: intelbrasReaders.length,
+        partial: failures.length > 0,
+      });
+
+      return { deviceSyncStatus: 'synced', deviceSyncError: warn };
+    } catch (err) {
+      syncLogError('syncPersonOnReaders', err, { clientId, faceId });
+      throw err;
     }
-
-    if (failures.length === intelbrasReaders.length) {
-      const failedCount = failures.length;
-      const total = intelbrasReaders.length;
-      const err = `Não foi possível sincronizar com ${failedCount} de ${total} leitor(es).`;
-      return { deviceSyncStatus: 'sync_failed', deviceSyncError: err };
-    }
-
-    const warn =
-      failures.length > 0
-        ? `Sincronizado parcialmente (${intelbrasReaders.length - failures.length} de ${intelbrasReaders.length} leitor(es)).`
-        : null;
-    return { deviceSyncStatus: 'synced', deviceSyncError: warn };
   }
 
   /** Remove face_id dos leitores Intelbras ativos do cliente (exclusão de responsável). */

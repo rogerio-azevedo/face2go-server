@@ -6,7 +6,9 @@ export const FACIAL_READER_MAX_BYTES = 100 * 1024;
 /**
  * Comprime/regredimensiona imagem até ≤100KB JPEG; devolve Base64 cru (sem data: URL).
  */
-export async function imageBufferToReaderBase64Jpeg(buf: Buffer): Promise<string> {
+export async function imageBufferToReaderBase64Jpeg(
+  buf: Buffer,
+): Promise<string> {
   let targetW = Math.min((await sharp(buf).metadata()).width ?? 400, 400);
 
   for (let shrink = 0; shrink < 8; shrink++) {

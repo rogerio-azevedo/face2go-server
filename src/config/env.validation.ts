@@ -14,6 +14,8 @@ export const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   FRONTEND_URL: z.string().url(),
   PORT: z.coerce.number().default(3001),
+  /** Quantidade máxima de zonas AccessTimeSchedule customizadas por leitor (exclui 255). */
+  READER_MAX_TIME_ZONES: z.coerce.number().int().min(1).max(254).default(32),
   /** Chave AES-256 para credenciais de leitores (64 hex = 32 bytes). */
   READER_ENCRYPTION_KEY: z
     .string()

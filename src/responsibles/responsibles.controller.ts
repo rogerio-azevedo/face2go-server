@@ -123,6 +123,22 @@ export class ResponsiblesController {
     );
   }
 
+  @Post(':responsibleId/face/sync')
+  @ApiOperation({
+    summary: 'Sincronizar face do responsável com os leitores Intelbras',
+  })
+  syncFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+  ) {
+    return this.responsiblesService.syncFaceByCompany(
+      user,
+      clientId,
+      responsibleId,
+    );
+  }
+
   @Get(':responsibleId')
   @ApiOperation({ summary: 'Detalhe do responsável' })
   getOne(

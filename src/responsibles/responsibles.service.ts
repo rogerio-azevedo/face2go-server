@@ -13,6 +13,8 @@ import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
+import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
+import { FaceSyncService } from '../face-sync/face-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
@@ -36,6 +38,8 @@ export class ResponsiblesService {
     private readonly database: DatabaseService,
     private readonly schoolAccess: SchoolAccessService,
     private readonly r2Storage: R2StorageService,
+    private readonly faceSync: FaceSyncService,
+    private readonly accessTimeZone: AccessTimeZoneService,
   ) {}
 
   async list(user: JwtPayload, clientId: string, query: ListPaginationParams = {}) {
@@ -429,5 +433,91 @@ export class ResponsiblesService {
       throw new NotFoundException('Vínculo não encontrado.');
     }
     return { removed: true };
+  }
+
+  async syncFaceByCompany(
+    user: JwtPayload,
+    clientId: string,
+    responsibleId: string,
+  ): Promise<{
+    deviceSyncStatus: 'synced' | 'sync_failed' | 'pending_sync';
+    deviceSyncError: string | null;
+  }> {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const row = await responsiblesQueries.getResponsibleWithFaceStatus(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+    if (!row.photoKey || row.faceId == null) {
+      throw new BadRequestException('Sem foto cadastrada para sincronizar.');
+    }
+
+    const responsible = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!responsible) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    let buffer: Buffer;
+    try {
+      const got = await this.r2Storage.getObjectBytes(row.photoKey);
+      buffer = got.buffer;
+    } catch {
+      throw new BadRequestException(
+        'Não foi possível obter a foto armazenada.',
+      );
+    }
+    if (buffer.length < 256) {
+      throw new BadRequestException(
+        'Imagem armazenada inválida ou muito pequena.',
+      );
+    }
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      responsibleId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    const sync = await this.faceSync.syncPersonOnReaders({
+      clientId,
+      faceId: row.faceId,
+      name: responsible.name,
+      imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
+        clientId,
+        responsibleId,
+      ),
+      logContext: `responsible-sync=${responsibleId}`,
+    });
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      responsibleId,
+      clientId,
+      {
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt:
+          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+    );
+
+    return {
+      deviceSyncStatus: sync.deviceSyncStatus,
+      deviceSyncError: sync.deviceSyncError,
+    };
   }
 }
