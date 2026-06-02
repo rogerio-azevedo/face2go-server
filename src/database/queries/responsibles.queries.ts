@@ -6,7 +6,9 @@ import {
   ilike,
   inArray,
   isNotNull,
+  isNull,
   ne,
+  or,
   type SQL,
 } from 'drizzle-orm';
 
@@ -707,6 +709,82 @@ export async function listResponsibleIdsForStudent(
       ),
     );
   return [...new Set(rows.map((r) => r.responsibleId))];
+}
+
+export type ResponsibleForGlobalSyncRow = {
+  id: string;
+  name: string;
+  faceId: number;
+  photoKey: string;
+};
+
+/** Responsáveis com foto e sync pendente/falho — elegíveis para sync global. */
+export async function listResponsiblesForGlobalSync(
+  db: AppDb,
+  clientId: string,
+): Promise<ResponsibleForGlobalSyncRow[]> {
+  const rows = await db
+    .select({
+      id: responsibles.id,
+      name: responsibles.name,
+      faceId: responsibles.faceId,
+      photoKey: responsibles.photoKey,
+    })
+    .from(responsibles)
+    .where(
+      and(
+        eq(responsibles.clientId, clientId),
+        isNotNull(responsibles.faceId),
+        isNotNull(responsibles.photoKey),
+        or(
+          ne(responsibles.deviceSyncStatus, 'synced'),
+          isNull(responsibles.deviceSyncStatus),
+        ),
+      ),
+    )
+    .orderBy(asc(responsibles.name));
+
+  return rows.filter(
+    (r): r is ResponsibleForGlobalSyncRow =>
+      r.faceId != null && r.photoKey != null,
+  );
+}
+
+/** Mapa responsibleId → índices de zona (via alunos vinculados). */
+export async function listActiveShiftZoneIndicesByResponsibleIds(
+  db: AppDb,
+  responsibleIds: string[],
+): Promise<Map<string, number[]>> {
+  const result = new Map<string, number[]>();
+  if (responsibleIds.length === 0) return result;
+
+  const links = await db
+    .select({
+      responsibleId: responsibleStudents.responsibleId,
+      studentId: responsibleStudents.studentId,
+    })
+    .from(responsibleStudents)
+    .where(inArray(responsibleStudents.responsibleId, responsibleIds));
+
+  const studentIds = [...new Set(links.map((l) => l.studentId))];
+  const zonesByStudent =
+    await studentClassesQueries.listActiveShiftZoneIndicesByStudentIds(
+      db,
+      studentIds,
+    );
+
+  const byResponsible = new Map<string, Set<number>>();
+  for (const link of links) {
+    const zones = zonesByStudent.get(link.studentId) ?? [];
+    const set = byResponsible.get(link.responsibleId) ?? new Set<number>();
+    for (const z of zones) set.add(z);
+    byResponsible.set(link.responsibleId, set);
+  }
+
+  for (const [responsibleId, indices] of byResponsible) {
+    result.set(responsibleId, [...indices].sort((a, b) => a - b));
+  }
+  return result;
 }
 
 /** União dos índices de zona dos turnos dos alunos vinculados ao responsável. */

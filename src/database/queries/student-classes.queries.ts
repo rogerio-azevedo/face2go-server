@@ -244,6 +244,46 @@ export async function deactivateStudentClassLinksNotInList(
   return rows.length;
 }
 
+/** Mapa studentId → índices de zona ativos (batch para sync global). */
+export async function listActiveShiftZoneIndicesByStudentIds(
+  db: AppDb,
+  studentIds: string[],
+): Promise<Map<string, number[]>> {
+  const result = new Map<string, number[]>();
+  if (studentIds.length === 0) return result;
+
+  const rows = await db
+    .select({
+      studentId: studentClasses.studentId,
+      timeZoneIndex: shifts.timeZoneIndex,
+    })
+    .from(studentClasses)
+    .innerJoin(schoolClasses, eq(studentClasses.classId, schoolClasses.id))
+    .innerJoin(shifts, eq(schoolClasses.shiftId, shifts.id))
+    .where(
+      and(
+        inArray(studentClasses.studentId, studentIds),
+        eq(studentClasses.isActive, true),
+        eq(schoolClasses.isActive, true),
+        eq(shifts.isActive, true),
+        isNotNull(shifts.timeZoneIndex),
+      ),
+    );
+
+  const byStudent = new Map<string, Set<number>>();
+  for (const row of rows) {
+    if (row.timeZoneIndex == null) continue;
+    const set = byStudent.get(row.studentId) ?? new Set<number>();
+    set.add(row.timeZoneIndex);
+    byStudent.set(row.studentId, set);
+  }
+
+  for (const [studentId, indices] of byStudent) {
+    result.set(studentId, [...indices].sort((a, b) => a - b));
+  }
+  return result;
+}
+
 /** Índices de zona (AccessTimeSchedule) dos turnos das turmas ativas do aluno. */
 export async function listActiveShiftZoneIndicesForStudent(
   db: AppDb,

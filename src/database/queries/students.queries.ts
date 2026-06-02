@@ -5,7 +5,11 @@ import {
   eq,
   ilike,
   inArray,
+  isNotNull,
+  isNull,
+  ne,
   notInArray,
+  or,
   type SQL,
 } from 'drizzle-orm';
 
@@ -356,6 +360,45 @@ export async function upsertStudentByEnrollment(
     isActive: input.isActive,
   });
   return { row: row!, created: true };
+}
+
+export type StudentForGlobalSyncRow = {
+  id: string;
+  name: string;
+  faceId: number;
+  photoKey: string;
+};
+
+/** Alunos com foto e sync pendente/falho — elegíveis para sync global. */
+export async function listStudentsForGlobalSync(
+  db: AppDb,
+  clientId: string,
+): Promise<StudentForGlobalSyncRow[]> {
+  const rows = await db
+    .select({
+      id: students.id,
+      name: students.name,
+      faceId: students.faceId,
+      photoKey: students.photoKey,
+    })
+    .from(students)
+    .where(
+      and(
+        eq(students.clientId, clientId),
+        isNotNull(students.faceId),
+        isNotNull(students.photoKey),
+        or(
+          ne(students.deviceSyncStatus, 'synced'),
+          isNull(students.deviceSyncStatus),
+        ),
+      ),
+    )
+    .orderBy(asc(students.name));
+
+  return rows.filter(
+    (r): r is StudentForGlobalSyncRow =>
+      r.faceId != null && r.photoKey != null,
+  );
 }
 
 export async function deactivateStudentsNotInList(
