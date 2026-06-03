@@ -18,6 +18,7 @@ import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import {
   formatCameraLprPlateError,
   intelbrasGetDevicePlates,
+  intelbrasSearchDevicePlates,
   toPlainCameraCredential,
 } from '../lpr-plate-sync/intelbras-lpr-device.client';
 import {
@@ -67,6 +68,7 @@ export class CamerasService {
     cameraId: string,
     limit: number,
     offset: number,
+    search?: string,
   ) {
     const companyId = this.ensureCompany(user);
     return this.ensureReadAccessThen(user, companyId, async () => {
@@ -88,6 +90,14 @@ export class CamerasService {
       const camera = toPlainCameraCredential(row, plainPassword);
 
       try {
+        if (search) {
+          return await intelbrasSearchDevicePlates(
+            camera,
+            search,
+            limit,
+            offset,
+          );
+        }
         return await intelbrasGetDevicePlates(camera, limit, offset);
       } catch (e: unknown) {
         throw new BadRequestException(

@@ -44,10 +44,18 @@ export class CamerasController {
     @Param('cameraId', ParseUUIDPipe) cameraId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('search') search?: string,
   ) {
     const lim = limit ? parseInt(limit, 10) : 50;
     const off = offset ? parseInt(offset, 10) : 0;
-    return this.camerasService.getDevicePlates(user, cameraId, lim, off);
+    const term = search?.trim() || undefined;
+    return this.camerasService.getDevicePlates(
+      user,
+      cameraId,
+      lim,
+      off,
+      term,
+    );
   }
 
   @Get()

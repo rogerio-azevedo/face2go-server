@@ -323,12 +323,48 @@ function parsePlateListFromText(text: string): DevicePlatesListResult {
   return { totalCount, found, records };
 }
 
+function parseQuerySizeFromText(text: string): number {
+  for (const line of text.split('\n')) {
+    const m = /^Size=(\d+)$/.exec(line.trim());
+    if (m) return parseInt(m[1], 10) || 0;
+  }
+  return 0;
+}
+
+function resolveTotalCount(
+  page: DevicePlatesListResult,
+  offset: number,
+  sizeFromQuery: number | null,
+): number {
+  if (sizeFromQuery != null && sizeFromQuery > 0) return sizeFromQuery;
+  if (page.totalCount > 0) return page.totalCount;
+  return Math.max(page.found, offset + page.records.length);
+}
+
 /**
- * Lista placas da TrafficRedList (allowlist), paginada.
- * Alguns firmwares só aceitam `action=find` (doc Intelbras LPR); outros `doSeekFind`.
- * Não reutiliza o CGI do leitor facial (`AccessControlCard`) — só o mesmo padrão Dahua (Digest + recordFinder).
+ * Total de placas na TrafficRedList via getQuerySize (quando o firmware suporta).
  */
-export async function intelbrasGetDevicePlates(
+export async function intelbrasGetDevicePlateCount(
+  camera: PlainCameraCredential,
+): Promise<number | null> {
+  const auth = new AxiosDigestAuth({
+    username: camera.username,
+    password: camera.plainPassword,
+  });
+  const base = deviceUrl(camera);
+  const url = `${base}/cgi-bin/recordFinder.cgi?action=getQuerySize&name=${TRAFFIC_LIST_NAME}`;
+
+  try {
+    const r = await digestRequest(auth, { method: 'GET', url });
+    if (typeof r.data !== 'string') return null;
+    const size = parseQuerySizeFromText(r.data);
+    return size > 0 ? size : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchDevicePlatesPage(
   camera: PlainCameraCredential,
   count: number,
   offset: number,
@@ -359,6 +395,88 @@ export async function intelbrasGetDevicePlates(
 
   if (lastErr !== undefined) throw lastErr;
   throw new Error('Resposta inválida da câmera ao listar placas.');
+}
+
+const DEVICE_PLATES_BATCH_SIZE = 500;
+
+async function fetchAllDevicePlates(
+  camera: PlainCameraCredential,
+): Promise<DevicePlate[]> {
+  const all: DevicePlate[] = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await fetchDevicePlatesPage(
+      camera,
+      DEVICE_PLATES_BATCH_SIZE,
+      offset,
+    );
+    all.push(...page.records);
+    if (page.records.length < DEVICE_PLATES_BATCH_SIZE) break;
+    offset += DEVICE_PLATES_BATCH_SIZE;
+    const cap =
+      page.totalCount > 0 ? page.totalCount : offset + page.records.length;
+    if (offset >= cap) break;
+  }
+
+  return all;
+}
+
+/**
+ * Lista placas da TrafficRedList (allowlist), paginada.
+ * Alguns firmwares só aceitam `action=find` (doc Intelbras LPR); outros `doSeekFind`.
+ * Não reutiliza o CGI do leitor facial (`AccessControlCard`) — só o mesmo padrão Dahua (Digest + recordFinder).
+ */
+export async function intelbrasGetDevicePlates(
+  camera: PlainCameraCredential,
+  count: number,
+  offset: number,
+): Promise<DevicePlatesListResult> {
+  const safeCount = Math.min(Math.max(count, 1), 500);
+  const safeOffset = Math.max(offset, 0);
+
+  const [page, sizeFromQuery] = await Promise.all([
+    fetchDevicePlatesPage(camera, safeCount, safeOffset),
+    intelbrasGetDevicePlateCount(camera),
+  ]);
+
+  const totalCount = resolveTotalCount(page, safeOffset, sizeFromQuery);
+  return {
+    totalCount,
+    found: page.found,
+    records: page.records,
+  };
+}
+
+/**
+ * Busca placas por substring no número (sem filtro nativo na TrafficRedList).
+ * Carrega a lista em lotes e filtra no servidor.
+ */
+export async function intelbrasSearchDevicePlates(
+  camera: PlainCameraCredential,
+  search: string,
+  count: number,
+  offset: number,
+): Promise<DevicePlatesListResult> {
+  const term = normalizePlate(search);
+  if (!term) {
+    return intelbrasGetDevicePlates(camera, count, offset);
+  }
+
+  const safeCount = Math.min(Math.max(count, 1), 500);
+  const safeOffset = Math.max(offset, 0);
+
+  const all = await fetchAllDevicePlates(camera);
+  const filtered = all.filter((row) =>
+    normalizePlate(row.plateNumber).includes(term),
+  );
+  const slice = filtered.slice(safeOffset, safeOffset + safeCount);
+
+  return {
+    totalCount: filtered.length,
+    found: slice.length,
+    records: slice,
+  };
 }
 
 /** Alias do plano (`listPlates` / diagnóstico). */
