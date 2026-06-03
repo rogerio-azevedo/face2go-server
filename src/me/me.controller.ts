@@ -33,7 +33,7 @@ export class MeController {
   @Get('can-check')
   @ApiOperation({
     summary:
-      'Checa permissão granular (empresa). Usado pelo middleware Next.js.',
+      'Checa permissão granular (empresa). Usado pelo middleware Next.js',
   })
   async canCheck(
     @CurrentUser() user: JwtPayload,
