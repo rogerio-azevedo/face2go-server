@@ -26,7 +26,10 @@ export const companyUserPermissions = pgTable(
       .notNull()
       .references(() => companyUsers.id, { onDelete: 'cascade' }),
     featureSlug: varchar('feature_slug', { length: 100 }).notNull(),
-    actions: text('actions').array().notNull().default(sql`'{}'`),
+    actions: text('actions')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

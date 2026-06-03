@@ -103,7 +103,11 @@ export class R2StorageService {
   }
 
   /** Upload direto pelo servidor (evita CORS no navegador → R2). */
-  async putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  async putObject(
+    key: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -144,7 +148,9 @@ export class R2StorageService {
   }
 
   /** Download binário direto para sync com leitor. */
-  async getObjectBytes(key: string): Promise<{ buffer: Buffer; contentType?: string }> {
+  async getObjectBytes(
+    key: string,
+  ): Promise<{ buffer: Buffer; contentType?: string }> {
     const resp = await this.client.send(
       new GetObjectCommand({ Bucket: this.bucket, Key: key }),
     );

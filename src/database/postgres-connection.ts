@@ -4,7 +4,9 @@ import postgres from 'postgres';
  * Neon/alguns templates usam `?schema=public` na URI — o postgres.js não trata esse
  * parâmetro como no libpq nativo e o RDS recusa (“unrecognized configuration parameter schema”).
  */
-export function sanitizePostgresConnectionUrl(connectionString: string): string {
+export function sanitizePostgresConnectionUrl(
+  connectionString: string,
+): string {
   try {
     const normalized = connectionString.replace(
       /^postgres:\/\//,
@@ -30,10 +32,7 @@ export function finalizePostgresUrl(connectionString: string): string {
   const sanitized = sanitizePostgresConnectionUrl(connectionString);
 
   try {
-    const normalized = sanitized.replace(
-      /^postgres:\/\//,
-      'postgresql://',
-    );
+    const normalized = sanitized.replace(/^postgres:\/\//, 'postgresql://');
     const parsed = new URL(normalized);
     const mode = parsed.searchParams.get('sslmode');
     const sslFromEnv =

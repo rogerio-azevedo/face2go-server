@@ -10,11 +10,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -35,8 +31,7 @@ export class StudentsController {
 
   @Get()
   @ApiOperation({
-    summary:
-      'Listar alunos paginados (?page, ?pageSize, ?search, ?classId)',
+    summary: 'Listar alunos paginados (?page, ?pageSize, ?search, ?classId)',
   })
   list(
     @CurrentUser() user: JwtPayload,
@@ -56,7 +51,8 @@ export class StudentsController {
 
   @Get('face/global-sync/progress')
   @ApiOperation({
-    summary: 'SSE — progresso da sincronização global de alunos (token na query)',
+    summary:
+      'SSE — progresso da sincronização global de alunos (token na query)',
   })
   async globalSyncProgress(
     @CurrentUser() user: JwtPayload,
@@ -106,12 +102,7 @@ export class StudentsController {
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @Param('classId', ParseUUIDPipe) classId: string,
   ) {
-    return this.studentsService.unlinkClass(
-      user,
-      clientId,
-      studentId,
-      classId,
-    );
+    return this.studentsService.unlinkClass(user, clientId, studentId, classId);
   }
 
   @Get(':studentId/responsibles')

@@ -10,11 +10,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -49,8 +45,7 @@ export class IenhController {
 
   @Post('fetch')
   @ApiOperation({
-    summary:
-      'Buscar dados na API TOTVS IENH e salvar snapshot JSON em disco',
+    summary: 'Buscar dados na API TOTVS IENH e salvar snapshot JSON em disco',
   })
   fetch(@Body() body: unknown) {
     return this.ienhService.fetchAndSave(body);
@@ -77,8 +72,7 @@ export class IenhController {
 
   @Get('sync/progress')
   @ApiOperation({
-    summary:
-      'SSE — progresso da sincronização IENH (token na query aceito)',
+    summary: 'SSE — progresso da sincronização IENH (token na query aceito)',
   })
   async syncProgress(
     @CurrentUser() user: JwtPayload,
@@ -152,7 +146,11 @@ export class IenhController {
         const response = err.getResponse();
         if (typeof response === 'string') {
           message = response;
-        } else if (response && typeof response === 'object' && 'message' in response) {
+        } else if (
+          response &&
+          typeof response === 'object' &&
+          'message' in response
+        ) {
           const m = (response as { message?: string | string[] }).message;
           message = Array.isArray(m) ? m.join(', ') : String(m ?? message);
         }

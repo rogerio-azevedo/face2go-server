@@ -7,11 +7,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -59,6 +55,10 @@ export class ClientRegistrationsController {
     @Param('registrationId', ParseUUIDPipe) registrationId: string,
     @Body() body: unknown,
   ) {
-    return this.registrationsAdmin.rejectForClientTenant(user, registrationId, body);
+    return this.registrationsAdmin.rejectForClientTenant(
+      user,
+      registrationId,
+      body,
+    );
   }
 }

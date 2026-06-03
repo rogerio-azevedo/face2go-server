@@ -1,8 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import {
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../common/decorators/public.decorator';
 import { PublicRegistrationService } from './public-registration.service';
@@ -16,7 +13,9 @@ export class PublicRegisterController {
 
   @Public()
   @Get(':code')
-  @ApiOperation({ summary: 'Dados públicos do cliente para o formulário de cadastro' })
+  @ApiOperation({
+    summary: 'Dados públicos do cliente para o formulário de cadastro',
+  })
   preview(@Param('code') code: string) {
     return this.publicRegistrationService.getPreview(code);
   }

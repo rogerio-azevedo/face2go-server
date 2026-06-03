@@ -13,7 +13,8 @@ export class ClientDisplayResolveController {
 
   @Get('display/resolve/:shortCode')
   @ApiOperation({
-    summary: 'Resolver código curto do display TV (redireciona para clientId + token)',
+    summary:
+      'Resolver código curto do display TV (redireciona para clientId + token)',
   })
   async resolve(@Param('shortCode') shortCode: string) {
     const row = await clientsQueries.getClientByDisplayShortCode(

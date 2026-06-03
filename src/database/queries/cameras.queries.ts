@@ -76,8 +76,8 @@ export async function listCameras(
 
   return rows.map(({ passwordEncrypted, ...r }) => ({
     ...r,
-    type: (r.type ?? 'general') as CameraType,
-    direction: (r.direction ?? null) as CameraDirection | null,
+    type: r.type ?? 'general',
+    direction: r.direction ?? null,
     hasCredentials: !!(
       r.username?.trim() &&
       passwordEncrypted != null &&
@@ -124,8 +124,8 @@ export async function getCameraById(
   const { passwordEncrypted, ...rest } = row;
   return {
     ...rest,
-    type: (row.type ?? 'general') as CameraType,
-    direction: (row.direction ?? null) as CameraDirection | null,
+    type: row.type ?? 'general',
+    direction: row.direction ?? null,
     hasCredentials: !!(
       row.username?.trim() &&
       passwordEncrypted != null &&
@@ -322,7 +322,7 @@ export function camerasRowToPublic(row: typeof cameras.$inferSelect) {
   const { passwordEncrypted, ...rest } = row;
   return {
     ...rest,
-    type: (rest.type ?? 'general') as CameraType,
+    type: rest.type ?? 'general',
     hasCredentials: !!(
       rest.username?.trim() &&
       passwordEncrypted != null &&
@@ -385,10 +385,7 @@ export async function listCamerasForLprPlateSyncByClient(
     .orderBy(asc(cameras.name));
 
   return rows.filter(
-    (r) =>
-      r.username?.trim() &&
-      r.passwordEncrypted?.trim() &&
-      r.ip?.trim(),
+    (r) => r.username?.trim() && r.passwordEncrypted?.trim() && r.ip?.trim(),
   ) as CameraLprPlateSyncRow[];
 }
 
@@ -422,7 +419,11 @@ export async function getCameraIfEligibleForLprPlateSync(
     )
     .limit(1);
 
-  if (!row?.username?.trim() || !row.passwordEncrypted?.trim() || !row.ip?.trim())
+  if (
+    !row?.username?.trim() ||
+    !row.passwordEncrypted?.trim() ||
+    !row.ip?.trim()
+  )
     return undefined;
   return row as CameraLprPlateSyncRow;
 }
@@ -474,7 +475,7 @@ export async function listCamerasForEventStream(
       clientName: r.clientName,
       companyId: r.companyId,
       brand: r.brand.trim().toLowerCase(),
-      type: (r.type ?? 'lpr') as CameraType,
+      type: r.type ?? 'lpr',
       ip: r.ip,
       port: r.port,
       username: r.username as string,
@@ -530,7 +531,7 @@ export async function getCameraForEventStreamById(
     clientName: row.clientName,
     companyId: row.companyId,
     brand: row.brand.trim().toLowerCase(),
-    type: (row.type ?? 'lpr') as CameraType,
+    type: row.type ?? 'lpr',
     ip: row.ip,
     port: row.port,
     username: row.username,
@@ -600,7 +601,7 @@ export async function listCamerasForMonitorReport(
     id: r.id,
     clientId: r.clientId,
     clientName: r.clientName,
-    type: (r.type ?? 'general') as CameraType,
+    type: r.type ?? 'general',
     brand: r.brand,
     name: r.name,
     ip: r.ip,

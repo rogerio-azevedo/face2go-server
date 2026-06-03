@@ -11,7 +11,10 @@ import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as vehicleQueries from '../database/queries/vehicles.queries';
 import type { VehicleWithDriverRow } from '../database/queries/vehicles.queries';
-import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
+import {
+  LprPlateSyncService,
+  type SyncVehiclePlateResult,
+} from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import {
   buildPaginatedResult,
@@ -35,7 +38,24 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 function normalizeVehiclePlateCmp(plate: string): string {
-  return plate.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return plate
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function vehicleRowWithLprSync(
+  row: VehicleWithDriverRow,
+  driverName: string,
+  lpr: SyncVehiclePlateResult,
+): VehicleWithDriverRow {
+  return {
+    ...row,
+    driverName,
+    lprSyncStatus: lpr.lprSyncStatus,
+    lprSyncError: lpr.lprSyncError,
+    lprSyncedAt: lpr.lprSyncStatus === 'synced' ? new Date() : null,
+  };
 }
 
 export type VehicleDriverOptionDto = {
@@ -53,6 +73,75 @@ export class VehiclesService {
     private readonly schoolAccess: SchoolAccessService,
     private readonly lprPlateSync: LprPlateSyncService,
   ) {}
+
+  /** Sincroniza placa nas câmeras LPR e devolve o veículo com status atualizado (cadastro/edição). */
+  private async syncLprForVehicleRow(
+    row: VehicleWithDriverRow,
+    clientId: string,
+    ownerDisplayName: string,
+    logContext: string,
+  ): Promise<VehicleWithDriverRow> {
+    const driverName = ownerDisplayName.trim() || 'CONDUTOR';
+    try {
+      const lpr = await this.lprPlateSync.syncVehiclePlateOnCameras({
+        clientId,
+        vehicleId: row.id,
+        plate: row.plate,
+        ownerDisplayName: driverName,
+        vehicleColor: row.color,
+        logContext,
+      });
+      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr);
+    } catch (e) {
+      this.log.warn(
+        `${logContext}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return vehicleRowWithLprSync(row, row.driverName || driverName, {
+        lprSyncStatus: 'sync_failed',
+        lprSyncError:
+          e instanceof Error
+            ? e.message
+            : 'Falha ao sincronizar placa com LPR.',
+      });
+    }
+  }
+
+  private async syncLprAfterPlateChange(
+    row: VehicleWithDriverRow,
+    clientId: string,
+    previousPlate: string,
+    ownerDisplayName: string,
+    logContext: string,
+  ): Promise<VehicleWithDriverRow> {
+    const driverName = ownerDisplayName.trim() || 'CONDUTOR';
+    try {
+      await this.lprPlateSync.removePlateFromAllLprCameras(
+        clientId,
+        previousPlate,
+        `${logContext} remove-old`,
+      );
+      const lpr = await this.lprPlateSync.syncVehiclePlateOnCameras({
+        clientId,
+        vehicleId: row.id,
+        plate: row.plate,
+        ownerDisplayName: driverName,
+        vehicleColor: row.color,
+        logContext,
+      });
+      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr);
+    } catch (e) {
+      this.log.warn(
+        `${logContext}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return vehicleRowWithLprSync(row, row.driverName || driverName, {
+        lprSyncStatus: 'sync_failed',
+        lprSyncError:
+          e instanceof Error
+            ? e.message
+            : 'Falha ao sincronizar placa com LPR.',
+      });
+    }
+  }
 
   private assertResponsibleJwt(user: JwtPayload): asserts user is JwtPayload & {
     clientId: string;
@@ -127,26 +216,13 @@ export class VehiclesService {
         row.responsibleId,
         user.clientId,
       );
-      void this.lprPlateSync
-        .syncVehiclePlateOnCameras({
-          clientId: user.clientId,
-          vehicleId: row.id,
-          plate: row.plate,
-          ownerDisplayName: driver?.name ?? 'CONDUTOR',
-          vehicleColor: row.color,
-          logContext: `create responsible vehicle=${row.id}`,
-        })
-        .catch((e) =>
-          this.log.warn(
-            `LPR sync create veículo ${row.id}: ${
-              e instanceof Error ? e.message : String(e)
-            }`,
-          ),
-        );
-      return {
-        ...row,
-        driverName: driver?.name ?? '',
-      };
+      const driverName = driver?.name ?? '';
+      return this.syncLprForVehicleRow(
+        { ...row, driverName },
+        user.clientId,
+        driverName,
+        `create responsible vehicle=${row.id}`,
+      );
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new BadRequestException(
@@ -208,56 +284,26 @@ export class VehiclesService {
         user.clientId,
       );
 
+      const driverName = driver?.name ?? '';
+      const withDriver = { ...row, driverName };
       const plateChanged =
         normalizeVehiclePlateCmp(prev.plate) !==
         normalizeVehiclePlateCmp(row.plate);
       if (plateChanged) {
-        void this.lprPlateSync
-          .removePlateFromAllLprCameras(
-            user.clientId,
-            prev.plate,
-            `plat change vehicle=${id}`,
-          )
-          .then(() =>
-            this.lprPlateSync.syncVehiclePlateOnCameras({
-              clientId: user.clientId,
-              vehicleId: id,
-              plate: row.plate,
-              ownerDisplayName: driver?.name ?? 'CONDUTOR',
-              vehicleColor: row.color,
-              logContext: `update plate vehicle=${id}`,
-            }),
-          )
-          .catch((e) =>
-            this.log.warn(
-              `LPR sync atualizar placa vehicle=${id}: ${
-                e instanceof Error ? e.message : String(e)
-              }`,
-            ),
-          );
-      } else {
-        void this.lprPlateSync
-          .syncVehiclePlateOnCameras({
-            clientId: user.clientId,
-            vehicleId: id,
-            plate: row.plate,
-            ownerDisplayName: driver?.name ?? 'CONDUTOR',
-            vehicleColor: row.color,
-            logContext: `update vehicle=${id}`,
-          })
-          .catch((e) =>
-            this.log.warn(
-              `LPR sync atualizar veículo ${id}: ${
-                e instanceof Error ? e.message : String(e)
-              }`,
-            ),
-          );
+        return this.syncLprAfterPlateChange(
+          withDriver,
+          user.clientId,
+          prev.plate,
+          driverName,
+          `update plate responsible vehicle=${id}`,
+        );
       }
-
-      return {
-        ...row,
-        driverName: driver?.name ?? '',
-      };
+      return this.syncLprForVehicleRow(
+        withDriver,
+        user.clientId,
+        driverName,
+        `update responsible vehicle=${id}`,
+      );
     } catch (err) {
       if (err instanceof NotFoundException) {
         throw err;
@@ -269,6 +315,30 @@ export class VehiclesService {
       }
       throw err;
     }
+  }
+
+  async syncForResponsible(
+    user: JwtPayload,
+    id: string,
+  ): Promise<SyncVehiclePlateResult> {
+    this.assertResponsibleJwt(user);
+    const household = await this.householdResponsibleIds(user);
+    const v = await vehicleQueries.vehicleGetWithDriver(
+      this.database.db,
+      id,
+      user.clientId,
+    );
+    if (!v || !household.includes(v.responsibleId)) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+    return this.lprPlateSync.syncVehiclePlateOnCameras({
+      clientId: user.clientId,
+      vehicleId: id,
+      plate: v.plate,
+      ownerDisplayName: v.driverName ?? 'CONDUTOR',
+      vehicleColor: v.color,
+      logContext: `sync responsible vehicle=${id}`,
+    });
   }
 
   async deleteForResponsible(user: JwtPayload, id: string): Promise<void> {
@@ -380,27 +450,13 @@ export class VehiclesService {
         throw new BadRequestException('Não foi possível cadastrar o veículo.');
       }
 
-      void this.lprPlateSync
-        .syncVehiclePlateOnCameras({
-          clientId,
-          vehicleId: row.id,
-          plate: row.plate,
-          ownerDisplayName: driver.name ?? 'CONDUTOR',
-          vehicleColor: row.color,
-          logContext: `create company-client vehicle=${row.id}`,
-        })
-        .catch((e) =>
-          this.log.warn(
-            `LPR sync create veículo ${row.id}: ${
-              e instanceof Error ? e.message : String(e)
-            }`,
-          ),
-        );
-
-      return {
-        ...row,
-        driverName: driver.name ?? '',
-      };
+      const driverName = driver.name ?? '';
+      return this.syncLprForVehicleRow(
+        { ...row, driverName },
+        clientId,
+        driverName,
+        `create company-client vehicle=${row.id}`,
+      );
     } catch (err) {
       if (isUniqueViolation(err)) {
         throw new BadRequestException(
@@ -461,56 +517,26 @@ export class VehiclesService {
         throw new NotFoundException('Veículo não encontrado.');
       }
 
+      const driverName = driver.name ?? '';
+      const withDriver = { ...row, driverName };
       const plateChanged =
         normalizeVehiclePlateCmp(prev.plate) !==
         normalizeVehiclePlateCmp(row.plate);
       if (plateChanged) {
-        void this.lprPlateSync
-          .removePlateFromAllLprCameras(
-            clientId,
-            prev.plate,
-            `plate change vehicle=${id}`,
-          )
-          .then(() =>
-            this.lprPlateSync.syncVehiclePlateOnCameras({
-              clientId,
-              vehicleId: id,
-              plate: row.plate,
-              ownerDisplayName: driver.name ?? 'CONDUTOR',
-              vehicleColor: row.color,
-              logContext: `update plate vehicle=${id}`,
-            }),
-          )
-          .catch((e) =>
-            this.log.warn(
-              `LPR sync atualizar placa vehicle=${id}: ${
-                e instanceof Error ? e.message : String(e)
-              }`,
-            ),
-          );
-      } else {
-        void this.lprPlateSync
-          .syncVehiclePlateOnCameras({
-            clientId,
-            vehicleId: id,
-            plate: row.plate,
-            ownerDisplayName: driver.name ?? 'CONDUTOR',
-            vehicleColor: row.color,
-            logContext: `update vehicle=${id}`,
-          })
-          .catch((e) =>
-            this.log.warn(
-              `LPR sync atualizar veículo ${id}: ${
-                e instanceof Error ? e.message : String(e)
-              }`,
-            ),
-          );
+        return this.syncLprAfterPlateChange(
+          withDriver,
+          clientId,
+          prev.plate,
+          driverName,
+          `update plate company-client vehicle=${id}`,
+        );
       }
-
-      return {
-        ...row,
-        driverName: driver.name ?? '',
-      };
+      return this.syncLprForVehicleRow(
+        withDriver,
+        clientId,
+        driverName,
+        `update company-client vehicle=${id}`,
+      );
     } catch (err) {
       if (err instanceof NotFoundException) {
         throw err;
@@ -540,7 +566,11 @@ export class VehiclesService {
     }
 
     void this.lprPlateSync
-      .removePlateFromAllLprCameras(clientId, existing.plate, `delete vehicle=${id}`)
+      .removePlateFromAllLprCameras(
+        clientId,
+        existing.plate,
+        `delete vehicle=${id}`,
+      )
       .catch((e) =>
         this.log.warn(
           `LPR remove ao excluir veículo ${id}: ${

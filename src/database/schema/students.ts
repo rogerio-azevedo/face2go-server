@@ -55,7 +55,10 @@ export const students = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => [
-    uniqueIndex('students_client_enrollment_unique').on(t.clientId, t.enrollment),
+    uniqueIndex('students_client_enrollment_unique').on(
+      t.clientId,
+      t.enrollment,
+    ),
   ],
 );
 

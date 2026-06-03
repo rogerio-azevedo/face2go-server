@@ -115,4 +115,3 @@ export const registrationsRelations = relations(registrations, ({ one }) => ({
     references: [users.id],
   }),
 }));
-

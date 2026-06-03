@@ -1,7 +1,13 @@
 import { and, asc, eq, inArray, isNotNull, notInArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { responsibles, responsibleStudents, schoolClasses, shifts, studentClasses } from '../schema';
+import {
+  responsibles,
+  responsibleStudents,
+  schoolClasses,
+  shifts,
+  studentClasses,
+} from '../schema';
 
 export type StudentClassLinkRow = {
   id: string;
@@ -129,7 +135,7 @@ export async function upsertStudentClassLink(
     })
     .returning({ id: studentClasses.id });
 
-  return { id: row!.id, created: true };
+  return { id: row.id, created: true };
 }
 
 /**
@@ -279,7 +285,10 @@ export async function listActiveShiftZoneIndicesByStudentIds(
   }
 
   for (const [studentId, indices] of byStudent) {
-    result.set(studentId, [...indices].sort((a, b) => a - b));
+    result.set(
+      studentId,
+      [...indices].sort((a, b) => a - b),
+    );
   }
   return result;
 }
@@ -312,10 +321,7 @@ export async function listActiveShiftZoneIndicesForStudent(
 }
 
 /** Turnos completos (com schedule) das turmas ativas do aluno — para ensureShiftZone. */
-export async function listActiveShiftsForStudent(
-  db: AppDb,
-  studentId: string,
-) {
+export async function listActiveShiftsForStudent(db: AppDb, studentId: string) {
   const rows = await db
     .select({
       id: shifts.id,

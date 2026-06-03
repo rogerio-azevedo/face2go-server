@@ -7,11 +7,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -28,7 +24,9 @@ export class CompanyRegistrationLinksController {
   ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Gerar link de cadastro para um cliente da empresa' })
+  @ApiOperation({
+    summary: 'Gerar link de cadastro para um cliente da empresa',
+  })
   create(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,

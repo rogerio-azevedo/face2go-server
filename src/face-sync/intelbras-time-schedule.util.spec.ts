@@ -21,7 +21,9 @@ describe('intelbras-time-schedule.util', () => {
     });
 
     it('usa 255 quando vazio', () => {
-      expect(buildTimeSectionsRecordUpdaterParams([])).toBe('TimeSections[0]=255');
+      expect(buildTimeSectionsRecordUpdaterParams([])).toBe(
+        'TimeSections[0]=255',
+      );
     });
   });
 

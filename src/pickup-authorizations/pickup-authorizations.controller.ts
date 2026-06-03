@@ -28,7 +28,9 @@ export class PickupAuthorizationsSchoolController {
   constructor(private readonly svc: PickupAuthorizationsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar autorizações temporárias de retirada (escola)' })
+  @ApiOperation({
+    summary: 'Listar autorizações temporárias de retirada (escola)',
+  })
   @ApiQuery({ name: 'studentId', required: false })
   @ApiQuery({ name: 'status', required: false })
   async list(
@@ -69,7 +71,9 @@ export class PickupAuthorizationsResponsibleController {
   constructor(private readonly svc: PickupAuthorizationsService) {}
 
   @Get('pickup-authorizations')
-  @ApiOperation({ summary: 'Listar minhas autorizações temporárias de retirada' })
+  @ApiOperation({
+    summary: 'Listar minhas autorizações temporárias de retirada',
+  })
   listMine(@CurrentUser() user: JwtPayload) {
     return this.svc.listForResponsible(user);
   }
@@ -99,7 +103,9 @@ export class PickupAuthorizationsResponsibleController {
   }
 
   @Post('pickup-authorizations/:id/approve-guest-face')
-  @ApiOperation({ summary: 'Aprovar face do convidado e sincronizar leitores/LPR' })
+  @ApiOperation({
+    summary: 'Aprovar face do convidado e sincronizar leitores/LPR',
+  })
   approveGuestFace(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,

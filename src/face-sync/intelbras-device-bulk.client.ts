@@ -6,7 +6,11 @@ import {
 } from './intelbras-valid-date.util';
 import type { PlainReaderCredential } from './intelbras-device.client';
 import { normalizeNameForFacialReader } from './normalize-name-for-reader';
-import { readerLabel, syncLog, syncLogError } from './intelbras-sync-debug.util';
+import {
+  readerLabel,
+  syncLog,
+  syncLogError,
+} from './intelbras-sync-debug.util';
 
 export type IntelbrasUserRecord = {
   userId: string;
@@ -21,9 +25,7 @@ const MAX_USERS_PER_CALL = 10;
 
 function deviceUrl(reader: PlainReaderCredential): string {
   const port = reader.port ?? 80;
-  return port === 80
-    ? `http://${reader.ip}`
-    : `http://${reader.ip}:${port}`;
+  return port === 80 ? `http://${reader.ip}` : `http://${reader.ip}:${port}`;
 }
 
 function toApiUserRecord(user: IntelbrasUserRecord) {
@@ -54,7 +56,10 @@ async function digestJsonPost(
     data: body,
     headers: { 'Content-Type': 'application/json' },
     timeout: READER_HTTP_TIMEOUT_MS,
-  } as Parameters<AxiosDigestAuth['request']>[0])) as { status?: number; data?: unknown };
+  } as Parameters<AxiosDigestAuth['request']>[0])) as {
+    status?: number;
+    data?: unknown;
+  };
 
   const status = response.status ?? 0;
   if (status >= 400) {
@@ -77,7 +82,9 @@ export async function batchInsertUsersOnReader(
 ): Promise<void> {
   if (users.length === 0) return;
   if (users.length > MAX_USERS_PER_CALL) {
-    throw new Error(`insertMulti aceita no máximo ${MAX_USERS_PER_CALL} usuários.`);
+    throw new Error(
+      `insertMulti aceita no máximo ${MAX_USERS_PER_CALL} usuários.`,
+    );
   }
 
   const label = readerLabel(reader);
@@ -92,7 +99,10 @@ export async function batchInsertUsersOnReader(
     });
     syncLog('batchInsertUsers:ok', { reader: label, count: users.length });
   } catch (err) {
-    syncLogError('batchInsertUsers', err, { reader: label, count: users.length });
+    syncLogError('batchInsertUsers', err, {
+      reader: label,
+      count: users.length,
+    });
     throw err;
   }
 }
@@ -104,7 +114,9 @@ export async function batchUpdateUsersOnReader(
 ): Promise<void> {
   if (users.length === 0) return;
   if (users.length > MAX_USERS_PER_CALL) {
-    throw new Error(`updateMulti aceita no máximo ${MAX_USERS_PER_CALL} usuários.`);
+    throw new Error(
+      `updateMulti aceita no máximo ${MAX_USERS_PER_CALL} usuários.`,
+    );
   }
 
   const label = readerLabel(reader);
@@ -119,7 +131,10 @@ export async function batchUpdateUsersOnReader(
     });
     syncLog('batchUpdateUsers:ok', { reader: label, count: users.length });
   } catch (err) {
-    syncLogError('batchUpdateUsers', err, { reader: label, count: users.length });
+    syncLogError('batchUpdateUsers', err, {
+      reader: label,
+      count: users.length,
+    });
     throw err;
   }
 }

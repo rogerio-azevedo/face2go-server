@@ -14,12 +14,7 @@ import { RegistrationLinksService } from './registration-links.service';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
 @Module({
-  imports: [
-    DatabaseModule,
-    PermissionsModule,
-    StorageModule,
-    FaceSyncModule,
-  ],
+  imports: [DatabaseModule, PermissionsModule, StorageModule, FaceSyncModule],
   controllers: [
     ClientRegistrationLinksController,
     CompanyRegistrationLinksController,

@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
-import { ALL_FEATURES, type FeatureSlug, type PermissionAction } from '../common/features.constants';
+import {
+  ALL_FEATURES,
+  type FeatureSlug,
+  type PermissionAction,
+} from '../common/features.constants';
 import { ROUTE_PERMISSIONS } from '../common/route-permissions.constants';
 import { DatabaseService } from '../database/database.service';
 import { companyUserPermissions } from '../database/schema';
@@ -57,13 +61,11 @@ export class PermissionsService {
     }
 
     if (user.role === 'company_admin') {
-      const rows =
-        await this.database.db.query.companyUserPermissions.findMany({
-          where: eq(
-            companyUserPermissions.companyUserId,
-            user.companyUserId,
-          ),
-        });
+      const rows = await this.database.db.query.companyUserPermissions.findMany(
+        {
+          where: eq(companyUserPermissions.companyUserId, user.companyUserId),
+        },
+      );
 
       const readableSlugs = this.readableFeatureSlugsFromPermissionRows(
         rows,
@@ -80,13 +82,11 @@ export class PermissionsService {
     }
 
     if (user.role === 'company_operator') {
-      const rows =
-        await this.database.db.query.companyUserPermissions.findMany({
-          where: eq(
-            companyUserPermissions.companyUserId,
-            user.companyUserId,
-          ),
-        });
+      const rows = await this.database.db.query.companyUserPermissions.findMany(
+        {
+          where: eq(companyUserPermissions.companyUserId, user.companyUserId),
+        },
+      );
 
       const readableSlugs = this.readableFeatureSlugsFromPermissionRows(
         rows,

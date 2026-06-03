@@ -25,7 +25,9 @@ function randomInviteCode(): string {
 export async function generateClientInviteCode(
   db: AppDb,
   data: GenerateClientInviteInput,
-): Promise<{ success: true; code: string } | { success: false; error: string }> {
+): Promise<
+  { success: true; code: string } | { success: false; error: string }
+> {
   const code = randomInviteCode();
 
   try {

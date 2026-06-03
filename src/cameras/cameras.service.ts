@@ -9,7 +9,6 @@ import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
-import type { FeatureSlug } from '../common/features.constants';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
 import * as camerasQueries from '../database/queries/cameras.queries';
@@ -18,11 +17,11 @@ import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import {
   formatCameraLprPlateError,
   intelbrasGetDevicePlates,
+  intelbrasRemovePlateFromCamera,
   intelbrasSearchDevicePlates,
   toPlainCameraCredential,
 } from '../lpr-plate-sync/intelbras-lpr-device.client';
-import {
-  PermissionsService } from '../permissions/permissions.service';
+import { PermissionsService } from '../permissions/permissions.service';
 import {
   createCameraSchema,
   updateCameraSchema,
@@ -107,6 +106,56 @@ export class CamerasService {
     });
   }
 
+  async removeDevicePlate(
+    user: JwtPayload,
+    cameraId: string,
+    recNoParam: string,
+    plateQuery?: string,
+  ): Promise<{ success: true }> {
+    const companyId = this.ensureCompany(user);
+
+    if (user.role === 'company_operator') {
+      const ok = await this.permissionsService.evaluateCompanyFeatureAction(
+        user.role,
+        user.companyUserId,
+        'clients',
+        'can_delete',
+      );
+      if (!ok) throw new ForbiddenException('Sem permissão.');
+    } else if (user.role !== 'company_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+
+    const row = await camerasQueries.getCameraIfEligibleForLprPlateSync(
+      this.database.db,
+      cameraId,
+      companyId,
+    );
+    if (!row) {
+      throw new NotFoundException(
+        'Câmera não encontrada ou indisponível para esta operação (ativo, LPR Intelbras e credenciais).',
+      );
+    }
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+    const plainPassword = cipher.decrypt(row.passwordEncrypted);
+    const camera = toPlainCameraCredential(row, plainPassword);
+
+    const parsedRec = parseInt(recNoParam, 10);
+    const recNo =
+      Number.isFinite(parsedRec) && parsedRec > 0 ? parsedRec : null;
+    const plate = plateQuery?.trim() || undefined;
+
+    try {
+      await intelbrasRemovePlateFromCamera(camera, { recNo, plate });
+      return { success: true };
+    } catch (e: unknown) {
+      throw new BadRequestException(formatCameraLprPlateError(camera.name, e));
+    }
+  }
+
   private async ensureReadAccessThen<T>(
     user: JwtPayload,
     companyId: string,
@@ -116,13 +165,12 @@ export class CamerasService {
       return fn();
     }
     if (user.role === 'company_operator') {
-      const ok =
-        await this.permissionsService.evaluateCompanyFeatureAction(
-          user.role,
-          user.companyUserId,
-          'clients' as FeatureSlug,
-          'can_read',
-        );
+      const ok = await this.permissionsService.evaluateCompanyFeatureAction(
+        user.role,
+        user.companyUserId,
+        'clients',
+        'can_read',
+      );
       if (!ok) throw new ForbiddenException('Sem permissão.');
       return fn();
     }
@@ -211,9 +259,7 @@ export class CamerasService {
     const patch: camerasQueries.CameraUpdateInput = {
       ...(d.clientId !== undefined ? { clientId: d.clientId } : {}),
       ...(d.type !== undefined ? { type: d.type } : {}),
-      ...(d.direction !== undefined
-        ? { direction: d.direction ?? null }
-        : {}),
+      ...(d.direction !== undefined ? { direction: d.direction ?? null } : {}),
       ...(d.brand !== undefined ? { brand: d.brand } : {}),
       ...(d.name !== undefined ? { name: d.name } : {}),
       ...(d.description !== undefined
@@ -226,9 +272,7 @@ export class CamerasService {
         : {}),
       ...(d.model !== undefined ? { model: d.model ?? null } : {}),
       ...(d.location !== undefined ? { location: d.location ?? null } : {}),
-      ...(d.deviceId !== undefined
-        ? { deviceId: d.deviceId ?? null }
-        : {}),
+      ...(d.deviceId !== undefined ? { deviceId: d.deviceId ?? null } : {}),
       ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
       ...(d.username !== undefined ? { username: d.username ?? null } : {}),
     };

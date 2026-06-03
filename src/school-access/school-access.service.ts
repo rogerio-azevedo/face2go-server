@@ -45,10 +45,7 @@ export class SchoolAccessService {
       return client;
     }
 
-    if (
-      user.role !== 'company_admin' &&
-      user.role !== 'company_operator'
-    ) {
+    if (user.role !== 'company_admin' && user.role !== 'company_operator') {
       throw new ForbiddenException('Sem permissão.');
     }
 
@@ -72,7 +69,7 @@ export class SchoolAccessService {
     const ok = await this.permissionsService.evaluateCompanyFeatureAction(
       user.role,
       user.companyUserId,
-      'clients' as FeatureSlug,
+      'clients',
       'can_read',
     );
     if (!ok) {

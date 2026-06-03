@@ -7,11 +7,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -96,7 +92,10 @@ export class ResponsibleDashboardController {
   }
 
   @Get('me/accesses')
-  @ApiOperation({ summary: 'Histórico de acessos faciais do próprio responsável (face cadastrada na escola)' })
+  @ApiOperation({
+    summary:
+      'Histórico de acessos faciais do próprio responsável (face cadastrada na escola)',
+  })
   async listOwnAccesses(
     @CurrentUser() user: JwtPayload,
     @Query('page') pageStr?: string,

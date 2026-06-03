@@ -37,7 +37,9 @@ export const responsibleInvitations = pgTable(
       .notNull()
       .references(() => responsibles.id, { onDelete: 'cascade' }),
     guestLinkCode: varchar('guest_link_code', { length: 50 }),
-    status: responsibleInvitationStatusEnum('status').notNull().default('pending'),
+    status: responsibleInvitationStatusEnum('status')
+      .notNull()
+      .default('pending'),
     faceApprovalStatus: responsibleInvitationApprovalStatusEnum(
       'face_approval_status',
     )
@@ -72,9 +74,9 @@ export const responsibleInvitations = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => ({
-    guestLinkCodeUnique: unique('responsible_invitation_guest_link_code_unique').on(
-      t.guestLinkCode,
-    ),
+    guestLinkCodeUnique: unique(
+      'responsible_invitation_guest_link_code_unique',
+    ).on(t.guestLinkCode),
   }),
 );
 

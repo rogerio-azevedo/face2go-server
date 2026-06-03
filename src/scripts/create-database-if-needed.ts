@@ -20,7 +20,10 @@ function rewriteDatabaseName(rawUrl: string, databaseName: string): string {
   return out.replace(/^postgresql:\/\//, 'postgres://');
 }
 
-async function databaseExists(adminSql: Awaited<ReturnType<typeof createPostgresClient>>, name: string) {
+async function databaseExists(
+  adminSql: Awaited<ReturnType<typeof createPostgresClient>>,
+  name: string,
+) {
   const rows = await adminSql`
     SELECT 1 FROM pg_database WHERE datname = ${name} LIMIT 1
   `;
@@ -48,7 +51,9 @@ async function main() {
   ).replace(/^\/+/, '');
 
   if (!targetDb) {
-    throw new Error('DATABASE_URL deve incluir o nome do banco no path (/meu_db).');
+    throw new Error(
+      'DATABASE_URL deve incluir o nome do banco no path (/meu_db).',
+    );
   }
 
   const maintenanceDb =

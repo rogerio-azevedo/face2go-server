@@ -36,4 +36,3 @@ export const createVehicleSchema = z
 
 /** Mesmo payload de criação (condutor + dados do veículo). */
 export const updateVehicleSchema = createVehicleSchema;
-

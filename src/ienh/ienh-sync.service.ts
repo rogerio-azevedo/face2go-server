@@ -17,7 +17,10 @@ import * as schoolClassQueries from '../database/queries/school-classes.queries'
 import * as studentClassesQueries from '../database/queries/student-classes.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { users } from '../database/schema';
-import { syncFromSnapshotSchema, syncIenhSchema } from '../validation/ienh.schema';
+import {
+  syncFromSnapshotSchema,
+  syncIenhSchema,
+} from '../validation/ienh.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import {
   IENH_FILIAL_LABELS,
@@ -36,7 +39,10 @@ import type {
   IenhSyncResult,
   TotvsIenhRecordWithFilial,
 } from './types/ienh-sync.types';
-import type { TotvsIenhRecord, TotvsIenhSnapshot } from './types/totvs-ienh.types';
+import type {
+  TotvsIenhRecord,
+  TotvsIenhSnapshot,
+} from './types/totvs-ienh.types';
 
 const PROGRESS_EMIT_INTERVAL = 10;
 const PROCESS_CONCURRENCY = 10;
@@ -409,7 +415,7 @@ export class IenhSyncService {
         while (index < items.length) {
           const i = index;
           index += 1;
-          await fn(items[i]!);
+          await fn(items[i]);
         }
       },
     );
@@ -425,7 +431,11 @@ export class IenhSyncService {
     );
     const map: Record<number, string> = {};
     for (const row of rows) {
-      if (row.ienhFilialCode != null && row.ienhFilialCode >= 1 && row.ienhFilialCode <= 3) {
+      if (
+        row.ienhFilialCode != null &&
+        row.ienhFilialCode >= 1 &&
+        row.ienhFilialCode <= 3
+      ) {
         map[row.ienhFilialCode] = row.id;
       }
     }
@@ -457,8 +467,7 @@ export class IenhSyncService {
       accountCreationInflight,
     } = args;
     const record = item.record;
-    const filial =
-      item.filial ?? resolveFilialFromRecord(record) ?? null;
+    const filial = item.filial ?? resolveFilialFromRecord(record) ?? null;
     if (filial == null) {
       throw new Error(`Filial não identificada para ${record.NOMEFILIAL}`);
     }
@@ -666,14 +675,15 @@ export class IenhSyncService {
       }
     }
 
-    const link = await responsibleStudentsQueries.findOrCreateResponsibleStudentLink(
-      this.database.db,
-      {
-        responsibleId,
-        studentId,
-        relationshipType: isMother ? 'mother' : 'father',
-      },
-    );
+    const link =
+      await responsibleStudentsQueries.findOrCreateResponsibleStudentLink(
+        this.database.db,
+        {
+          responsibleId,
+          studentId,
+          relationshipType: isMother ? 'mother' : 'father',
+        },
+      );
     if (link.created) result.linksCreated += 1;
 
     const linkedUserId = await this.ensureResponsibleAccount({

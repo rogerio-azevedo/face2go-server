@@ -46,13 +46,26 @@ export class VehiclesResponsibleController {
   }
 
   @Patch('vehicles/:id')
-  @ApiOperation({ summary: 'Atualizar veículo (condutor, placa, marca, modelo, cor)' })
+  @ApiOperation({
+    summary: 'Atualizar veículo (condutor, placa, marca, modelo, cor)',
+  })
   update(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: unknown,
   ) {
     return this.vehiclesService.updateFromResponsible(user, id, body);
+  }
+
+  @Post('vehicles/:id/sync')
+  @ApiOperation({
+    summary: 'Sincronizar placa do veículo com as câmeras LPR Intelbras',
+  })
+  sync(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.vehiclesService.syncForResponsible(user, id);
   }
 
   @Delete('vehicles/:id')

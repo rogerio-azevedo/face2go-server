@@ -22,9 +22,7 @@ export class ArrivalsListener {
   }
 
   @OnEvent(ACCESS_LPR_RECORDED, { async: true })
-  async onAccessLprRecorded(
-    payload: AccessLprRecordedPayload,
-  ): Promise<void> {
+  async onAccessLprRecorded(payload: AccessLprRecordedPayload): Promise<void> {
     await this.arrivalsService.broadcastLprRecorded(payload);
   }
 }

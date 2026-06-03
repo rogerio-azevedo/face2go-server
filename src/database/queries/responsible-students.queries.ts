@@ -26,7 +26,13 @@ export async function findOrCreateResponsibleStudentLink(
   args: {
     responsibleId: string;
     studentId: string;
-    relationshipType: 'father' | 'mother' | 'grandfather' | 'grandmother' | 'guardian' | 'other';
+    relationshipType:
+      | 'father'
+      | 'mother'
+      | 'grandfather'
+      | 'grandmother'
+      | 'guardian'
+      | 'other';
   },
 ): Promise<{ created: boolean }> {
   const existing = await findResponsibleStudentLink(

@@ -118,7 +118,8 @@ export class PublicPickupRegisterService {
     }
 
     const ext = this.r2.extForImageMime(mime);
-    const contentType = mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const contentType =
+      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
     const client = await clientsQueries.getClientByIdOnly(
       this.database.db,
       row.clientId,

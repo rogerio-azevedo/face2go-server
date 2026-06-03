@@ -31,7 +31,8 @@ export type PickupGuestFaceSubmittedPayload = {
   guestName: string;
 };
 
-export const RESPONSIBLE_INVITATION_SUBMITTED = 'responsible.invitation.submitted';
+export const RESPONSIBLE_INVITATION_SUBMITTED =
+  'responsible.invitation.submitted';
 
 export type ResponsibleInvitationSubmittedPayload = {
   invitationId: string;

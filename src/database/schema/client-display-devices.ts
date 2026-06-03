@@ -2,10 +2,10 @@ import { pgEnum, pgTable, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { clients } from './clients';
 
-export const clientDisplayDeviceTypeEnum = pgEnum('client_display_device_type', [
-  'lpr_camera',
-  'facial_reader',
-]);
+export const clientDisplayDeviceTypeEnum = pgEnum(
+  'client_display_device_type',
+  ['lpr_camera', 'facial_reader'],
+);
 
 export const clientDisplayDevices = pgTable(
   'client_display_devices',

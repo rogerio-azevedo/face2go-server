@@ -44,8 +44,8 @@ export const cameras = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('cameras_device_id_unique').on(table.deviceId).where(
-      sql`${table.deviceId} IS NOT NULL`,
-    ),
+    uniqueIndex('cameras_device_id_unique')
+      .on(table.deviceId)
+      .where(sql`${table.deviceId} IS NOT NULL`),
   ],
 );

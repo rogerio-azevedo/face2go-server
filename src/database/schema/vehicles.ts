@@ -30,9 +30,8 @@ export const vehicles = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
     /** Sincronização da placa com câmeras LPR Intelbras (TrafficRedList). */
-    lprSyncStatus: deviceSyncStatusEnum('lpr_sync_status').default(
-      'pending_sync',
-    ),
+    lprSyncStatus:
+      deviceSyncStatusEnum('lpr_sync_status').default('pending_sync'),
     lprSyncError: text('lpr_sync_error'),
     lprSyncedAt: timestamp('lpr_synced_at'),
   },

@@ -93,7 +93,12 @@ export class GlobalFaceSyncService {
       entities,
       emit,
       updateStatus: (id, status) =>
-        studentsQueries.updateStudentFace(this.database.db, id, clientId, status),
+        studentsQueries.updateStudentFace(
+          this.database.db,
+          id,
+          clientId,
+          status,
+        ),
       logLabel: 'students',
     });
   }

@@ -69,8 +69,8 @@ export async function listReaders(
 
   return rows.map(({ passwordEncrypted, ...r }) => ({
     ...r,
-    brand: (r.brand ?? 'intelbras') as ReaderBrand,
-    direction: (r.direction ?? null) as ReaderDirection | null,
+    brand: r.brand ?? 'intelbras',
+    direction: r.direction ?? null,
     hasCredentials: !!(
       r.username?.trim() &&
       passwordEncrypted != null &&
@@ -116,8 +116,8 @@ export async function getReaderById(
   const { passwordEncrypted, ...rest } = row;
   return {
     ...rest,
-    brand: (row.brand ?? 'intelbras') as ReaderBrand,
-    direction: (row.direction ?? null) as ReaderDirection | null,
+    brand: row.brand ?? 'intelbras',
+    direction: row.direction ?? null,
     hasCredentials: !!(
       row.username?.trim() &&
       passwordEncrypted != null &&
@@ -261,9 +261,7 @@ export async function updateReader(
   }
   if (input.model !== undefined) {
     setPayload.model =
-      input.model === null || input.model === ''
-        ? null
-        : input.model.trim();
+      input.model === null || input.model === '' ? null : input.model.trim();
   }
   if (input.location !== undefined) {
     setPayload.location =
@@ -322,8 +320,8 @@ export function readerRowToPublic(row: typeof facialReaders.$inferSelect) {
   const { passwordEncrypted, ...rest } = row;
   return {
     ...rest,
-    brand: (rest.brand ?? 'intelbras') as ReaderBrand,
-    direction: (rest.direction ?? null) as ReaderDirection | null,
+    brand: rest.brand ?? 'intelbras',
+    direction: rest.direction ?? null,
     hasCredentials: !!(
       rest.username?.trim() &&
       passwordEncrypted != null &&
@@ -392,8 +390,8 @@ export async function listReadersForEventStream(
       clientId: r.clientId,
       clientName: r.clientName,
       companyId: r.companyId,
-      brand: (r.brand ?? 'intelbras') as ReaderBrand,
-      direction: (r.direction ?? null) as ReaderDirection | null,
+      brand: r.brand ?? 'intelbras',
+      direction: r.direction ?? null,
       ip: r.ip,
       port: r.port,
       username: r.username as string,
@@ -447,8 +445,8 @@ export async function getReaderForEventStreamById(
     clientId: row.clientId,
     clientName: row.clientName,
     companyId: row.companyId,
-    brand: (row.brand ?? 'intelbras') as ReaderBrand,
-    direction: (row.direction ?? null) as ReaderDirection | null,
+    brand: row.brand ?? 'intelbras',
+    direction: row.direction ?? null,
     ip: row.ip,
     port: row.port,
     username: row.username,
@@ -517,7 +515,7 @@ export async function listReadersForMonitorReport(
     id: r.id,
     clientId: r.clientId,
     clientName: r.clientName,
-    brand: (r.brand ?? 'intelbras') as ReaderBrand,
+    brand: r.brand ?? 'intelbras',
     name: r.name,
     ip: r.ip,
     port: r.port,
@@ -568,9 +566,6 @@ export async function listReadersForFaceSyncByClient(
     );
 
   return rows.filter(
-    (r) =>
-      r.username?.trim() &&
-      r.passwordEncrypted?.trim() &&
-      r.ip?.trim(),
+    (r) => r.username?.trim() && r.passwordEncrypted?.trim() && r.ip?.trim(),
   ) as ReaderFaceSyncRow[];
 }

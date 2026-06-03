@@ -37,7 +37,10 @@ export class IenhFilialMappingService {
       this.database.db,
       companyId,
     );
-    const byFilial = new Map<number, { clientId: string; clientName: string }>();
+    const byFilial = new Map<
+      number,
+      { clientId: string; clientName: string }
+    >();
     for (const c of clients) {
       if (c.ienhFilialCode != null) {
         byFilial.set(c.ienhFilialCode, { clientId: c.id, clientName: c.name });

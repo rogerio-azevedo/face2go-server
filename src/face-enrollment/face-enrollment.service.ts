@@ -55,14 +55,11 @@ export class FaceEnrollmentService {
     private readonly accessTimeZone: AccessTimeZoneService,
   ) {}
 
-  private assertResponsibleScope(
-    user: JwtPayload,
-  ): { responsibleId: string; clientId: string } {
-    if (
-      user.role !== 'responsible' ||
-      !user.responsibleId ||
-      !user.clientId
-    ) {
+  private assertResponsibleScope(user: JwtPayload): {
+    responsibleId: string;
+    clientId: string;
+  } {
+    if (user.role !== 'responsible' || !user.responsibleId || !user.clientId) {
       throw new ForbiddenException('Acesso apenas para conta de responsável.');
     }
     return { responsibleId: user.responsibleId, clientId: user.clientId };
@@ -235,8 +232,7 @@ export class FaceEnrollmentService {
       clientId,
       {
         deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError: sync.deviceSyncError,
       },
     );
@@ -353,8 +349,7 @@ export class FaceEnrollmentService {
       clientId,
       {
         deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError: sync.deviceSyncError,
       },
     );
@@ -440,8 +435,7 @@ export class FaceEnrollmentService {
       clientId,
       {
         deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError: sync.deviceSyncError,
       },
     );
@@ -516,8 +510,7 @@ export class FaceEnrollmentService {
       clientId,
       {
         deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError: sync.deviceSyncError,
       },
     );
@@ -534,9 +527,7 @@ export class FaceEnrollmentService {
     };
   }
 
-  async resyncMyFaceFromR2(
-    user: JwtPayload,
-  ): Promise<FaceEnrollmentStatusDto> {
+  async resyncMyFaceFromR2(user: JwtPayload): Promise<FaceEnrollmentStatusDto> {
     const { responsibleId, clientId } = this.assertResponsibleScope(user);
     return this.resyncResponsibleFromR2(clientId, responsibleId);
   }

@@ -39,7 +39,8 @@ export async function invitationInsertWithStudents(
         studentLinks.map((link) => ({
           invitationId: row.id,
           studentId: link.studentId,
-          relationshipType: link.relationshipType as typeof responsibleInvitationStudents.$inferInsert['relationshipType'],
+          relationshipType:
+            link.relationshipType as (typeof responsibleInvitationStudents.$inferInsert)['relationshipType'],
           isAuthorizedPickup: link.isAuthorizedPickup,
         })),
       );
@@ -87,7 +88,10 @@ export async function invitationListStudentsForInvitation(
       isAuthorizedPickup: responsibleInvitationStudents.isAuthorizedPickup,
     })
     .from(responsibleInvitationStudents)
-    .innerJoin(students, eq(responsibleInvitationStudents.studentId, students.id))
+    .innerJoin(
+      students,
+      eq(responsibleInvitationStudents.studentId, students.id),
+    )
     .where(eq(responsibleInvitationStudents.invitationId, invitationId))
     .orderBy(students.name);
 }
@@ -106,10 +110,11 @@ export async function invitationListStudentsForInvitationIds(
       isAuthorizedPickup: responsibleInvitationStudents.isAuthorizedPickup,
     })
     .from(responsibleInvitationStudents)
-    .innerJoin(students, eq(responsibleInvitationStudents.studentId, students.id))
-    .where(
-      inArray(responsibleInvitationStudents.invitationId, invitationIds),
+    .innerJoin(
+      students,
+      eq(responsibleInvitationStudents.studentId, students.id),
     )
+    .where(inArray(responsibleInvitationStudents.invitationId, invitationIds))
     .orderBy(students.name);
 }
 

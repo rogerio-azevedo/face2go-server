@@ -8,11 +8,7 @@ import {
   Post,
   Body,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -39,7 +35,9 @@ export class ManagedResponsiblesController {
   }
 
   @Delete('managed-responsibles/:id')
-  @ApiOperation({ summary: 'Excluir responsável do núcleo familiar (apenas pai/mãe)' })
+  @ApiOperation({
+    summary: 'Excluir responsável do núcleo familiar (apenas pai/mãe)',
+  })
   deleteManaged(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -48,7 +46,9 @@ export class ManagedResponsiblesController {
   }
 
   @Post('responsible-invitations')
-  @ApiOperation({ summary: 'Criar convite de cadastro de responsável (Fluxo 2)' })
+  @ApiOperation({
+    summary: 'Criar convite de cadastro de responsável (Fluxo 2)',
+  })
   createInvitation(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
     return this.svc.createInvitation(user, body);
   }

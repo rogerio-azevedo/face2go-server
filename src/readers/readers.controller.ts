@@ -39,13 +39,7 @@ export class ReadersController {
     const lim = limit ? parseInt(limit, 10) : 50;
     const off = offset ? parseInt(offset, 10) : 0;
     const term = search?.trim() || undefined;
-    return this.readersService.getDeviceUsers(
-      user,
-      readerId,
-      lim,
-      off,
-      term,
-    );
+    return this.readersService.getDeviceUsers(user, readerId, lim, off, term);
   }
 
   @Get('monitor/status')
@@ -62,10 +56,7 @@ export class ReadersController {
 
   @Get()
   @ApiOperation({ summary: 'Listar leitores faciais da empresa' })
-  list(
-    @CurrentUser() user: JwtPayload,
-    @Query('clientId') clientId?: string,
-  ) {
+  list(@CurrentUser() user: JwtPayload, @Query('clientId') clientId?: string) {
     return this.readersService.list(user, clientId);
   }
 
@@ -96,7 +87,6 @@ export class ReadersController {
   ) {
     return this.readersService.setActive(user, readerId, body);
   }
-
 
   @Delete(':readerId/device-users/:userId')
   @ApiOperation({

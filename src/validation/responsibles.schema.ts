@@ -11,7 +11,10 @@ export const responsibleRelationshipSchema = z.enum([
 
 export const createResponsibleSchema = z.object({
   email: z.email('E-mail inválido.'),
-  password: z.string().min(8, 'Senha deve ter pelo menos 8 caracteres.').max(128),
+  password: z
+    .string()
+    .min(8, 'Senha deve ter pelo menos 8 caracteres.')
+    .max(128),
   name: z.string().trim().min(1, 'Informe o nome.').max(255),
   phone: z.string().trim().max(32).nullable().optional(),
   document: z.string().trim().max(32).nullable().optional(),

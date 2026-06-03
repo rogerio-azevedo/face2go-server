@@ -62,11 +62,7 @@ export class PickupAuthorizationsService {
     clientId: string;
     responsibleId: string;
   } {
-    if (
-      user.role !== 'responsible' ||
-      !user.clientId ||
-      !user.responsibleId
-    ) {
+    if (user.role !== 'responsible' || !user.clientId || !user.responsibleId) {
       throw new ForbiddenException('Acesso apenas para conta de responsável.');
     }
   }
@@ -77,7 +73,9 @@ export class PickupAuthorizationsService {
     return `${trimmed}/retirada/${code}`;
   }
 
-  private async enrichRows(rows: PickupAuthRow[]): Promise<PickupAuthorizationResponse[]> {
+  private async enrichRows(
+    rows: PickupAuthRow[],
+  ): Promise<PickupAuthorizationResponse[]> {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
     const links = await pickupQueries.pickupAuthListStudentsForAuthIds(
@@ -128,7 +126,10 @@ export class PickupAuthorizationsService {
   }
 
   private async expireStale(clientId: string) {
-    await pickupQueries.pickupAuthExpireStaleActives(this.database.db, clientId);
+    await pickupQueries.pickupAuthExpireStaleActives(
+      this.database.db,
+      clientId,
+    );
   }
 
   async listForSchoolClient(
@@ -146,7 +147,9 @@ export class PickupAuthorizationsService {
     return this.enrichRows(rows);
   }
 
-  async listForResponsible(user: JwtPayload): Promise<PickupAuthorizationResponse[]> {
+  async listForResponsible(
+    user: JwtPayload,
+  ): Promise<PickupAuthorizationResponse[]> {
     this.assertResponsibleJwt(user);
     await this.expireStale(user.clientId);
     const rows = await pickupQueries.pickupAuthListByResponsible(
@@ -218,13 +221,19 @@ export class PickupAuthorizationsService {
         students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
       );
     } catch {
-      throw new BadRequestException('Não foi possível registrar a autorização.');
+      throw new BadRequestException(
+        'Não foi possível registrar a autorização.',
+      );
     }
   }
 
   async generateGuestLink(user: JwtPayload, id: string) {
     this.assertResponsibleJwt(user);
-    const row = await this.assertOwnedAuth(id, user.clientId, user.responsibleId);
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
     if (row.guestLinkCode) {
       return {
         code: row.guestLinkCode,
@@ -265,20 +274,32 @@ export class PickupAuthorizationsService {
 
   async getGuestFacePreviewUrl(user: JwtPayload, id: string) {
     this.assertResponsibleJwt(user);
-    const row = await this.assertOwnedAuth(id, user.clientId, user.responsibleId);
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
     if (!row.guestFaceImageKey) {
       throw new BadRequestException('O convidado ainda não enviou a foto.');
     }
-    const url = await this.r2.createPresignedPortraitGetUrl(row.guestFaceImageKey);
+    const url = await this.r2.createPresignedPortraitGetUrl(
+      row.guestFaceImageKey,
+    );
     if (!url) {
-      throw new BadRequestException('Não foi possível carregar a prévia da foto.');
+      throw new BadRequestException(
+        'Não foi possível carregar a prévia da foto.',
+      );
     }
     return { url };
   }
 
   async approveGuestFace(user: JwtPayload, id: string) {
     this.assertResponsibleJwt(user);
-    const row = await this.assertOwnedAuth(id, user.clientId, user.responsibleId);
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
     if (row.guestApprovalStatus !== 'submitted') {
       throw new BadRequestException(
         'Só é possível aprovar após o convidado enviar a foto.',
@@ -361,7 +382,11 @@ export class PickupAuthorizationsService {
 
   async rejectGuestFace(user: JwtPayload, id: string) {
     this.assertResponsibleJwt(user);
-    const row = await this.assertOwnedAuth(id, user.clientId, user.responsibleId);
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
     if (row.guestApprovalStatus !== 'submitted') {
       throw new BadRequestException(
         'Só é possível recusar após o convidado enviar a foto.',
@@ -563,5 +588,4 @@ export class PickupAuthorizationsService {
       ext,
     );
   }
-
 }

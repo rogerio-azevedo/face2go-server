@@ -46,7 +46,10 @@ export class LegalDocumentsService {
       })
       .from(legalDocuments)
       .where(eq(legalDocuments.type, type))
-      .orderBy(desc(legalDocuments.effectiveDate), desc(legalDocuments.createdAt));
+      .orderBy(
+        desc(legalDocuments.effectiveDate),
+        desc(legalDocuments.createdAt),
+      );
   }
 
   async getByTypeAndVersion(type: string, version: string) {
@@ -63,10 +66,7 @@ export class LegalDocumentsService {
       })
       .from(legalDocuments)
       .where(
-        and(
-          eq(legalDocuments.type, type),
-          eq(legalDocuments.version, version),
-        ),
+        and(eq(legalDocuments.type, type), eq(legalDocuments.version, version)),
       )
       .limit(1);
 

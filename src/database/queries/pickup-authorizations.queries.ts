@@ -142,12 +142,7 @@ export async function pickupAuthListByClient(
 }
 
 function isPickupStatus(s: string): s is PickupAuthRow['status'] {
-  return (
-    s === 'active' ||
-    s === 'used' ||
-    s === 'expired' ||
-    s === 'cancelled'
-  );
+  return s === 'active' || s === 'used' || s === 'expired' || s === 'cancelled';
 }
 
 export async function pickupAuthListByResponsible(
@@ -259,7 +254,10 @@ export async function pickupAuthUpdateGuestApproval(
   return rows[0];
 }
 
-export async function pickupAuthExpireStaleActives(db: AppDb, clientId: string) {
+export async function pickupAuthExpireStaleActives(
+  db: AppDb,
+  clientId: string,
+) {
   await db
     .update(temporaryPickupAuthorizations)
     .set({ status: 'expired', updatedAt: new Date() })
@@ -311,7 +309,10 @@ export async function pickupAuthFindActiveGuestByPlate(
   return row ?? null;
 }
 
-export function isGuestLinkCodeTaken(db: AppDb, code: string): Promise<boolean> {
+export function isGuestLinkCodeTaken(
+  db: AppDb,
+  code: string,
+): Promise<boolean> {
   return db
     .select({ id: temporaryPickupAuthorizations.id })
     .from(temporaryPickupAuthorizations)

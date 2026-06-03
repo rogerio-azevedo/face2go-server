@@ -62,7 +62,7 @@ export class ReadersService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -89,7 +89,7 @@ export class ReadersService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -280,7 +280,7 @@ export class ReadersService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -336,7 +336,8 @@ export class ReadersService {
       return await intelbrasGetDeviceUsers(plainReader, limit, offset);
     } catch (e: any) {
       throw new BadRequestException(
-        'Falha ao comunicar com o leitor: ' + (e.message || 'Erro desconhecido'),
+        'Falha ao comunicar com o leitor: ' +
+          (e.message || 'Erro desconhecido'),
       );
     }
   }
@@ -351,7 +352,7 @@ export class ReadersService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_delete',
       );
       if (!ok) {
@@ -400,7 +401,8 @@ export class ReadersService {
       return { success: true };
     } catch (e: any) {
       throw new BadRequestException(
-        'Falha ao comunicar com o leitor: ' + (e.message || 'Erro desconhecido'),
+        'Falha ao comunicar com o leitor: ' +
+          (e.message || 'Erro desconhecido'),
       );
     }
   }
@@ -415,7 +417,7 @@ export class ReadersService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -463,7 +465,8 @@ export class ReadersService {
       return await intelbrasGetFaceImage(plainReader, userId);
     } catch (e: any) {
       throw new BadRequestException(
-        'Falha ao comunicar com o leitor: ' + (e.message || 'Erro desconhecido'),
+        'Falha ao comunicar com o leitor: ' +
+          (e.message || 'Erro desconhecido'),
       );
     }
   }

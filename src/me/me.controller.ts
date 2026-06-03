@@ -20,7 +20,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 @ApiBearerAuth()
 @Controller('me')
 export class MeController {
-  constructor(private readonly permissionsService: PermissionsService) { }
+  constructor(private readonly permissionsService: PermissionsService) {}
 
   @Get('navigation')
   @ApiOperation({

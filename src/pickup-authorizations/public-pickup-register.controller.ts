@@ -11,7 +11,9 @@ export class PublicPickupRegisterController {
 
   @Public()
   @Get(':code')
-  @ApiOperation({ summary: 'Preview da autorização de retirada para cadastro de face' })
+  @ApiOperation({
+    summary: 'Preview da autorização de retirada para cadastro de face',
+  })
   preview(@Param('code') code: string) {
     return this.svc.getPreview(code);
   }

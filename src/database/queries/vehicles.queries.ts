@@ -60,7 +60,7 @@ export async function vehicleListForHousehold(
       ),
     )
     .orderBy(desc(vehicles.createdAt));
-  return rows as VehicleWithDriverRow[];
+  return rows;
 }
 
 /**
@@ -76,7 +76,10 @@ export async function findVehiclePlateForArrival(
     .select({ plate: vehicles.plate })
     .from(vehicles)
     .where(
-      and(eq(vehicles.clientId, clientId), eq(vehicles.responsibleId, responsibleId)),
+      and(
+        eq(vehicles.clientId, clientId),
+        eq(vehicles.responsibleId, responsibleId),
+      ),
     )
     .orderBy(desc(vehicles.createdAt))
     .limit(1);
@@ -113,21 +116,14 @@ export async function findResponsibleByPlate(
     .from(vehicles)
     .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
     .where(
-      and(
-        eq(vehicles.clientId, clientId),
-        eq(vehicles.plate, normalizedPlate),
-      ),
+      and(eq(vehicles.clientId, clientId), eq(vehicles.plate, normalizedPlate)),
     )
     .orderBy(desc(vehicles.createdAt))
     .limit(1);
   return row ?? null;
 }
 
-export async function vehicleGetById(
-  db: AppDb,
-  id: string,
-  clientId: string,
-) {
+export async function vehicleGetById(db: AppDb, id: string, clientId: string) {
   const rows = await db
     .select()
     .from(vehicles)
@@ -269,7 +265,7 @@ export async function vehicleListForClient(
   }
 
   const rows = await q;
-  return rows as VehicleWithDriverRow[];
+  return rows;
 }
 
 export async function vehicleUpdateById(
@@ -371,7 +367,7 @@ export async function vehicleGetWithDriver(
     .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
     .where(and(eq(vehicles.id, id), eq(vehicles.clientId, clientId)))
     .limit(1);
-  return row as VehicleWithDriverRow | undefined;
+  return row;
 }
 
 export type VehicleLprSyncPatch = {
@@ -442,5 +438,5 @@ export async function listVehiclesPendingLprSync(
       ),
     )
     .orderBy(desc(vehicles.createdAt));
-  return rows as VehicleWithDriverRow[];
+  return rows;
 }

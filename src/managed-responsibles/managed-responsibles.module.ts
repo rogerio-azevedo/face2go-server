@@ -10,12 +10,7 @@ import { PublicResponsibleRegisterController } from './public-responsible-regist
 import { PublicResponsibleRegisterService } from './public-responsible-register.service';
 
 @Module({
-  imports: [
-    DatabaseModule,
-    StorageModule,
-    FaceSyncModule,
-    LprPlateSyncModule,
-  ],
+  imports: [DatabaseModule, StorageModule, FaceSyncModule, LprPlateSyncModule],
   controllers: [
     ManagedResponsiblesController,
     PublicResponsibleRegisterController,

@@ -1,9 +1,12 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -20,7 +23,8 @@ export class FaceEnrollmentController {
 
   @Get('me/face')
   @ApiOperation({
-    summary: 'Status da face do responsável (foto cadastrada e sync com leitores)',
+    summary:
+      'Status da face do responsável (foto cadastrada e sync com leitores)',
   })
   async getMyFace(@CurrentUser() user: JwtPayload) {
     return this.faceEnrollmentService.getMyFaceStatus(user);
@@ -28,7 +32,8 @@ export class FaceEnrollmentController {
 
   @Post('me/face')
   @ApiOperation({
-    summary: 'Enviar/atualizar foto do responsável e sincronizar com os leitores',
+    summary:
+      'Enviar/atualizar foto do responsável e sincronizar com os leitores',
   })
   async uploadMyFace(
     @CurrentUser() user: JwtPayload,

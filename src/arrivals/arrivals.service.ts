@@ -32,7 +32,10 @@ export class ArrivalsService {
   private readonly logger = new Logger(ArrivalsService.name);
   /** Por escola/cliente (UUID). */
   private readonly hubs = new Map<string, Set<SinkFn>>();
-  private readonly displayDeviceCache = new Map<string, DisplayDeviceCacheEntry>();
+  private readonly displayDeviceCache = new Map<
+    string,
+    DisplayDeviceCacheEntry
+  >();
   private static readonly DISPLAY_DEVICE_CACHE_TTL_MS = 30_000;
 
   constructor(
@@ -232,12 +235,11 @@ export class ArrivalsService {
           payload.clientId,
         );
       } else {
-        const student =
-          await studentsQueries.findStudentByFaceIdAndClientId(
-            this.database.db,
-            payload.faceId,
-            payload.clientId,
-          );
+        const student = await studentsQueries.findStudentByFaceIdAndClientId(
+          this.database.db,
+          payload.faceId,
+          payload.clientId,
+        );
         if (student) {
           kind = 'student';
           personName = student.name;
@@ -277,9 +279,7 @@ export class ArrivalsService {
     }
   }
 
-  async broadcastLprRecorded(
-    payload: AccessLprRecordedPayload,
-  ): Promise<void> {
+  async broadcastLprRecorded(payload: AccessLprRecordedPayload): Promise<void> {
     try {
       if (
         !(await this.isDeviceAllowed(

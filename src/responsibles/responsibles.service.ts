@@ -42,7 +42,11 @@ export class ResponsiblesService {
     private readonly accessTimeZone: AccessTimeZoneService,
   ) {}
 
-  async list(user: JwtPayload, clientId: string, query: ListPaginationParams = {}) {
+  async list(
+    user: JwtPayload,
+    clientId: string,
+    query: ListPaginationParams = {},
+  ) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
     const { page, pageSize, search, offset } = parseListPaginationParams(
       query.page !== undefined ? String(query.page) : undefined,
@@ -50,9 +54,13 @@ export class ResponsiblesService {
       query.search,
     );
     const [total, rows] = await Promise.all([
-      responsiblesQueries.countResponsiblesByClient(this.database.db, clientId, {
-        search,
-      }),
+      responsiblesQueries.countResponsiblesByClient(
+        this.database.db,
+        clientId,
+        {
+          search,
+        },
+      ),
       responsiblesQueries.listResponsiblesByClientWithEmail(
         this.database.db,
         clientId,
@@ -68,7 +76,9 @@ export class ResponsiblesService {
     return buildPaginatedResult(data, total, page, pageSize);
   }
 
-  private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
+  private async optionalPhotoUrl(
+    photoKey: string | null,
+  ): Promise<string | null> {
     if (!photoKey) return null;
     try {
       return await this.r2Storage.createPresignedPortraitGetUrl(photoKey);
@@ -396,13 +406,12 @@ export class ResponsiblesService {
         : {}),
     };
 
-    const updated =
-      await responsiblesQueries.updateResponsibleStudentLink(
-        this.database.db,
-        responsibleId,
-        studentId,
-        patch,
-      );
+    const updated = await responsiblesQueries.updateResponsibleStudentLink(
+      this.database.db,
+      responsibleId,
+      studentId,
+      patch,
+    );
     if (!updated) {
       throw new NotFoundException('Vínculo não encontrado.');
     }
@@ -509,8 +518,7 @@ export class ResponsiblesService {
       clientId,
       {
         deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError: sync.deviceSyncError,
       },
     );

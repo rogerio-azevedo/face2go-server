@@ -8,7 +8,11 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import { ALL_FEATURES, type FeatureSlug, type PermissionAction } from '../common/features.constants';
+import {
+  ALL_FEATURES,
+  type FeatureSlug,
+  type PermissionAction,
+} from '../common/features.constants';
 import { DatabaseService } from '../database/database.service';
 import * as permissionsQueries from '../database/queries/permissions.queries';
 import * as invitesQueries from '../database/queries/invites.queries';
@@ -72,7 +76,7 @@ export class CompanyUsersService {
         );
         permissionsMap[u.companyUserId] = rows.map((r) => ({
           featureSlug: r.featureSlug,
-          actions: r.actions as string[],
+          actions: r.actions,
         }));
       }
     }
@@ -118,11 +122,7 @@ export class CompanyUsersService {
     return { code: inviteResult.code };
   }
 
-  async updateRole(
-    user: JwtPayload,
-    companyUserId: string,
-    body: unknown,
-  ) {
+  async updateRole(user: JwtPayload, companyUserId: string, body: unknown) {
     const companyId = this.ensureCompanyAdmin(user);
     const parsed = updateRoleSchema.safeParse(body);
     if (!parsed.success) {
@@ -206,11 +206,7 @@ export class CompanyUsersService {
     return { success: true };
   }
 
-  async updateProfile(
-    user: JwtPayload,
-    companyUserId: string,
-    body: unknown,
-  ) {
+  async updateProfile(user: JwtPayload, companyUserId: string, body: unknown) {
     const companyId = this.ensureCompanyAdmin(user);
     const parsed = profileSchema.safeParse(body);
     if (!parsed.success) {

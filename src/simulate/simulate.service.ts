@@ -105,11 +105,7 @@ export class SimulateService {
       trimmed,
       companyId,
     );
-    if (
-      !reader ||
-      !reader.isActive ||
-      reader.clientId !== clientId
-    ) {
+    if (!reader || !reader.isActive || reader.clientId !== clientId) {
       return fallback;
     }
 
@@ -264,8 +260,7 @@ export class SimulateService {
     }
 
     const snapKey =
-      typeof responsible.photoKey === 'string' &&
-      responsible.photoKey.trim()
+      typeof responsible.photoKey === 'string' && responsible.photoKey.trim()
         ? responsible.photoKey.trim()
         : null;
 

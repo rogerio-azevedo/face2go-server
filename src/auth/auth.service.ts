@@ -40,9 +40,7 @@ import {
   type RegisterInput,
 } from '../validation/register.schema';
 import { joinContextSchema } from '../validation/join-context.schema';
-import {
-  requestPasswordSchema,
-} from '../validation/request-password.schema';
+import { requestPasswordSchema } from '../validation/request-password.schema';
 import { resetPasswordSchema } from '../validation/reset-password.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { EmailService } from '../email/email.service';

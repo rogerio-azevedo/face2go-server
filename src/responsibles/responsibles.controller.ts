@@ -10,11 +10,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -35,7 +31,8 @@ export class ResponsiblesController {
 
   @Get()
   @ApiOperation({
-    summary: 'Listar responsáveis da escola paginados (?page, ?pageSize, ?search)',
+    summary:
+      'Listar responsáveis da escola paginados (?page, ?pageSize, ?search)',
   })
   list(
     @CurrentUser() user: JwtPayload,
@@ -86,7 +83,9 @@ export class ResponsiblesController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Cadastrar responsável com login (usuário + senha)' })
+  @ApiOperation({
+    summary: 'Cadastrar responsável com login (usuário + senha)',
+  })
   create(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,

@@ -62,7 +62,7 @@ export class RegistrationsAdminService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -159,10 +159,7 @@ export class RegistrationsAdminService {
     return this.faceUrlShared(clientId, registrationId);
   }
 
-  async faceUrlForClientTenant(
-    user: JwtPayload,
-    registrationId: string,
-  ) {
+  async faceUrlForClientTenant(user: JwtPayload, registrationId: string) {
     const clientId = this.ensureClientTenant(user);
     return this.faceUrlShared(clientId, registrationId);
   }
@@ -217,13 +214,12 @@ export class RegistrationsAdminService {
         this.database.db,
         clientId,
       );
-      const linked =
-        await registrationsQueries.setRegistrationFaceAfterApprove(
-          this.database.db,
-          registrationId,
-          clientId,
-          faceId,
-        );
+      const linked = await registrationsQueries.setRegistrationFaceAfterApprove(
+        this.database.db,
+        registrationId,
+        clientId,
+        faceId,
+      );
       if (!linked) {
         throw new BadRequestException('Falha ao atribuir face_id ao cadastro.');
       }
@@ -236,9 +232,7 @@ export class RegistrationsAdminService {
             err instanceof Error
               ? err.message
               : 'Erro ao sincronizar face com os leitores.';
-          this.logger.warn(
-            `sync pós-aprovação reg=${registrationId}: ${msg}`,
-          );
+          this.logger.warn(`sync pós-aprovação reg=${registrationId}: ${msg}`);
         });
     }
 

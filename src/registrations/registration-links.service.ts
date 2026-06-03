@@ -126,7 +126,7 @@ export class RegistrationLinksService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -154,7 +154,11 @@ export class RegistrationLinksService {
     return clientId;
   }
 
-  async createForCompanyUser(user: JwtPayload, clientId: string, body: unknown) {
+  async createForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    body: unknown,
+  ) {
     await this.ensureCompanyCanAccessClient(user, clientId);
     const schedule = parseCreateLinkBody(body);
     return this.createLink(clientId, user.sub, schedule);
@@ -200,8 +204,7 @@ export class RegistrationLinksService {
     createdByUserId: string,
     schedule: CreateLinkSchedule,
   ) {
-    const validFrom =
-      schedule.kind === 'temporary' ? schedule.validFrom : null;
+    const validFrom = schedule.kind === 'temporary' ? schedule.validFrom : null;
     const expiresAt =
       schedule.kind === 'temporary' ? schedule.validUntil : null;
     const db = this.database.db;
@@ -228,7 +231,9 @@ export class RegistrationLinksService {
         // colisão de code → tentar de novo
       }
     }
-    throw new BadRequestException('Não foi possível gerar o link. Tente novamente.');
+    throw new BadRequestException(
+      'Não foi possível gerar o link. Tente novamente.',
+    );
   }
 
   private async listForClientId(clientId: string) {

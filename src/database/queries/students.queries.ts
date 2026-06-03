@@ -146,11 +146,7 @@ export async function listStudentsByClass(
   return q;
 }
 
-export async function getStudentById(
-  db: AppDb,
-  id: string,
-  clientId: string,
-) {
+export async function getStudentById(db: AppDb, id: string, clientId: string) {
   const [row] = await db
     .select()
     .from(students)
@@ -349,7 +345,7 @@ export async function upsertStudentByEnrollment(
       situacaoMatricula: input.situacaoMatricula,
       isActive: input.isActive,
     });
-    return { row: row!, created: false };
+    return { row: row, created: false };
   }
   const row = await insertStudent(db, {
     clientId: input.clientId,
@@ -359,7 +355,7 @@ export async function upsertStudentByEnrollment(
     situacaoMatricula: input.situacaoMatricula ?? null,
     isActive: input.isActive,
   });
-  return { row: row!, created: true };
+  return { row: row, created: true };
 }
 
 export type StudentForGlobalSyncRow = {
@@ -396,8 +392,7 @@ export async function listStudentsForGlobalSync(
     .orderBy(asc(students.name));
 
   return rows.filter(
-    (r): r is StudentForGlobalSyncRow =>
-      r.faceId != null && r.photoKey != null,
+    (r): r is StudentForGlobalSyncRow => r.faceId != null && r.photoKey != null,
   );
 }
 

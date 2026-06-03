@@ -22,7 +22,11 @@ export function parseListPaginationParams(
   const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
   const pageSize = Math.min(
     MAX_PAGE_SIZE,
-    Math.max(1, parseInt(pageSizeStr ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE),
+    Math.max(
+      1,
+      parseInt(pageSizeStr ?? String(DEFAULT_PAGE_SIZE), 10) ||
+        DEFAULT_PAGE_SIZE,
+    ),
   );
   const trimmed = search?.trim();
   return {

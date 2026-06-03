@@ -43,10 +43,7 @@ export async function updateShift(
   id: string,
   clientId: string,
   patch: Partial<
-    Pick<
-      typeof shifts.$inferInsert,
-      'name' | 'schedule' | 'isActive'
-    >
+    Pick<typeof shifts.$inferInsert, 'name' | 'schedule' | 'isActive'>
   >,
 ) {
   const now = new Date();
@@ -73,9 +70,7 @@ export async function listShiftsWithZoneIndexByClient(
   return db
     .select()
     .from(shifts)
-    .where(
-      and(eq(shifts.clientId, clientId), isNotNull(shifts.timeZoneIndex)),
-    )
+    .where(and(eq(shifts.clientId, clientId), isNotNull(shifts.timeZoneIndex)))
     .orderBy(asc(shifts.timeZoneIndex));
 }
 
@@ -105,9 +100,7 @@ export async function allocateShiftZoneIndex(
   const rows = await db
     .select({ timeZoneIndex: shifts.timeZoneIndex })
     .from(shifts)
-    .where(
-      and(eq(shifts.clientId, clientId), isNotNull(shifts.timeZoneIndex)),
-    );
+    .where(and(eq(shifts.clientId, clientId), isNotNull(shifts.timeZoneIndex)));
 
   const used = new Set(
     rows

@@ -60,15 +60,20 @@ export class StudentsService {
     private readonly accessTimeZone: AccessTimeZoneService,
   ) {}
 
-  private async attachClassesToStudents<
-    T extends { id: string },
-  >(rows: T[]): Promise<(T & { classes: ReturnType<typeof mapStudentClassLinkToApi>[] })[]> {
+  private async attachClassesToStudents<T extends { id: string }>(
+    rows: T[],
+  ): Promise<
+    (T & { classes: ReturnType<typeof mapStudentClassLinkToApi>[] })[]
+  > {
     if (rows.length === 0) return [];
     const links = await studentClassesQueries.listClassesByStudentIds(
       this.database.db,
       rows.map((r) => r.id),
     );
-    const byStudent = new Map<string, ReturnType<typeof mapStudentClassLinkToApi>[]>();
+    const byStudent = new Map<
+      string,
+      ReturnType<typeof mapStudentClassLinkToApi>[]
+    >();
     for (const link of links) {
       const list = byStudent.get(link.studentId) ?? [];
       list.push(mapStudentClassLinkToApi(link));
@@ -80,9 +85,9 @@ export class StudentsService {
     }));
   }
 
-  private async mapStudentWithPhoto<
-    T extends { photoKey: string | null },
-  >(row: T) {
+  private async mapStudentWithPhoto<T extends { photoKey: string | null }>(
+    row: T,
+  ) {
     return {
       ...row,
       photoUrl: await this.optionalPhotoUrl(row.photoKey),
@@ -150,7 +155,9 @@ export class StudentsService {
     return buildPaginatedResult(data, total, page, pageSize);
   }
 
-  private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
+  private async optionalPhotoUrl(
+    photoKey: string | null,
+  ): Promise<string | null> {
     if (!photoKey) return null;
     try {
       return await this.r2Storage.createPresignedGetUrl(photoKey);
@@ -258,10 +265,12 @@ export class StudentsService {
           throw new BadRequestException('Turma não encontrada nesta escola.');
         }
         if (!klass.isActive) {
-          throw new BadRequestException('Turma inativa não pode ser vinculada.');
+          throw new BadRequestException(
+            'Turma inativa não pode ser vinculada.',
+          );
         }
         await studentClassesQueries.upsertStudentClassLink(this.database.db, {
-          studentId: row!.id,
+          studentId: row.id,
           classId,
           situacaoMatricula: 'enrolled',
           isActive: true,
@@ -269,7 +278,7 @@ export class StudentsService {
       }
     }
 
-    const [withClasses] = await this.attachClassesToStudents([row!]);
+    const [withClasses] = await this.attachClassesToStudents([row]);
     return withClasses;
   }
 
@@ -469,8 +478,7 @@ export class StudentsService {
       clientId,
       {
         deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError: sync.deviceSyncError,
       },
     );

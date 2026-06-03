@@ -73,13 +73,12 @@ export class LprPlateSyncService {
       return client;
     }
     if (user.role === 'company_operator') {
-      const ok =
-        await this.permissionsService.evaluateCompanyFeatureAction(
-          user.role,
-          user.companyUserId,
-          'clients' as FeatureSlug,
-          'can_read',
-        );
+      const ok = await this.permissionsService.evaluateCompanyFeatureAction(
+        user.role,
+        user.companyUserId,
+        'clients',
+        'can_read',
+      );
       if (!ok) {
         throw new ForbiddenException('Sem permissão.');
       }
@@ -127,11 +126,10 @@ export class LprPlateSyncService {
       };
     }
 
-    const cams =
-      await camerasQueries.listCamerasForLprPlateSyncByClient(
-        this.database.db,
-        clientId,
-      );
+    const cams = await camerasQueries.listCamerasForLprPlateSyncByClient(
+      this.database.db,
+      clientId,
+    );
 
     if (cams.length === 0) {
       const msg =
@@ -161,7 +159,11 @@ export class LprPlateSyncService {
         } catch (e) {
           const msg = formatCameraLprPlateError(r.name, e);
           const raw =
-            e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+            e instanceof Error
+              ? e.message
+              : typeof e === 'string'
+                ? e
+                : String(e);
           this.log.warn(
             `${logPrefix}LPR push plate=${pl} cam=${r.name}: ${raw}`,
           );
@@ -233,11 +235,10 @@ export class LprPlateSyncService {
       return { lprSyncStatus: 'sync_failed', lprSyncError: msg };
     }
 
-    const cams =
-      await camerasQueries.listCamerasForLprPlateSyncByClient(
-        this.database.db,
-        clientId,
-      );
+    const cams = await camerasQueries.listCamerasForLprPlateSyncByClient(
+      this.database.db,
+      clientId,
+    );
 
     if (cams.length === 0) {
       const msg =
@@ -278,7 +279,11 @@ export class LprPlateSyncService {
         } catch (e) {
           const msg = formatCameraLprPlateError(r.name, e);
           const raw =
-            e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+            e instanceof Error
+              ? e.message
+              : typeof e === 'string'
+                ? e
+                : String(e);
           this.log.warn(
             `${logPrefix}LPR sync plate=${pl} cam=${r.name}: ${raw}`,
           );
@@ -335,11 +340,10 @@ export class LprPlateSyncService {
 
     const requireAll = options?.requireAll ?? false;
 
-    const cams =
-      await camerasQueries.listCamerasForLprPlateSyncByClient(
-        this.database.db,
-        clientId,
-      );
+    const cams = await camerasQueries.listCamerasForLprPlateSyncByClient(
+      this.database.db,
+      clientId,
+    );
     if (cams.length === 0) return { removed: 0, total: 0, failures: [] };
 
     const cipher = createReaderCredentialsCipher(
@@ -358,9 +362,15 @@ export class LprPlateSyncService {
           await intelbrasRemovePlate(plain, pl);
         } catch (e) {
           const raw =
-            e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+            e instanceof Error
+              ? e.message
+              : typeof e === 'string'
+                ? e
+                : String(e);
           failures.push(`${r.name}: ${raw}`);
-          this.log.warn(`${logPrefix}LPR remove plate=${pl} cam=${r.name}: ${raw}`);
+          this.log.warn(
+            `${logPrefix}LPR remove plate=${pl} cam=${r.name}: ${raw}`,
+          );
         }
       }),
     );
@@ -380,7 +390,11 @@ export class LprPlateSyncService {
     return result;
   }
 
-  async syncVehicleForCompany(user: JwtPayload, clientId: string, vehicleId: string) {
+  async syncVehicleForCompany(
+    user: JwtPayload,
+    clientId: string,
+    vehicleId: string,
+  ) {
     await this.ensureCompanyCanAccessClient(user, clientId);
 
     const v = await vehiclesQueries.vehicleGetWithDriver(
@@ -423,30 +437,36 @@ export class LprPlateSyncService {
     cameraId: string,
     companyId: string,
   ): void {
-    void this.runSyncAllVehiclePlatesToCamera(cameraId, companyId).catch((e) => {
-      const msg =
-        e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
-      this.log.error(`syncAllVehiclePlatesToCamera camera=${cameraId}: ${msg}`);
-    });
+    void this.runSyncAllVehiclePlatesToCamera(cameraId, companyId).catch(
+      (e) => {
+        const msg =
+          e instanceof Error
+            ? e.message
+            : typeof e === 'string'
+              ? e
+              : String(e);
+        this.log.error(
+          `syncAllVehiclePlatesToCamera camera=${cameraId}: ${msg}`,
+        );
+      },
+    );
   }
 
   private async runSyncAllVehiclePlatesToCamera(
     cameraId: string,
     companyId: string,
   ): Promise<void> {
-    const camera =
-      await camerasQueries.getCameraIfEligibleForLprPlateSync(
-        this.database.db,
-        cameraId,
-        companyId,
-      );
+    const camera = await camerasQueries.getCameraIfEligibleForLprPlateSync(
+      this.database.db,
+      cameraId,
+      companyId,
+    );
     if (!camera) return;
 
-    const rows =
-      await vehiclesQueries.listVehiclesForLprPlateSync(
-        this.database.db,
-        camera.clientId,
-      );
+    const rows = await vehiclesQueries.listVehiclesForLprPlateSync(
+      this.database.db,
+      camera.clientId,
+    );
 
     const cipher = createReaderCredentialsCipher(
       this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
@@ -468,7 +488,11 @@ export class LprPlateSyncService {
         );
       } catch (e) {
         const raw =
-          e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+          e instanceof Error
+            ? e.message
+            : typeof e === 'string'
+              ? e
+              : String(e);
         this.log.warn(
           `Ativação LPR bulk cam=${camera.name} plate=${pl}: ${raw}`,
         );
@@ -497,11 +521,10 @@ export class LprPlateSyncService {
     clientId: string,
     emit: (e: LprPlateSyncProgressEvent) => void,
   ): Promise<void> {
-    const rows =
-      await vehiclesQueries.listVehiclesPendingLprSync(
-        this.database.db,
-        clientId,
-      );
+    const rows = await vehiclesQueries.listVehiclesPendingLprSync(
+      this.database.db,
+      clientId,
+    );
     emit({ type: 'start', total: rows.length });
     for (const r of rows) {
       try {
@@ -524,7 +547,7 @@ export class LprPlateSyncService {
           vehicleId: r.id,
           plate: r.plate,
           ok,
-          error: ok ? undefined : fresh?.lprSyncError ?? undefined,
+          error: ok ? undefined : (fresh?.lprSyncError ?? undefined),
         });
       } catch (e) {
         emit({

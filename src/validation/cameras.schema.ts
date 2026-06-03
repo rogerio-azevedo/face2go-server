@@ -94,9 +94,7 @@ export const cameraSchema = z.object({
 });
 
 export const createCameraSchema = cameraSchema.refine(
-  (d) =>
-    !d.password ||
-    (d.username != null && d.username.trim().length > 0),
+  (d) => !d.password || (d.username != null && d.username.trim().length > 0),
   {
     message: 'Informe o usuário da câmera para salvar a senha.',
     path: ['username'],

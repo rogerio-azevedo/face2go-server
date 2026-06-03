@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -49,21 +50,26 @@ export class CamerasController {
     const lim = limit ? parseInt(limit, 10) : 50;
     const off = offset ? parseInt(offset, 10) : 0;
     const term = search?.trim() || undefined;
-    return this.camerasService.getDevicePlates(
-      user,
-      cameraId,
-      lim,
-      off,
-      term,
-    );
+    return this.camerasService.getDevicePlates(user, cameraId, lim, off, term);
+  }
+
+  @Delete(':cameraId/device-plates/:recNo')
+  @ApiOperation({
+    summary:
+      'Remover placa da lista de permissão na câmera LPR (TrafficRedList)',
+  })
+  removeDevicePlate(
+    @CurrentUser() user: JwtPayload,
+    @Param('cameraId', ParseUUIDPipe) cameraId: string,
+    @Param('recNo') recNo: string,
+    @Query('plate') plate?: string,
+  ) {
+    return this.camerasService.removeDevicePlate(user, cameraId, recNo, plate);
   }
 
   @Get()
   @ApiOperation({ summary: 'Listar câmeras da empresa' })
-  list(
-    @CurrentUser() user: JwtPayload,
-    @Query('clientId') clientId?: string,
-  ) {
+  list(@CurrentUser() user: JwtPayload, @Query('clientId') clientId?: string) {
     return this.camerasService.list(user, clientId);
   }
 

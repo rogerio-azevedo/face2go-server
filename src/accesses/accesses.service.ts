@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectModel } from '@nestjs/mongoose';
 import { and, eq } from 'drizzle-orm';
@@ -133,7 +129,7 @@ export class AccessesService {
       return;
     }
 
-    const data = accessControlDataFromRecord(raw as Record<string, unknown>);
+    const data = accessControlDataFromRecord(raw);
     const userId = data.UserID;
     if (userId === undefined || userId === null || String(userId) === '') {
       return;
@@ -366,9 +362,11 @@ export class AccessesService {
           (d as FacialAccessDocument & { snapR2Key?: string | null })
             .snapR2Key ?? null,
         readerDirection:
-          (d as FacialAccessDocument & {
-            readerDirection?: 'in' | 'out' | null;
-          }).readerDirection ?? null,
+          (
+            d as FacialAccessDocument & {
+              readerDirection?: 'in' | 'out' | null;
+            }
+          ).readerDirection ?? null,
       };
     });
 
@@ -396,8 +394,7 @@ export class AccessesService {
       throw new NotFoundException('Acesso facial não encontrado.');
     }
 
-    const key =
-      typeof doc.snapR2Key === 'string' ? doc.snapR2Key.trim() : '';
+    const key = typeof doc.snapR2Key === 'string' ? doc.snapR2Key.trim() : '';
     if (!key) {
       return { snapUrl: null };
     }

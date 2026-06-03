@@ -18,7 +18,7 @@ import type { JwtPayload } from './interfaces/jwt-payload.interface';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @Public()
   @Post('login')

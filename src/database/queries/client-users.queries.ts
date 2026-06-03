@@ -57,7 +57,10 @@ export async function getCompanyUserLink(
     .select()
     .from(companyUsers)
     .where(
-      and(eq(companyUsers.userId, userId), eq(companyUsers.companyId, companyId)),
+      and(
+        eq(companyUsers.userId, userId),
+        eq(companyUsers.companyId, companyId),
+      ),
     )
     .limit(1);
   return row;

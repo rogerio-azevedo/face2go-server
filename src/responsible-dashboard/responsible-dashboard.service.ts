@@ -168,7 +168,6 @@ export class ResponsibleDashboardService {
 
     const out: ResponsibleAccessHistoryItemDto[] = [];
     for (const doc of parsed) {
-
       let snapPath: string | null =
         typeof doc.snapPath === 'string' && doc.snapPath.trim()
           ? doc.snapPath.trim()
@@ -350,20 +349,19 @@ export class ResponsibleDashboardService {
     };
   }
 
-  private assertResponsibleScope(
-    user: JwtPayload,
-  ): { responsibleId: string; clientId: string } {
-    if (
-      user.role !== 'responsible' ||
-      !user.responsibleId ||
-      !user.clientId
-    ) {
+  private assertResponsibleScope(user: JwtPayload): {
+    responsibleId: string;
+    clientId: string;
+  } {
+    if (user.role !== 'responsible' || !user.responsibleId || !user.clientId) {
       throw new ForbiddenException('Acesso apenas para conta de responsável.');
     }
     return { responsibleId: user.responsibleId, clientId: user.clientId };
   }
 
-  private async optionalPhotoUrl(photoKey: string | null): Promise<string | null> {
+  private async optionalPhotoUrl(
+    photoKey: string | null,
+  ): Promise<string | null> {
     if (!photoKey) return null;
     try {
       return await this.r2Storage.createPresignedGetUrl(photoKey);
@@ -415,12 +413,11 @@ export class ResponsibleDashboardService {
       });
     }
 
-    const peerOptions =
-      await responsiblesQueries.listHouseholdDriverOptions(
-        this.database.db,
-        responsibleId,
-        clientId,
-      );
+    const peerOptions = await responsiblesQueries.listHouseholdDriverOptions(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
     const peers = peerOptions.filter((p) => p.id !== responsibleId);
 
     for (const peer of peers) {
@@ -598,12 +595,11 @@ export class ResponsibleDashboardService {
     const timezoneOffsetMinutes =
       await this.schoolTimezoneOffsetMinutes(clientId);
 
-    const faceId =
-      await responsiblesQueries.getResponsibleFaceId(
-        this.database.db,
-        responsibleId,
-        clientId,
-      );
+    const faceId = await responsiblesQueries.getResponsibleFaceId(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
     if (faceId == null) {
       return {
         items: [],
@@ -675,17 +671,14 @@ export class ResponsibleDashboardService {
       clientId,
     );
 
-    const byIp = readers.filter(
-      (r) => r.ip.trim().toLowerCase() === hostLower,
-    );
+    const byIp = readers.filter((r) => r.ip.trim().toLowerCase() === hostLower);
     if (byIp.length === 0) {
       throw new ForbiddenException(
         'Origem da imagem não autorizada para esta escola.',
       );
     }
 
-    let matched =
-      byIp.find((r) => (r.port ?? 80) === urlPort) ?? null;
+    let matched = byIp.find((r) => (r.port ?? 80) === urlPort) ?? null;
     if (!matched && byIp.length === 1) {
       matched = byIp[0];
     }
@@ -729,7 +722,7 @@ export class ResponsibleDashboardService {
       const rawCt = resp.headers?.['content-type'];
       const contentType =
         typeof rawCt === 'string'
-          ? rawCt.split(';')[0]?.trim() ?? 'image/jpeg'
+          ? (rawCt.split(';')[0]?.trim() ?? 'image/jpeg')
           : 'image/jpeg';
 
       if (!contentType.startsWith('image/')) {

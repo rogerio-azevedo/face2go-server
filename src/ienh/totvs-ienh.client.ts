@@ -19,9 +19,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
 export class TotvsIenhClient {
   private readonly logger = new Logger(TotvsIenhClient.name);
 
-  constructor(
-    private readonly configService: ConfigService<EnvVars, true>,
-  ) { }
+  constructor(private readonly configService: ConfigService<EnvVars, true>) {}
 
   async fetchRecords(params: TotvsIenhFetchParams): Promise<TotvsIenhRecord[]> {
     const baseUrl = this.configService.get('IENH_API_URL', { infer: true });
@@ -75,7 +73,10 @@ export class TotvsIenhClient {
       const body: unknown = await res.json();
       return this.parseRecords(body);
     } catch (err: unknown) {
-      if (err instanceof UnauthorizedException || err instanceof BadGatewayException) {
+      if (
+        err instanceof UnauthorizedException ||
+        err instanceof BadGatewayException
+      ) {
         throw err;
       }
       if (err instanceof Error && err.name === 'AbortError') {
@@ -84,7 +85,9 @@ export class TotvsIenhClient {
         );
       }
       const message = err instanceof Error ? err.message : String(err);
-      throw new BadGatewayException(`TOTVS IENH: falha na requisição — ${message}`);
+      throw new BadGatewayException(
+        `TOTVS IENH: falha na requisição — ${message}`,
+      );
     } finally {
       clearTimeout(timeout);
     }
@@ -98,7 +101,7 @@ export class TotvsIenhClient {
       body &&
       typeof body === 'object' &&
       'data' in body &&
-      Array.isArray((body as { data: unknown }).data)
+      Array.isArray(body.data)
     ) {
       return (body as { data: TotvsIenhRecord[] }).data;
     }

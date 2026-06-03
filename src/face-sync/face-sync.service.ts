@@ -26,17 +26,21 @@ import {
 } from './intelbras-device.client';
 import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
 import { AccessTimeZoneService } from './access-time-zone.service';
-import { readerLabel, syncLog, syncLogError } from './intelbras-sync-debug.util';
+import {
+  readerLabel,
+  syncLog,
+  syncLogError,
+} from './intelbras-sync-debug.util';
 
 export type FaceSyncProgressEvent =
   | { type: 'start'; total: number }
   | {
-    type: 'item';
-    registrationId: string;
-    name: string | null;
-    ok: boolean;
-    error?: string;
-  }
+      type: 'item';
+      registrationId: string;
+      name: string | null;
+      ok: boolean;
+      error?: string;
+    }
   | { type: 'done' }
   | { type: 'error'; message: string };
 
@@ -50,7 +54,7 @@ export class FaceSyncService {
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly permissionsService: PermissionsService,
     private readonly accessTimeZone: AccessTimeZoneService,
-  ) { }
+  ) {}
 
   private ensureCompany(user: JwtPayload): string {
     const companyId = user.companyId ?? undefined;
@@ -359,7 +363,7 @@ export class FaceSyncService {
         try {
           const plain = toPlainReaderCredential(
             r,
-            cipher.decrypt(r.passwordEncrypted!),
+            cipher.decrypt(r.passwordEncrypted),
           );
           await intelbrasRemoveUserFromReader(plain, faceId);
         } catch (e) {
@@ -452,8 +456,7 @@ export class FaceSyncService {
       clientId,
       {
         deviceSyncStatus,
-        deviceSyncedAt:
-          deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError,
       },
     );
@@ -502,7 +505,7 @@ export class FaceSyncService {
           registrationId: r.id,
           name: fresh?.name ?? r.name ?? null,
           ok,
-          error: ok ? undefined : fresh?.deviceSyncError ?? undefined,
+          error: ok ? undefined : (fresh?.deviceSyncError ?? undefined),
         });
       } catch (e) {
         emit({

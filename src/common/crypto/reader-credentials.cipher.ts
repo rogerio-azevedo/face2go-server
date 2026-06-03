@@ -1,8 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  randomBytes,
-} from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
@@ -59,7 +55,9 @@ export function createReaderCredentialsCipher(
     decrypt(stored: string): string {
       const parts = stored.split(':');
       if (parts.length !== 3) {
-        throw new Error('Payload criptografado inválido (formato esperado iv:tag:data).');
+        throw new Error(
+          'Payload criptografado inválido (formato esperado iv:tag:data).',
+        );
       }
       const [ivHex, tagHex, dataHex] = parts;
       const iv = Buffer.from(ivHex, 'hex');

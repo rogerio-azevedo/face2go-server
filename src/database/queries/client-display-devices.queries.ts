@@ -37,7 +37,7 @@ export async function listDisplayDevices(
     .where(eq(clientDisplayDevices.clientId, clientId));
 
   return rows.map((row) => ({
-    deviceType: row.deviceType as ClientDisplayDeviceType,
+    deviceType: row.deviceType,
     deviceId: row.deviceId,
   }));
 }
@@ -80,7 +80,7 @@ export async function getDisplayDevicesForClient(
     lprCameras: lprRows.map((row) => ({
       id: row.id,
       name: row.name,
-      direction: (row.direction ?? null) as 'in' | 'out' | null,
+      direction: row.direction ?? null,
       isActive: row.isActive,
       isEnabled: hasConfiguredDevices
         ? enabledSet.has(`lpr_camera:${row.id}`)
@@ -89,7 +89,7 @@ export async function getDisplayDevicesForClient(
     facialReaders: readerRows.map((row) => ({
       id: row.id,
       name: row.name,
-      direction: (row.direction ?? null) as 'in' | 'out' | null,
+      direction: row.direction ?? null,
       isActive: row.isActive,
       isEnabled: hasConfiguredDevices
         ? enabledSet.has(`facial_reader:${row.id}`)
@@ -142,12 +142,7 @@ export async function validateDisplayDevicesForClient(
     const rows = await db
       .select({ id: cameras.id })
       .from(cameras)
-      .where(
-        and(
-          eq(cameras.clientId, clientId),
-          eq(cameras.type, 'lpr'),
-        ),
-      );
+      .where(and(eq(cameras.clientId, clientId), eq(cameras.type, 'lpr')));
     const validIds = new Set(rows.map((r) => r.id));
     if (!lprIds.every((id) => validIds.has(id))) {
       return false;

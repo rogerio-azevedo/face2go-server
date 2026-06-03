@@ -27,9 +27,12 @@ const EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID = 'student_access';
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly database: DatabaseService) { }
+  constructor(private readonly database: DatabaseService) {}
 
-  async updatePushToken(responsibleId: string, pushToken: string): Promise<void> {
+  async updatePushToken(
+    responsibleId: string,
+    pushToken: string,
+  ): Promise<void> {
     const token = pushToken.trim();
     if (!token) {
       throw new BadRequestException('Token de push inválido.');
@@ -46,7 +49,9 @@ export class NotificationsService {
   }
 
   @OnEvent(ACCESS_FACIAL_RECORDED, { async: true })
-  async handleAccessRecorded(payload: AccessFacialRecordedPayload): Promise<void> {
+  async handleAccessRecorded(
+    payload: AccessFacialRecordedPayload,
+  ): Promise<void> {
     try {
       await this.notifyParentsOfStudentAccess(payload);
     } catch (err: unknown) {
@@ -190,9 +195,7 @@ export class NotificationsService {
 
     if (!res.ok) {
       const text = await res.text();
-      this.logger.warn(
-        `Expo push HTTP ${res.status}: ${text.slice(0, 500)}`,
-      );
+      this.logger.warn(`Expo push HTTP ${res.status}: ${text.slice(0, 500)}`);
       return;
     }
 

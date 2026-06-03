@@ -31,11 +31,7 @@ export class CompanyLprPlateSyncController {
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
   ) {
-    return this.lprPlateSync.syncVehicleForCompany(
-      user,
-      clientId,
-      vehicleId,
-    );
+    return this.lprPlateSync.syncVehicleForCompany(user, clientId, vehicleId);
   }
 
   @Get('sync-all/progress')
@@ -60,7 +56,7 @@ export class CompanyLprPlateSyncController {
 
     try {
       await this.lprPlateSync.syncAllPendingForCompany(user, clientId, (evt) =>
-        write(evt as Record<string, unknown>),
+        write(evt),
       );
     } catch (e: unknown) {
       write({
@@ -111,7 +107,7 @@ export class ClientLprPlateSyncController {
 
     try {
       await this.lprPlateSync.syncAllPendingForClientTenant(user, (evt) =>
-        write(evt as Record<string, unknown>),
+        write(evt),
       );
     } catch (e: unknown) {
       write({

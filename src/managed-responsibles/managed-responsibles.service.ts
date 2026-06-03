@@ -70,11 +70,7 @@ export class ManagedResponsiblesService {
     clientId: string;
     responsibleId: string;
   } {
-    if (
-      user.role !== 'responsible' ||
-      !user.clientId ||
-      !user.responsibleId
-    ) {
+    if (user.role !== 'responsible' || !user.clientId || !user.responsibleId) {
       throw new ForbiddenException('Acesso apenas para conta de responsável.');
     }
   }
@@ -107,7 +103,10 @@ export class ManagedResponsiblesService {
       const candidate = randomLinkCode();
       const [pickupTaken, invitationTaken] = await Promise.all([
         pickupQueries.isGuestLinkCodeTaken(this.database.db, candidate),
-        invitationQueries.invitationIsLinkCodeTaken(this.database.db, candidate),
+        invitationQueries.invitationIsLinkCodeTaken(
+          this.database.db,
+          candidate,
+        ),
       ]);
       if (!pickupTaken && !invitationTaken) {
         return candidate;
@@ -121,10 +120,11 @@ export class ManagedResponsiblesService {
   ): Promise<ResponsibleInvitationResponse[]> {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r.id);
-    const links = await invitationQueries.invitationListStudentsForInvitationIds(
-      this.database.db,
-      ids,
-    );
+    const links =
+      await invitationQueries.invitationListStudentsForInvitationIds(
+        this.database.db,
+        ids,
+      );
     const byInvitation = new Map<string, InvitationStudentDto[]>();
     for (const link of links) {
       const list = byInvitation.get(link.invitationId) ?? [];
@@ -194,7 +194,11 @@ export class ManagedResponsiblesService {
   private async createResponsibleFromInvitation(
     row: ResponsibleInvitationRow,
   ): Promise<string> {
-    if (!row.submittedEmail || !row.submittedPasswordHash || !row.submittedName) {
+    if (
+      !row.submittedEmail ||
+      !row.submittedPasswordHash ||
+      !row.submittedName
+    ) {
       throw new BadRequestException('Dados do convidado incompletos.');
     }
     if (!row.faceImageKey) {
@@ -208,10 +212,11 @@ export class ManagedResponsiblesService {
       throw new ConflictException('E-mail já cadastrado.');
     }
 
-    const studentLinks = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      row.id,
-    );
+    const studentLinks =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        row.id,
+      );
 
     const userId = crypto.randomUUID();
     const responsible = await this.database.db.transaction(async (tx) => {
@@ -224,7 +229,7 @@ export class ManagedResponsiblesService {
         isActive: true,
       });
 
-      const created = await responsiblesQueries.insertResponsible(tx as never, {
+      const created = await responsiblesQueries.insertResponsible(tx, {
         clientId: row.clientId,
         userId,
         name: row.submittedName!,
@@ -238,7 +243,7 @@ export class ManagedResponsiblesService {
       }
 
       for (const link of studentLinks) {
-        await responsiblesQueries.insertResponsibleStudentLink(tx as never, {
+        await responsiblesQueries.insertResponsibleStudentLink(tx, {
           responsibleId: created.id,
           studentId: link.studentId,
           relationshipType: link.relationshipType as never,
@@ -285,7 +290,7 @@ export class ManagedResponsiblesService {
     const faceSync = await this.faceSync.syncPersonOnReaders({
       clientId: row.clientId,
       faceId,
-      name: row.submittedName!,
+      name: row.submittedName,
       imageBuffer: buffer,
       timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
         row.clientId,
@@ -322,10 +327,11 @@ export class ManagedResponsiblesService {
           color: row.vehicleColor ?? '',
         });
         if (vehicle) {
-          plateLprResult = await this.lprPlateSync.pushPlateToLprCameras({
+          plateLprResult = await this.lprPlateSync.syncVehiclePlateOnCameras({
             clientId: row.clientId,
+            vehicleId: vehicle.id,
             plate: row.vehiclePlate,
-            ownerDisplayName: row.submittedName!,
+            ownerDisplayName: row.submittedName,
             vehicleColor: row.vehicleColor,
             logContext: `responsible-invitation=${row.id}`,
           });
@@ -393,7 +399,7 @@ export class ManagedResponsiblesService {
         isActive: true,
       });
 
-      const created = await responsiblesQueries.insertResponsible(tx as never, {
+      const created = await responsiblesQueries.insertResponsible(tx, {
         clientId: user.clientId,
         userId,
         name: d.name,
@@ -403,11 +409,13 @@ export class ManagedResponsiblesService {
       });
 
       if (!created) {
-        throw new BadRequestException('Não foi possível cadastrar o responsável.');
+        throw new BadRequestException(
+          'Não foi possível cadastrar o responsável.',
+        );
       }
 
       for (const link of d.students) {
-        await responsiblesQueries.insertResponsibleStudentLink(tx as never, {
+        await responsiblesQueries.insertResponsibleStudentLink(tx, {
           responsibleId: created.id,
           studentId: link.studentId,
           relationshipType: link.relationshipType,
@@ -445,10 +453,11 @@ export class ManagedResponsiblesService {
           faceId,
           name: d.name,
           imageBuffer: buffer,
-          timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
-            user.clientId,
-            responsible.id,
-          ),
+          timeSectionIds:
+            await this.accessTimeZone.resolveResponsibleTimeSections(
+              user.clientId,
+              responsible.id,
+            ),
           logContext: `managed-responsible=${responsible.id}`,
         });
         await responsiblesQueries.updateResponsibleFace(
@@ -476,8 +485,9 @@ export class ManagedResponsiblesService {
           color: d.vehicle.color,
         });
         if (vehicle) {
-          await this.lprPlateSync.pushPlateToLprCameras({
+          await this.lprPlateSync.syncVehiclePlateOnCameras({
             clientId: user.clientId,
+            vehicleId: vehicle.id,
             plate: d.vehicle.plate,
             ownerDisplayName: d.name,
             vehicleColor: d.vehicle.color,
@@ -516,7 +526,10 @@ export class ManagedResponsiblesService {
     return rows.filter(Boolean);
   }
 
-  async deleteManagedResponsible(user: JwtPayload, targetResponsibleId: string) {
+  async deleteManagedResponsible(
+    user: JwtPayload,
+    targetResponsibleId: string,
+  ) {
     this.assertResponsibleJwt(user);
 
     if (targetResponsibleId === user.responsibleId) {
@@ -580,16 +593,16 @@ export class ManagedResponsiblesService {
 
     await this.database.db.transaction(async (tx) => {
       await responsiblesQueries.deleteAllResponsibleStudentLinks(
-        tx as never,
+        tx,
         targetResponsibleId,
       );
       await vehicleQueries.vehicleDeleteAllForResponsible(
-        tx as never,
+        tx,
         targetResponsibleId,
         user.clientId,
       );
       await responsiblesQueries.updateResponsible(
-        tx as never,
+        tx,
         targetResponsibleId,
         user.clientId,
         {
@@ -642,10 +655,11 @@ export class ManagedResponsiblesService {
     if (!row) {
       throw new BadRequestException('Não foi possível criar o convite.');
     }
-    const students = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      row.id,
-    );
+    const students =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        row.id,
+      );
     return this.toInvitationResponse(
       row,
       students.map((s) => ({
@@ -679,7 +693,9 @@ export class ManagedResponsiblesService {
     }
     const url = await this.r2.createPresignedPortraitGetUrl(row.faceImageKey);
     if (!url) {
-      throw new BadRequestException('Não foi possível carregar a prévia da foto.');
+      throw new BadRequestException(
+        'Não foi possível carregar a prévia da foto.',
+      );
     }
     return { url };
   }
@@ -723,17 +739,18 @@ export class ManagedResponsiblesService {
       await this.createResponsibleFromInvitation(row);
     }
 
-    const students = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      id,
-    );
+    const students =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        id,
+      );
     const updated = await invitationQueries.invitationGetById(
       this.database.db,
       id,
       user.clientId,
     );
     return this.toInvitationResponse(
-      updated!,
+      updated,
       students.map((s) => ({
         studentId: s.studentId,
         name: s.studentName,
@@ -765,12 +782,13 @@ export class ManagedResponsiblesService {
         status: 'rejected',
       },
     );
-    const students = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      id,
-    );
+    const students =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        id,
+      );
     return this.toInvitationResponse(
-      updated!,
+      updated,
       students.map((s) => ({
         studentId: s.studentId,
         name: s.studentName,
@@ -807,17 +825,18 @@ export class ManagedResponsiblesService {
       await this.createResponsibleFromInvitation(row);
     }
 
-    const students = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      id,
-    );
+    const students =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        id,
+      );
     const updated = await invitationQueries.invitationGetById(
       this.database.db,
       id,
       user.clientId,
     );
     return this.toInvitationResponse(
-      updated!,
+      updated,
       students.map((s) => ({
         studentId: s.studentId,
         name: s.studentName,
@@ -871,12 +890,13 @@ export class ManagedResponsiblesService {
           )) ?? updated;
       }
     }
-    const students = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      id,
-    );
+    const students =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        id,
+      );
     return this.toInvitationResponse(
-      updated!,
+      updated,
       students.map((s) => ({
         studentId: s.studentId,
         name: s.studentName,
@@ -902,12 +922,13 @@ export class ManagedResponsiblesService {
       user.clientId,
       { status: 'cancelled' },
     );
-    const students = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      id,
-    );
+    const students =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        id,
+      );
     return this.toInvitationResponse(
-      updated!,
+      updated,
       students.map((s) => ({
         studentId: s.studentId,
         name: s.studentName,

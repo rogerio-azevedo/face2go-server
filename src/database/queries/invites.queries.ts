@@ -23,7 +23,9 @@ export type CompanyInviteListRow = {
 export async function generateInviteCode(
   db: AppDb,
   data: GenerateInviteInput,
-): Promise<{ success: true; code: string } | { success: false; error: string }> {
+): Promise<
+  { success: true; code: string } | { success: false; error: string }
+> {
   const code = Math.random().toString(36).substring(2, 10).toUpperCase();
 
   try {
@@ -63,10 +65,7 @@ export async function listCompanyInvites(
     })
     .from(inviteLinks)
     .where(
-      and(
-        eq(inviteLinks.companyId, companyId),
-        eq(inviteLinks.isActive, true),
-      ),
+      and(eq(inviteLinks.companyId, companyId), eq(inviteLinks.isActive, true)),
     )
     .orderBy(desc(inviteLinks.createdAt));
 }

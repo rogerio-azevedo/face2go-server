@@ -1,12 +1,11 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
-import { fetchIenhSchema, type FetchIenhInput } from '../validation/ienh.schema';
+import {
+  fetchIenhSchema,
+  type FetchIenhInput,
+} from '../validation/ienh.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { TotvsIenhClient } from './totvs-ienh.client';
 import type { TotvsIenhRecordWithFilial } from './types/ienh-sync.types';
@@ -29,7 +28,7 @@ export interface FetchAndSaveResult {
 export class IenhService {
   private readonly logger = new Logger(IenhService.name);
 
-  constructor(private readonly totvsClient: TotvsIenhClient) { }
+  constructor(private readonly totvsClient: TotvsIenhClient) {}
 
   async fetchAllRecordsTagged(input: {
     perlet: string;
@@ -202,7 +201,9 @@ export class IenhService {
     };
 
     await writeFile(filePath, JSON.stringify(snapshot, null, 2), 'utf8');
-    this.logger.log(`Snapshot TOTVS IENH salvo em ${filePath} (${args.records.length} registros)`);
+    this.logger.log(
+      `Snapshot TOTVS IENH salvo em ${filePath} (${args.records.length} registros)`,
+    );
 
     return filePath;
   }

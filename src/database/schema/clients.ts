@@ -51,7 +51,9 @@ export const clients = pgTable(
      * Diferença em minutos em relação ao UTC (UTC−4 → −240, UTC+3 → +180).
      * Atalho aceito na API: |valor|≤14 tratado como horas inteiras.
      */
-    timezoneOffsetMinutes: integer('timezone_offset_minutes').default(0).notNull(),
+    timezoneOffsetMinutes: integer('timezone_offset_minutes')
+      .default(0)
+      .notNull(),
     /** Código da filial TOTVS IENH (1–3) para integração cadastral. */
     ienhFilialCode: integer('ienh_filial_code'),
     createdAt: timestamp('created_at').defaultNow().notNull(),

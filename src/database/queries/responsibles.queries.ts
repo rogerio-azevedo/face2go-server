@@ -13,12 +13,7 @@ import {
 } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import {
-  responsibleStudents,
-  responsibles,
-  students,
-  users,
-} from '../schema';
+import { responsibleStudents, responsibles, students, users } from '../schema';
 
 import * as studentClassesQueries from './student-classes.queries';
 import * as studentsQueries from './students.queries';
@@ -267,7 +262,12 @@ export async function getResponsibleFaceId(
   const rows = await db
     .select({ faceId: responsibles.faceId })
     .from(responsibles)
-    .where(and(eq(responsibles.id, responsibleId), eq(responsibles.clientId, clientId)))
+    .where(
+      and(
+        eq(responsibles.id, responsibleId),
+        eq(responsibles.clientId, clientId),
+      ),
+    )
     .limit(1);
   const v = rows[0]?.faceId;
   return v == null ? null : v;
@@ -314,7 +314,10 @@ export async function findResponsibleByDocumentAndClient(
     .select()
     .from(responsibles)
     .where(
-      and(eq(responsibles.clientId, clientId), eq(responsibles.document, document)),
+      and(
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.document, document),
+      ),
     )
     .limit(1);
   return row;
@@ -343,7 +346,7 @@ export async function upsertResponsibleByDocument(
       phone: input.phone ?? existing.phone,
       isActive: input.isActive ?? existing.isActive,
     });
-    return { row: row!, created: false };
+    return { row: row, created: false };
   }
   const row = await insertResponsible(db, {
     clientId: input.clientId,
@@ -352,7 +355,7 @@ export async function upsertResponsibleByDocument(
     phone: input.phone ?? null,
     isActive: input.isActive ?? true,
   });
-  return { row: row!, created: true };
+  return { row: row, created: true };
 }
 
 /** Responsável pelo face ID do leitor (chegada do pai/avô etc.). */
@@ -456,10 +459,7 @@ export async function findResponsiblesWithPushTokenForStudent(
     );
 }
 
-export async function insertResponsible(
-  db: AppDb,
-  values: ResponsibleInsert,
-) {
+export async function insertResponsible(db: AppDb, values: ResponsibleInsert) {
   const rows = await db.insert(responsibles).values(values).returning();
   return rows[0];
 }
@@ -474,7 +474,10 @@ export async function linkUserToResponsible(
     .update(responsibles)
     .set({ userId, updatedAt: new Date() })
     .where(
-      and(eq(responsibles.id, responsibleId), eq(responsibles.clientId, clientId)),
+      and(
+        eq(responsibles.id, responsibleId),
+        eq(responsibles.clientId, clientId),
+      ),
     )
     .returning();
   return row;
@@ -633,10 +636,7 @@ export async function listResponsibleStudentLinksWithStudents(
     db,
     studentIds,
   );
-  const firstClassByStudent = new Map<
-    string,
-    { name: string; year: number }
-  >();
+  const firstClassByStudent = new Map<string, { name: string; year: number }>();
   for (const link of links) {
     if (link.isActive && !firstClassByStudent.has(link.studentId)) {
       firstClassByStudent.set(link.studentId, {
@@ -782,7 +782,10 @@ export async function listActiveShiftZoneIndicesByResponsibleIds(
   }
 
   for (const [responsibleId, indices] of byResponsible) {
-    result.set(responsibleId, [...indices].sort((a, b) => a - b));
+    result.set(
+      responsibleId,
+      [...indices].sort((a, b) => a - b),
+    );
   }
   return result;
 }
@@ -799,10 +802,11 @@ export async function listActiveShiftZoneIndicesForResponsible(
 
   const indices = new Set<number>();
   for (const link of studentLinks) {
-    const zones = await studentClassesQueries.listActiveShiftZoneIndicesForStudent(
-      db,
-      link.studentId,
-    );
+    const zones =
+      await studentClassesQueries.listActiveShiftZoneIndicesForStudent(
+        db,
+        link.studentId,
+      );
     for (const z of zones) indices.add(z);
   }
 

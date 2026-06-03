@@ -1,9 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -19,8 +23,7 @@ export class CompanyUsersController {
 
   @Get()
   @ApiOperation({
-    summary:
-      'Listar usuários da empresa com mapa de permissões por operador',
+    summary: 'Listar usuários da empresa com mapa de permissões por operador',
   })
   list(@CurrentUser() user: JwtPayload) {
     return this.companyUsersService.listWithPermissions(user);
@@ -65,11 +68,7 @@ export class CompanyUsersController {
     @Param('companyUserId', ParseUUIDPipe) companyUserId: string,
     @Body() body: unknown,
   ) {
-    return this.companyUsersService.updateProfile(
-      user,
-      companyUserId,
-      body,
-    );
+    return this.companyUsersService.updateProfile(user, companyUserId, body);
   }
 
   @Patch(':companyUserId/permissions')

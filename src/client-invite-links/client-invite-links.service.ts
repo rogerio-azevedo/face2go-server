@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -38,13 +42,14 @@ export class ClientInviteLinksService {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
 
-    const inviteResult = await clientInviteLinksQueries.generateClientInviteCode(
-      this.database.db,
-      {
-        clientId,
-        role: parsed.data.role,
-      },
-    );
+    const inviteResult =
+      await clientInviteLinksQueries.generateClientInviteCode(
+        this.database.db,
+        {
+          clientId,
+          role: parsed.data.role,
+        },
+      );
     if (inviteResult.success === false) {
       throw new BadRequestException(inviteResult.error);
     }

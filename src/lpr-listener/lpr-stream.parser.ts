@@ -260,9 +260,8 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
     pickStr(o, 'EventID', 'eventId') ??
       (o.EventID != null ? String(o.EventID) : null),
   );
-  const defendCode = trafficCar != null
-    ? pickStr(trafficCar, 'DefendCode', 'defendCode')
-    : null;
+  const defendCode =
+    trafficCar != null ? pickStr(trafficCar, 'DefendCode', 'defendCode') : null;
 
   let plateNumber =
     plate != null
@@ -307,13 +306,15 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
   }
 
   // Velocidade: Vehicle > TrafficCar > SnapInfo
-  let speed = vehicle != null ? pickOptionalNum(vehicle, 'Speed', 'speed') : null;
+  let speed =
+    vehicle != null ? pickOptionalNum(vehicle, 'Speed', 'speed') : null;
   if (speed == null && trafficCar != null) {
     speed = pickOptionalNum(trafficCar, 'Speed', 'speed');
   }
 
   // Direção: Vehicle > TrafficCar.DrivingDirection[0] > JunctionDirection
-  let direction = vehicle != null ? pickStr(vehicle, 'Direction', 'direction') : null;
+  let direction =
+    vehicle != null ? pickStr(vehicle, 'Direction', 'direction') : null;
   if (direction == null && trafficCar != null) {
     const drivingDir = trafficCar['DrivingDirection'];
     if (Array.isArray(drivingDir)) {
@@ -353,9 +354,7 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
     snap != null && asRecord(snap)
       ? pickStr(asRecord(snap)!, 'SnapTime', 'snapTime')
       : (pickStr(o, 'SnapTime') ??
-          (trafficCar != null
-            ? pickStr(trafficCar, 'UTC', 'CapTime')
-            : null));
+        (trafficCar != null ? pickStr(trafficCar, 'UTC', 'CapTime') : null));
 
   const accurateTimeRaw =
     snap != null && asRecord(snap)
@@ -386,9 +385,9 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
   const plateColor =
     plate != null
       ? pickStr(plate, 'PlateColor', 'plateColor', 'Color')
-      : (trafficCar != null
+      : ((trafficCar != null
           ? pickStr(trafficCar, 'PlateColor', 'plateColor')
-          : null) ?? pickStr(o, 'PlateColor', 'plateColor');
+          : null) ?? pickStr(o, 'PlateColor', 'plateColor'));
 
   const plateType =
     plate != null
@@ -399,23 +398,23 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
   const vehicleColor =
     vehicle != null
       ? pickStr(vehicle, 'VehicleColor', 'vehicleColor', 'Color')
-      : (trafficCar != null
+      : ((trafficCar != null
           ? pickStr(trafficCar, 'VehicleColor', 'vehicleColor')
-          : null) ?? pickStr(o, 'VehicleColor');
+          : null) ?? pickStr(o, 'VehicleColor'));
 
   const vehicleType =
     vehicle != null
       ? pickStr(vehicle, 'VehicleType', 'vehicleType', 'type')
-      : (trafficCar != null
+      : ((trafficCar != null
           ? pickStr(trafficCar, 'CarType', 'VehicleType', 'vehicleType')
-          : null) ?? pickStr(o, 'VehicleType', 'CarType');
+          : null) ?? pickStr(o, 'VehicleType', 'CarType'));
 
   const vehicleBrand =
     vehicle != null
       ? pickStr(vehicle, 'VehicleSign', 'vehicleBrand', 'Brand')
-      : (trafficCar != null
+      : ((trafficCar != null
           ? pickStr(trafficCar, 'VehicleSign', 'vehicleBrand', 'Brand')
-          : null) ?? pickStr(o, 'VehicleSign', 'VehicleBrand');
+          : null) ?? pickStr(o, 'VehicleSign', 'VehicleBrand'));
 
   return {
     plateNumber,
@@ -588,14 +587,23 @@ export function snapFlatMapToLprReading(
   return {
     plateNumber: normalizedPlate,
     plateColor:
-      pickEv('PlateColor', 'Plate.PlateColor', 'TrafficParking.PlateColor', 'TrafficCar.PlateColor') ??
-      null,
+      pickEv(
+        'PlateColor',
+        'Plate.PlateColor',
+        'TrafficParking.PlateColor',
+        'TrafficCar.PlateColor',
+      ) ?? null,
     plateType: pickEv('PlateType', 'Plate.PlateType') ?? null,
     confidence,
     vehicleColor:
-      pickEv('VehicleColor', 'Vehicle.VehicleColor', 'TrafficCar.VehicleColor') ?? null,
+      pickEv(
+        'VehicleColor',
+        'Vehicle.VehicleColor',
+        'TrafficCar.VehicleColor',
+      ) ?? null,
     vehicleType:
-      pickEv('VehicleType', 'Vehicle.VehicleType', 'TrafficCar.CarType') ?? null,
+      pickEv('VehicleType', 'Vehicle.VehicleType', 'TrafficCar.CarType') ??
+      null,
     vehicleBrand: pickEv('VehicleSign', 'Vehicle.VehicleSign') ?? null,
     speed,
     direction,

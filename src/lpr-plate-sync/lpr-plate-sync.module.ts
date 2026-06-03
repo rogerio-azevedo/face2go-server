@@ -10,10 +10,7 @@ import { LprPlateSyncService } from './lpr-plate-sync.service';
 @Global()
 @Module({
   imports: [PermissionsModule],
-  controllers: [
-    CompanyLprPlateSyncController,
-    ClientLprPlateSyncController,
-  ],
+  controllers: [CompanyLprPlateSyncController, ClientLprPlateSyncController],
   providers: [LprPlateSyncService],
   exports: [LprPlateSyncService],
 })

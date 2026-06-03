@@ -19,7 +19,7 @@ import { FaceSyncService } from './face-sync.service';
 @Roles('company_admin', 'company_operator')
 @Controller('clients/:clientId/faces')
 export class CompanyFaceSyncController {
-  constructor(private readonly faceSync: FaceSyncService) { }
+  constructor(private readonly faceSync: FaceSyncService) {}
 
   @Post(':registrationId/sync')
   @ApiOperation({
@@ -77,7 +77,7 @@ export class CompanyFaceSyncController {
 @Roles('client_admin', 'client_operator')
 @Controller('client/faces')
 export class ClientFaceSyncController {
-  constructor(private readonly faceSync: FaceSyncService) { }
+  constructor(private readonly faceSync: FaceSyncService) {}
 
   @Post(':registrationId/sync')
   @ApiOperation({ summary: 'Sincronizar face com os leitores do meu cliente' })

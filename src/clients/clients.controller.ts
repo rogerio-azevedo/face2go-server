@@ -20,7 +20,7 @@ import { ClientsService } from './clients.service';
 @Roles('company_admin', 'company_operator')
 @Controller('clients')
 export class ClientsController {
-  constructor(private readonly clientsService: ClientsService) { }
+  constructor(private readonly clientsService: ClientsService) {}
 
   @Get()
   @ApiOperation({ summary: 'Listar clientes da empresa' })

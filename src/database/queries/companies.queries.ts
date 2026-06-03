@@ -10,10 +10,7 @@ export type ListCompaniesOptions = {
   includeInactive?: boolean;
 };
 
-export async function listCompanies(
-  db: AppDb,
-  options?: ListCompaniesOptions,
-) {
+export async function listCompanies(db: AppDb, options?: ListCompaniesOptions) {
   const includeInactive = options?.includeInactive ?? false;
 
   const baseQuery = db.select().from(companies);

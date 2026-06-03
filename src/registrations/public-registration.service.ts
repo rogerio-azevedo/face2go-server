@@ -118,7 +118,8 @@ export class PublicRegistrationService {
       ext,
     );
 
-    const contentType = mimeType.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const contentType =
+      mimeType.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
     const uploadUrl = await this.r2.createPresignedPutUrl(key, contentType);
 
     return {
@@ -175,7 +176,8 @@ export class PublicRegistrationService {
     }
 
     const ext = this.r2.extForImageMime(mime);
-    const contentType = mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const contentType =
+      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
     const key = this.r2.buildFaceDraftKey(
       bundle.client.companyId,
       bundle.client.id,
@@ -259,7 +261,7 @@ export class PublicRegistrationService {
       };
     } catch (e: unknown) {
       const codePg =
-        e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
+        e && typeof e === 'object' && 'code' in e ? String(e.code) : '';
       if (codePg === '23505') {
         throw new ConflictException('Este cadastro já foi enviado.');
       }

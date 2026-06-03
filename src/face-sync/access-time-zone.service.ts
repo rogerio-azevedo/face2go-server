@@ -19,7 +19,11 @@ import {
   toPlainReaderCredential,
   type PlainReaderCredential,
 } from './intelbras-device.client';
-import { readerLabel, syncLog, syncLogError } from './intelbras-sync-debug.util';
+import {
+  readerLabel,
+  syncLog,
+  syncLogError,
+} from './intelbras-sync-debug.util';
 
 type ShiftRow = typeof shifts.$inferSelect;
 
@@ -73,7 +77,10 @@ export class AccessTimeZoneService {
    */
   async ensureShiftZone(
     clientId: string,
-    shift: Pick<ShiftRow, 'id' | 'clientId' | 'name' | 'schedule' | 'timeZoneIndex'>,
+    shift: Pick<
+      ShiftRow,
+      'id' | 'clientId' | 'name' | 'schedule' | 'timeZoneIndex'
+    >,
   ): Promise<number> {
     const zoneIndex = await this.ensureShiftZoneIndex(clientId, shift);
     await this.pushShiftScheduleToReaders(clientId, zoneIndex, shift);
@@ -247,9 +254,7 @@ export class AccessTimeZoneService {
     clientId: string,
   ): Promise<Map<number, ShiftRow['schedule']>> {
     const shifts = await this.loadShiftsByZoneIndex(clientId);
-    return new Map(
-      [...shifts.entries()].map(([idx, s]) => [idx, s.schedule]),
-    );
+    return new Map([...shifts.entries()].map(([idx, s]) => [idx, s.schedule]));
   }
 
   /**
@@ -267,7 +272,10 @@ export class AccessTimeZoneService {
     if (needed.length === 0) return;
 
     const label = readerLabel(reader);
-    syncLog('ensureZonesOnReader:inicio', { reader: label, zoneIndices: needed });
+    syncLog('ensureZonesOnReader:inicio', {
+      reader: label,
+      zoneIndices: needed,
+    });
 
     try {
       for (const zoneIndex of needed) {
@@ -343,11 +351,10 @@ export class AccessTimeZoneService {
           zoneIndex,
           shiftId: shift.id,
         });
-        await this.pushShiftScheduleToReaders(
-          clientId,
-          zoneIndex,
-          { name: shift.name, schedule: shift.schedule },
-        );
+        await this.pushShiftScheduleToReaders(clientId, zoneIndex, {
+          name: shift.name,
+          schedule: shift.schedule,
+        });
       }
 
       syncLog('ensureZonesForSync:ok', { clientId, zoneIndices: needed });

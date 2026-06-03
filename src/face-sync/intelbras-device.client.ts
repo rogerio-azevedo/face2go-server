@@ -44,9 +44,7 @@ export function toPlainReaderCredential(
 
 function deviceUrl(reader: PlainReaderCredential): string {
   const port = reader.port ?? 80;
-  return port === 80
-    ? `http://${reader.ip}`
-    : `http://${reader.ip}:${port}`;
+  return port === 80 ? `http://${reader.ip}` : `http://${reader.ip}:${port}`;
 }
 
 const OFFLINE_ERRNO_CODES = new Set([
@@ -113,7 +111,9 @@ function httpStatusFromError(err: unknown): number | undefined {
     };
     const fromResp =
       coerceHttpStatus(r.response?.status) ??
-      coerceHttpStatus((r.response as { statusCode?: unknown } | undefined)?.statusCode);
+      coerceHttpStatus(
+        (r.response as { statusCode?: unknown } | undefined)?.statusCode,
+      );
     if (fromResp !== undefined) return fromResp;
 
     const top = coerceHttpStatus(r.status) ?? coerceHttpStatus(r.statusCode);
@@ -231,7 +231,8 @@ export function mapReaderError(
   /** Mensagem só em inglês, sem objeto `response` na raiz útil ao type checker. */
   if (
     /\brequest failed\b/i.test(rawMsg) &&
-    (/\bstatus(?:\s+code)?\D{0,5}400\b/i.test(rawMsg) || /\b400\b.*status\b/i.test(lower))
+    (/\bstatus(?:\s+code)?\D{0,5}400\b/i.test(rawMsg) ||
+      /\b400\b.*status\b/i.test(lower))
   ) {
     return msgs.bad400;
   }
@@ -262,7 +263,10 @@ export function mapReaderError(
 }
 
 /** Mensagem por leitor para `deviceSyncError` (ex.: fluxo FaceSyncService). */
-export function formatReaderFaceSyncError(readerName: string, err: unknown): string {
+export function formatReaderFaceSyncError(
+  readerName: string,
+  err: unknown,
+): string {
   return `${readerName}: ${mapReaderError(err)}`;
 }
 
@@ -472,7 +476,9 @@ function buildAccessCardInsertParams(args: {
 }): string {
   const qsStart = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_START);
   const qsEnd = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_END);
-  const timeSections = buildTimeSectionsRecordUpdaterParams(args.timeSectionIds);
+  const timeSections = buildTimeSectionsRecordUpdaterParams(
+    args.timeSectionIds,
+  );
   const cardName = encodeURIComponent(args.normalizedName);
 
   return (
@@ -496,7 +502,9 @@ function buildAccessCardUpdateParams(args: {
   timeSectionIds: number[];
 }): string {
   const cardName = encodeURIComponent(args.normalizedName);
-  const timeSections = buildTimeSectionsRecordUpdaterParams(args.timeSectionIds);
+  const timeSections = buildTimeSectionsRecordUpdaterParams(
+    args.timeSectionIds,
+  );
 
   return (
     `action=update&name=AccessControlCard&recno=${args.recNo}` +
@@ -550,7 +558,10 @@ export async function intelbrasUpsertFaceOnReader(
     try {
       existingCard = await intelbrasFindCardByUserId(reader, faceId);
     } catch (err) {
-      syncLogError('upsertFace:findCardByUserId', err, { reader: label, faceId });
+      syncLogError('upsertFace:findCardByUserId', err, {
+        reader: label,
+        faceId,
+      });
       throw err;
     }
 
@@ -583,7 +594,10 @@ export async function intelbrasUpsertFaceOnReader(
     });
 
     try {
-      const cardResp = await digestRequest(auth, { method: 'GET', url: cardUrl });
+      const cardResp = await digestRequest(auth, {
+        method: 'GET',
+        url: cardUrl,
+      });
       syncLog('upsertFace:cardSync:ok', {
         reader: label,
         faceId,
@@ -606,7 +620,11 @@ export async function intelbrasUpsertFaceOnReader(
     const checkFaceUrl = `${base}/cgi-bin/FaceInfoManager.cgi?action=startFind&Condition.UserID=${faceId}`;
     let faceExists = false;
 
-    syncLog('upsertFace:checkFace:inicio', { reader: label, faceId, checkFaceUrl });
+    syncLog('upsertFace:checkFace:inicio', {
+      reader: label,
+      faceId,
+      checkFaceUrl,
+    });
 
     try {
       const faceResp = await digestRequest(auth, {
@@ -683,9 +701,7 @@ export async function intelbrasUpsertFaceOnReader(
 
 function attachReaderSyncStepError(err: unknown, step: string): Error {
   const msg =
-    step === 'cartão de acesso'
-      ? mapReaderCardError(err)
-      : mapReaderError(err);
+    step === 'cartão de acesso' ? mapReaderCardError(err) : mapReaderError(err);
   const wrapped = new Error(`${step}: ${msg}`);
   if (err instanceof Error) {
     wrapped.cause = err;

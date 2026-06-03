@@ -215,12 +215,7 @@ export async function findOrCreateSchoolClassByCode(
   year: number,
 ): Promise<{ id: string; created: boolean }> {
   const name = classCode.trim();
-  const existing = await findSchoolClassByNameAndYear(
-    db,
-    clientId,
-    name,
-    year,
-  );
+  const existing = await findSchoolClassByNameAndYear(db, clientId, name, year);
   if (existing) {
     return { id: existing.id, created: false };
   }
@@ -233,7 +228,7 @@ export async function findOrCreateSchoolClassByCode(
       year,
       isActive: true,
     });
-    return { id: row!.id, created: true };
+    return { id: row.id, created: true };
   } catch (err: unknown) {
     const code =
       err && typeof err === 'object' && 'code' in err

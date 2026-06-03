@@ -41,9 +41,9 @@ export class ClientsService {
     return companyId;
   }
 
-  private omitDisplayToken<T extends { displayToken?: unknown; displayShortCode?: unknown }>(
-    row: T,
-  ): Omit<T, 'displayToken' | 'displayShortCode'> {
+  private omitDisplayToken<
+    T extends { displayToken?: unknown; displayShortCode?: unknown },
+  >(row: T): Omit<T, 'displayToken' | 'displayShortCode'> {
     const { displayToken: _omit, displayShortCode: _omitCode, ...rest } = row;
     return rest;
   }
@@ -69,7 +69,7 @@ export class ClientsService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -116,7 +116,7 @@ export class ClientsService {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         user.role,
         user.companyUserId,
-        'clients' as FeatureSlug,
+        'clients',
         'can_read',
       );
       if (!ok) {
@@ -219,11 +219,12 @@ export class ClientsService {
       throw new BadRequestException('Dispositivos duplicados na lista.');
     }
 
-    const valid = await clientDisplayDevicesQueries.validateDisplayDevicesForClient(
-      this.database.db,
-      clientId,
-      devices,
-    );
+    const valid =
+      await clientDisplayDevicesQueries.validateDisplayDevicesForClient(
+        this.database.db,
+        clientId,
+        devices,
+      );
     if (!valid) {
       throw new BadRequestException(
         'Um ou mais dispositivos não pertencem a este cliente.',
@@ -310,7 +311,9 @@ export class ClientsService {
         ...(d.phone !== undefined ? { phone: d.phone } : {}),
         ...(d.email !== undefined ? { email: d.email } : {}),
         ...(d.logoUrl !== undefined ? { logoUrl: d.logoUrl } : {}),
-        ...(d.primaryColor !== undefined ? { primaryColor: d.primaryColor } : {}),
+        ...(d.primaryColor !== undefined
+          ? { primaryColor: d.primaryColor }
+          : {}),
         ...(d.timezoneOffsetMinutes !== undefined
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
           : {}),
@@ -391,13 +394,14 @@ export class ClientsService {
       throw new BadRequestException('Cliente inativo.');
     }
 
-    const inviteResult = await clientInviteLinksQueries.generateClientInviteCode(
-      this.database.db,
-      {
-        clientId,
-        role: parsed.data.role,
-      },
-    );
+    const inviteResult =
+      await clientInviteLinksQueries.generateClientInviteCode(
+        this.database.db,
+        {
+          clientId,
+          role: parsed.data.role,
+        },
+      );
     if (inviteResult.success === false) {
       throw new BadRequestException(inviteResult.error);
     }

@@ -51,10 +51,7 @@ export class ShiftsService {
       return client;
     }
 
-    if (
-      user.role !== 'company_admin' &&
-      user.role !== 'company_operator'
-    ) {
+    if (user.role !== 'company_admin' && user.role !== 'company_operator') {
       throw new ForbiddenException('Sem permissão.');
     }
 
@@ -75,7 +72,7 @@ export class ShiftsService {
     const ok = await this.permissionsService.evaluateCompanyFeatureAction(
       user.role,
       user.companyUserId,
-      'clients' as FeatureSlug,
+      'clients',
       'can_read',
     );
     if (!ok) {
@@ -130,7 +127,12 @@ export class ShiftsService {
     return row;
   }
 
-  async update(user: JwtPayload, clientId: string, shiftId: string, body: unknown) {
+  async update(
+    user: JwtPayload,
+    clientId: string,
+    shiftId: string,
+    body: unknown,
+  ) {
     await this.assertManageClient(user, clientId);
     const parsed = updateShiftSchema.safeParse(body);
     if (!parsed.success) {

@@ -45,13 +45,17 @@ export const temporaryPickupAuthorizations = pgTable(
     guestFaceImageKey: text('guest_face_image_key'),
     guestFaceId: integer('guest_face_id'),
     guestFaceSyncStatus: deviceSyncStatusEnum('guest_face_sync_status'),
-    guestFaceSyncedAt: timestamp('guest_face_synced_at', { withTimezone: true }),
+    guestFaceSyncedAt: timestamp('guest_face_synced_at', {
+      withTimezone: true,
+    }),
     guestFaceSyncError: text('guest_face_sync_error'),
     guestVehiclePlate: varchar('guest_vehicle_plate', { length: 10 }),
     guestVehicleBrand: varchar('guest_vehicle_brand', { length: 100 }),
     guestVehicleModel: varchar('guest_vehicle_model', { length: 100 }),
     guestVehicleColor: varchar('guest_vehicle_color', { length: 50 }),
-    guestVehicleLprSyncStatus: deviceSyncStatusEnum('guest_vehicle_lpr_sync_status'),
+    guestVehicleLprSyncStatus: deviceSyncStatusEnum(
+      'guest_vehicle_lpr_sync_status',
+    ),
     guestVehicleLprSyncedAt: timestamp('guest_vehicle_lpr_synced_at', {
       withTimezone: true,
     }),
@@ -77,7 +81,9 @@ export const pickupAuthorizationStudents = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     authorizationId: uuid('authorization_id')
       .notNull()
-      .references(() => temporaryPickupAuthorizations.id, { onDelete: 'cascade' }),
+      .references(() => temporaryPickupAuthorizations.id, {
+        onDelete: 'cascade',
+      }),
     studentId: uuid('student_id')
       .notNull()
       .references(() => students.id, { onDelete: 'cascade' }),

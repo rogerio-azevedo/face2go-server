@@ -244,7 +244,8 @@ export async function updateClient(
   if (input.phone !== undefined) setPayload.phone = input.phone;
   if (input.email !== undefined) setPayload.email = input.email;
   if (input.logoUrl !== undefined) setPayload.logoUrl = input.logoUrl;
-  if (input.primaryColor !== undefined) setPayload.primaryColor = input.primaryColor;
+  if (input.primaryColor !== undefined)
+    setPayload.primaryColor = input.primaryColor;
   if (input.timezoneOffsetMinutes !== undefined) {
     setPayload.timezoneOffsetMinutes = input.timezoneOffsetMinutes;
   }
@@ -295,9 +296,7 @@ export async function validateClientDisplayToken(
   const [row] = await db
     .select({ id: clients.id })
     .from(clients)
-    .where(
-      and(eq(clients.id, clientId), eq(clients.displayToken, trimmed)),
-    )
+    .where(and(eq(clients.id, clientId), eq(clients.displayToken, trimmed)))
     .limit(1);
   return !!row;
 }
@@ -404,7 +403,9 @@ export async function ensureDisplayShortCodeForCompanyClient(
     }
   }
 
-  throw new Error('Não foi possível gerar um código curto único para o display.');
+  throw new Error(
+    'Não foi possível gerar um código curto único para o display.',
+  );
 }
 
 /** Resolve display público pelo código curto (lookup global). */

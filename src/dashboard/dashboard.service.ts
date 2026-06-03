@@ -5,11 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import * as dashboardQueries from '../database/queries/dashboard.queries';
 
 const COMPANY_ROLES = new Set(['company_admin', 'company_operator']);
-const CLIENT_ROLES = new Set([
-  'client_admin',
-  'client_operator',
-  'face_user',
-]);
+const CLIENT_ROLES = new Set(['client_admin', 'client_operator', 'face_user']);
 
 @Injectable()
 export class DashboardService {

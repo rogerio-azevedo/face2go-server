@@ -18,7 +18,9 @@ export type SituacaoMatricula =
   | 'cancelled'
   | 'pre_enrolled';
 
-export function normalizeDocument(raw: string | number | null | undefined): string | null {
+export function normalizeDocument(
+  raw: string | number | null | undefined,
+): string | null {
   if (raw == null) return null;
   const digits = String(raw).replace(/\D/g, '');
   return digits.length >= 11 ? digits : null;
@@ -43,7 +45,9 @@ export function mapStatusAcessoToIsActive(status: string): boolean {
   return status.trim().toLowerCase() === 'liberado';
 }
 
-export function resolveFilialFromRecord(record: TotvsIenhRecord): number | null {
+export function resolveFilialFromRecord(
+  record: TotvsIenhRecord,
+): number | null {
   const name = record.NOMEFILIAL?.trim();
   if (name && FILIAL_BY_BRANCH_NAME[name]) {
     return FILIAL_BY_BRANCH_NAME[name];
@@ -63,7 +67,9 @@ export function normalizeEnrollment(codAluno: string): string {
   return codAluno.trim();
 }
 
-export function normalizePhone(raw: string | number | null | undefined): string | null {
+export function normalizePhone(
+  raw: string | number | null | undefined,
+): string | null {
   if (raw == null) return null;
   const digits = String(raw).replace(/\D/g, '');
   return digits.length >= 8 ? digits : null;

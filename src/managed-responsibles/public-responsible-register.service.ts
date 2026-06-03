@@ -60,10 +60,11 @@ export class PublicResponsibleRegisterService {
       this.database.db,
       row.inviterResponsibleId,
     );
-    const students = await invitationQueries.invitationListStudentsForInvitation(
-      this.database.db,
-      row.id,
-    );
+    const students =
+      await invitationQueries.invitationListStudentsForInvitation(
+        this.database.db,
+        row.id,
+      );
     return {
       clientName: client.name,
       inviterName,
@@ -118,7 +119,8 @@ export class PublicResponsibleRegisterService {
     }
 
     const ext = this.r2.extForImageMime(mime);
-    const contentType = mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const contentType =
+      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
     const client = await clientsQueries.getClientByIdOnly(
       this.database.db,
       row.clientId,

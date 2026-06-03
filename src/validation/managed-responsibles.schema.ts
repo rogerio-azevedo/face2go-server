@@ -24,14 +24,13 @@ const optionalVehicleSchema = z
 
 export const managedResponsibleStudentLinkSchema = linkResponsibleStudentSchema;
 
-export const createManagedResponsibleSchema = createResponsibleSchema
-  .extend({
-    students: z
-      .array(managedResponsibleStudentLinkSchema)
-      .min(1, 'Informe ao menos um aluno.'),
-    imageBase64: z.string().min(64).optional(),
-    vehicle: optionalVehicleSchema,
-  });
+export const createManagedResponsibleSchema = createResponsibleSchema.extend({
+  students: z
+    .array(managedResponsibleStudentLinkSchema)
+    .min(1, 'Informe ao menos um aluno.'),
+  imageBase64: z.string().min(64).optional(),
+  vehicle: optionalVehicleSchema,
+});
 
 export const createResponsibleInvitationSchema = z.object({
   students: z
@@ -39,8 +38,8 @@ export const createResponsibleInvitationSchema = z.object({
     .min(1, 'Informe ao menos um aluno.'),
 });
 
-export const publicResponsibleRegisterSubmitSchema = createResponsibleSchema
-  .extend({
+export const publicResponsibleRegisterSubmitSchema =
+  createResponsibleSchema.extend({
     faceImageKey: z.string().min(1),
     vehicle: optionalVehicleSchema,
   });
