@@ -324,22 +324,42 @@ function parsePlateListFromText(text: string): DevicePlatesListResult {
 }
 
 function parseQuerySizeFromText(text: string): number {
+  let size = 0;
+  let count = 0;
   for (const line of text.split('\n')) {
-    const m = /^Size=(\d+)$/.exec(line.trim());
-    if (m) return parseInt(m[1], 10) || 0;
+    const t = line.trim();
+    const mSize = /^Size=(\d+)$/.exec(t);
+    if (mSize) {
+      size = parseInt(mSize[1], 10) || 0;
+      continue;
+    }
+    const mCount = /^count=(\d+)$/.exec(t);
+    if (mCount) count = parseInt(mCount[1], 10) || 0;
   }
-  return 0;
+  return Math.max(size, count);
 }
 
 function resolveTotalCount(
   page: DevicePlatesListResult,
   offset: number,
   sizeFromQuery: number | null,
+  pageSize: number,
 ): number {
   if (sizeFromQuery != null && sizeFromQuery > 0) return sizeFromQuery;
   if (page.totalCount > 0) return page.totalCount;
-  return Math.max(page.found, offset + page.records.length);
+  if (page.found > page.records.length) return page.found;
+  const loaded = offset + page.records.length;
+  if (page.records.length < pageSize) return loaded;
+  return Math.max(page.found, loaded);
 }
+
+const QUERY_SIZE_LIST_NAMES = [
+  TRAFFIC_LIST_NAME,
+  'TrafficAllowList',
+  'AllowList',
+] as const;
+
+const DEVICE_PLATES_BATCH_SIZE = 500;
 
 /**
  * Total de placas na TrafficRedList via getQuerySize (quando o firmware suporta).
@@ -352,15 +372,41 @@ export async function intelbrasGetDevicePlateCount(
     password: camera.plainPassword,
   });
   const base = deviceUrl(camera);
-  const url = `${base}/cgi-bin/recordFinder.cgi?action=getQuerySize&name=${TRAFFIC_LIST_NAME}`;
 
-  try {
-    const r = await digestRequest(auth, { method: 'GET', url });
-    if (typeof r.data !== 'string') return null;
-    const size = parseQuerySizeFromText(r.data);
-    return size > 0 ? size : null;
-  } catch {
-    return null;
+  for (const listName of QUERY_SIZE_LIST_NAMES) {
+    const url = `${base}/cgi-bin/recordFinder.cgi?action=getQuerySize&name=${listName}`;
+    try {
+      const r = await digestRequest(auth, { method: 'GET', url });
+      if (typeof r.data !== 'string') continue;
+      const size = parseQuerySizeFromText(r.data);
+      if (size > 0) return size;
+    } catch {
+      /* tenta próximo nome */
+    }
+  }
+  return null;
+}
+
+/**
+ * Varre a lista em lotes (doSeekFind) quando getQuerySize não está disponível.
+ */
+async function discoverDevicePlateCount(
+  camera: PlainCameraCredential,
+): Promise<number> {
+  let offset = 0;
+
+  while (true) {
+    const page = await fetchDevicePlatesPage(
+      camera,
+      DEVICE_PLATES_BATCH_SIZE,
+      offset,
+      true,
+    );
+    if (page.records.length < DEVICE_PLATES_BATCH_SIZE) {
+      return offset + page.records.length;
+    }
+    if (page.totalCount > 0) return page.totalCount;
+    offset += DEVICE_PLATES_BATCH_SIZE;
   }
 }
 
@@ -368,6 +414,7 @@ async function fetchDevicePlatesPage(
   camera: PlainCameraCredential,
   count: number,
   offset: number,
+  doSeekFindOnly = false,
 ): Promise<DevicePlatesListResult> {
   const auth = new AxiosDigestAuth({
     username: camera.username,
@@ -377,10 +424,13 @@ async function fetchDevicePlatesPage(
   const safeCount = Math.min(Math.max(count, 1), 500);
   const safeOffset = Math.max(offset, 0);
 
-  const candidates: string[] = [
-    `${base}/cgi-bin/recordFinder.cgi?action=find&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`,
-    `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`,
-  ];
+  const doSeekUrl = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
+  const findUrl = `${base}/cgi-bin/recordFinder.cgi?action=find&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
+
+  // doSeekFind respeita offset; `find` em vários firmwares ignora e quebra paginação.
+  const candidates: string[] = doSeekFindOnly || safeOffset > 0
+    ? [doSeekUrl]
+    : [doSeekUrl, findUrl];
 
   let lastErr: unknown;
   for (const url of candidates) {
@@ -397,8 +447,6 @@ async function fetchDevicePlatesPage(
   throw new Error('Resposta inválida da câmera ao listar placas.');
 }
 
-const DEVICE_PLATES_BATCH_SIZE = 500;
-
 async function fetchAllDevicePlates(
   camera: PlainCameraCredential,
 ): Promise<DevicePlate[]> {
@@ -410,6 +458,7 @@ async function fetchAllDevicePlates(
       camera,
       DEVICE_PLATES_BATCH_SIZE,
       offset,
+      true,
     );
     all.push(...page.records);
     if (page.records.length < DEVICE_PLATES_BATCH_SIZE) break;
@@ -440,7 +489,23 @@ export async function intelbrasGetDevicePlates(
     intelbrasGetDevicePlateCount(camera),
   ]);
 
-  const totalCount = resolveTotalCount(page, safeOffset, sizeFromQuery);
+  let totalCount = resolveTotalCount(
+    page,
+    safeOffset,
+    sizeFromQuery,
+    safeCount,
+  );
+
+  const needsDiscover =
+    sizeFromQuery == null &&
+    page.totalCount === 0 &&
+    page.records.length >= safeCount &&
+    page.found <= page.records.length;
+
+  if (needsDiscover) {
+    totalCount = await discoverDevicePlateCount(camera);
+  }
+
   return {
     totalCount,
     found: page.found,
