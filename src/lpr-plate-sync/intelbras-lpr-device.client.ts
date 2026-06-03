@@ -635,8 +635,9 @@ async function fetchDevicePlatesPage(
   const findUrl = `${base}/cgi-bin/recordFinder.cgi?action=find&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
 
   // doSeekFind respeita offset; `find` em vários firmwares ignora e quebra paginação.
-  const candidates: string[] =
-    doSeekFindOnly || safeOffset > 0 ? [doSeekUrl] : [doSeekUrl, findUrl];
+  const candidates: string[] = doSeekFindOnly
+    ? [doSeekUrl]
+    : [doSeekUrl, findUrl];
 
   let lastErr: unknown;
   for (const url of candidates) {
