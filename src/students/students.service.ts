@@ -178,115 +178,6 @@ export class StudentsService {
     }
   }
 
-  private async resyncStudentFaceOnReaders(
-    clientId: string,
-    studentId: string,
-  ): Promise<void> {
-    const student = await studentsQueries.getStudentById(
-      this.database.db,
-      studentId,
-      clientId,
-    );
-    if (!student?.faceId || !student.photoKey) return;
-
-    let buffer: Buffer;
-    try {
-      const got = await this.r2Storage.getObjectBytes(student.photoKey);
-      buffer = got.buffer;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      this.log.warn(
-        `Re-sync aluno ${studentId}: falha ao obter foto (${msg})`,
-      );
-      return;
-    }
-
-    const sync = await this.faceSync.syncPersonOnReaders({
-      clientId,
-      faceId: student.faceId,
-      name: student.name,
-      imageBuffer: buffer,
-      timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
-        clientId,
-        studentId,
-      ),
-      logContext: `student-class-change=${studentId}`,
-    });
-
-    await studentsQueries.updateStudentFace(
-      this.database.db,
-      studentId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
-      },
-    );
-  }
-
-  private async resyncLinkedResponsiblesFaceOnReaders(
-    clientId: string,
-    studentId: string,
-  ): Promise<void> {
-    const responsibleIds = await responsiblesQueries.listResponsibleIdsForStudent(
-      this.database.db,
-      studentId,
-      clientId,
-    );
-
-    for (const responsibleId of responsibleIds) {
-      const responsible = await responsiblesQueries.getResponsibleById(
-        this.database.db,
-        responsibleId,
-        clientId,
-      );
-      if (!responsible?.faceId || !responsible.photoKey) continue;
-
-      let buffer: Buffer;
-      try {
-        const got = await this.r2Storage.getObjectBytes(responsible.photoKey);
-        buffer = got.buffer;
-      } catch {
-        continue;
-      }
-
-      const sync = await this.faceSync.syncPersonOnReaders({
-        clientId,
-        faceId: responsible.faceId,
-        name: responsible.name,
-        imageBuffer: buffer,
-        timeSectionIds:
-          await this.accessTimeZone.resolveResponsibleTimeSections(
-            clientId,
-            responsibleId,
-          ),
-        logContext: `responsible-class-change=${responsibleId}`,
-      });
-
-      await responsiblesQueries.updateResponsibleFace(
-        this.database.db,
-        responsibleId,
-        clientId,
-        {
-          deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt:
-            sync.deviceSyncStatus === 'synced' ? new Date() : null,
-          deviceSyncError: sync.deviceSyncError,
-        },
-      );
-    }
-  }
-
-  private async resyncStudentAndLinkedResponsibles(
-    clientId: string,
-    studentId: string,
-  ): Promise<void> {
-    await this.resyncStudentFaceOnReaders(clientId, studentId);
-    await this.resyncLinkedResponsiblesFaceOnReaders(clientId, studentId);
-  }
-
   async listLinkedResponsibles(
     user: JwtPayload,
     clientId: string,
@@ -416,9 +307,6 @@ export class StudentsService {
     if (!updated) {
       throw new NotFoundException('Aluno não encontrado.');
     }
-    if (d.name !== undefined && updated.faceId != null) {
-      await this.resyncStudentAndLinkedResponsibles(clientId, studentId);
-    }
     const [withClasses] = await this.attachClassesToStudents([updated]);
     return withClasses;
   }
@@ -475,8 +363,6 @@ export class StudentsService {
       throw new NotFoundException('Vínculo não encontrado após criação.');
     }
 
-    await this.resyncStudentAndLinkedResponsibles(clientId, studentId);
-
     return mapStudentClassLinkToApi(link);
   }
 
@@ -514,8 +400,6 @@ export class StudentsService {
     if (!removed) {
       throw new NotFoundException('Vínculo não encontrado.');
     }
-
-    await this.resyncStudentAndLinkedResponsibles(clientId, studentId);
 
     return { success: true };
   }
