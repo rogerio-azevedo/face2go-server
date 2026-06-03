@@ -325,12 +325,13 @@ export async function intelbrasFindCardByUserId(
     let totalFound = Number.POSITIVE_INFINITY;
 
     while (offset < totalFound) {
-      const { found, records } = await intelbrasGetDeviceUsers(
+      const { found, records, totalCount } = await intelbrasGetDeviceUsers(
         reader,
         pageSize,
         offset,
       );
-      totalFound = found;
+      const total = totalCount > 0 ? totalCount : found;
+      totalFound = total;
 
       const match = records.find((r) => r.UserID === userId);
       if (match?.RecNo) {
@@ -349,7 +350,7 @@ export async function intelbrasFindCardByUserId(
 
       if (records.length === 0) break;
       offset += records.length;
-      if (offset >= found) break;
+      if (offset >= total) break;
     }
 
     syncLog('findCardByUserId:naoEncontrado', { reader: label, userId });
@@ -423,7 +424,7 @@ function parseAccessControlCardFinderText(text: string): DeviceUsersListResult {
     timeSectionIndices: r.timeSectionIndices,
   }));
 
-  return { found, records };
+  return { totalCount: 0, found, records };
 }
 
 /** Sincroniza uma zona AccessTimeSchedule[n] no leitor a partir do schedule interno. */
@@ -727,9 +728,126 @@ export type DeviceUser = {
 };
 
 export type DeviceUsersListResult = {
+  totalCount: number;
   found: number;
   records: DeviceUser[];
 };
+
+const ACCESS_CONTROL_CARD_NAME = 'AccessControlCard';
+const ACCESS_USER_INFO_NAME = 'AccessUserInfo';
+const DEVICE_USERS_BATCH_SIZE = 500;
+
+function parseQuerySizeFromText(text: string): number {
+  for (const line of text.split('\n')) {
+    const m = /^Size=(\d+)$/.exec(line.trim());
+    if (m) return parseInt(m[1], 10) || 0;
+  }
+  return 0;
+}
+
+function resolveDeviceUsersTotalCount(
+  page: DeviceUsersListResult,
+  offset: number,
+  sizeFromQuery: number | null,
+): number {
+  if (sizeFromQuery != null && sizeFromQuery > 0) return sizeFromQuery;
+  if (page.totalCount > 0) return page.totalCount;
+  return Math.max(page.found, offset + page.records.length);
+}
+
+function normalizeCardNameSearch(term: string): string {
+  return term.trim().toUpperCase();
+}
+
+/**
+ * Total de usuários/cartões via getQuerySize (quando o firmware suporta).
+ */
+export async function intelbrasGetDeviceUserCount(
+  reader: PlainReaderCredential,
+): Promise<number | null> {
+  const auth = new AxiosDigestAuth({
+    username: reader.username,
+    password: reader.plainPassword,
+  });
+  const base = deviceUrl(reader);
+  const url = `${base}/cgi-bin/recordFinder.cgi?action=getQuerySize&name=${ACCESS_USER_INFO_NAME}`;
+
+  try {
+    const r = await digestRequest(auth, { method: 'GET', url });
+    if (typeof r.data !== 'string') return null;
+    const size = parseQuerySizeFromText(r.data);
+    return size > 0 ? size : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchDeviceUsersPage(
+  reader: PlainReaderCredential,
+  count: number,
+  offset: number,
+): Promise<DeviceUsersListResult> {
+  const label = readerLabel(reader);
+  const safeCount = Math.min(Math.max(count, 1), DEVICE_USERS_BATCH_SIZE);
+  const safeOffset = Math.max(offset, 0);
+
+  const auth = new AxiosDigestAuth({
+    username: reader.username,
+    password: reader.plainPassword,
+  });
+  const base = deviceUrl(reader);
+  const url = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=${ACCESS_CONTROL_CARD_NAME}&count=${safeCount}&offset=${safeOffset}`;
+
+  syncLog('getDeviceUsers:inicio', {
+    reader: label,
+    count: safeCount,
+    offset: safeOffset,
+  });
+
+  const response = await digestRequest(auth, { method: 'GET', url });
+  if (typeof response.data !== 'string') {
+    syncLog('getDeviceUsers:respostaNaoTexto', {
+      reader: label,
+      count: safeCount,
+      offset: safeOffset,
+      dataType: typeof response.data,
+    });
+    return { totalCount: 0, found: 0, records: [] };
+  }
+
+  const parsed = parseAccessControlCardFinderText(response.data);
+  syncLog('getDeviceUsers:pagina', {
+    reader: label,
+    count: safeCount,
+    offset: safeOffset,
+    found: parsed.found,
+    records: parsed.records.length,
+  });
+  return parsed;
+}
+
+async function fetchAllDeviceUsers(
+  reader: PlainReaderCredential,
+): Promise<DeviceUser[]> {
+  const all: DeviceUser[] = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await fetchDeviceUsersPage(
+      reader,
+      DEVICE_USERS_BATCH_SIZE,
+      offset,
+    );
+    all.push(...page.records);
+    if (page.records.length < DEVICE_USERS_BATCH_SIZE) break;
+    offset += DEVICE_USERS_BATCH_SIZE;
+    const cap =
+      page.totalCount > 0 ? page.totalCount : offset + page.records.length;
+    if (offset >= cap) break;
+  }
+
+  return all;
+}
 
 export async function intelbrasGetDeviceUsers(
   reader: PlainReaderCredential,
@@ -737,41 +855,71 @@ export async function intelbrasGetDeviceUsers(
   offset: number,
 ): Promise<DeviceUsersListResult> {
   const label = readerLabel(reader);
+  const safeCount = Math.min(Math.max(count, 1), DEVICE_USERS_BATCH_SIZE);
+  const safeOffset = Math.max(offset, 0);
 
   try {
-    const auth = new AxiosDigestAuth({
-      username: reader.username,
-      password: reader.plainPassword,
-    });
-    const base = deviceUrl(reader);
-    const url = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=AccessControlCard&count=${count}&offset=${offset}`;
+    const [page, sizeFromQuery] = await Promise.all([
+      fetchDeviceUsersPage(reader, safeCount, safeOffset),
+      intelbrasGetDeviceUserCount(reader),
+    ]);
 
-    syncLog('getDeviceUsers:inicio', { reader: label, count, offset });
-
-    const response = await digestRequest(auth, { method: 'GET', url });
-    if (typeof response.data !== 'string') {
-      syncLog('getDeviceUsers:respostaNaoTexto', {
-        reader: label,
-        count,
-        offset,
-        dataType: typeof response.data,
-      });
-      return { found: 0, records: [] };
-    }
-
-    const parsed = parseAccessControlCardFinderText(response.data);
+    const totalCount = resolveDeviceUsersTotalCount(
+      page,
+      safeOffset,
+      sizeFromQuery,
+    );
     syncLog('getDeviceUsers:ok', {
       reader: label,
-      count,
-      offset,
-      found: parsed.found,
-      records: parsed.records.length,
+      count: safeCount,
+      offset: safeOffset,
+      totalCount,
+      found: page.found,
+      records: page.records.length,
     });
-    return parsed;
+    return {
+      totalCount,
+      found: page.found,
+      records: page.records,
+    };
   } catch (err) {
-    syncLogError('getDeviceUsers', err, { reader: label, count, offset });
+    syncLogError('getDeviceUsers', err, {
+      reader: label,
+      count: safeCount,
+      offset: safeOffset,
+    });
     throw err;
   }
+}
+
+/**
+ * Busca usuários por substring no CardName (sem filtro nativo no AccessControlCard).
+ */
+export async function intelbrasSearchDeviceUsers(
+  reader: PlainReaderCredential,
+  search: string,
+  count: number,
+  offset: number,
+): Promise<DeviceUsersListResult> {
+  const term = normalizeCardNameSearch(search);
+  if (!term) {
+    return intelbrasGetDeviceUsers(reader, count, offset);
+  }
+
+  const safeCount = Math.min(Math.max(count, 1), DEVICE_USERS_BATCH_SIZE);
+  const safeOffset = Math.max(offset, 0);
+
+  const all = await fetchAllDeviceUsers(reader);
+  const filtered = all.filter((row) =>
+    normalizeCardNameSearch(row.CardName).includes(term),
+  );
+  const slice = filtered.slice(safeOffset, safeOffset + safeCount);
+
+  return {
+    totalCount: filtered.length,
+    found: slice.length,
+    records: slice,
+  };
 }
 
 export async function intelbrasGetFaceImage(

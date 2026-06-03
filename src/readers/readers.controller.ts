@@ -34,10 +34,18 @@ export class ReadersController {
     @Param('readerId', ParseUUIDPipe) readerId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('search') search?: string,
   ) {
     const lim = limit ? parseInt(limit, 10) : 50;
     const off = offset ? parseInt(offset, 10) : 0;
-    return this.readersService.getDeviceUsers(user, readerId, lim, off);
+    const term = search?.trim() || undefined;
+    return this.readersService.getDeviceUsers(
+      user,
+      readerId,
+      lim,
+      off,
+      term,
+    );
   }
 
   @Get('monitor/status')

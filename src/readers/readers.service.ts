@@ -18,6 +18,7 @@ import {
   intelbrasGetDeviceUsers,
   intelbrasGetFaceImage,
   intelbrasRemoveUserFromReader,
+  intelbrasSearchDeviceUsers,
   toPlainReaderCredential,
 } from '../face-sync/intelbras-device.client';
 import { PermissionsService } from '../permissions/permissions.service';
@@ -268,6 +269,7 @@ export class ReadersService {
     readerId: string,
     limit: number,
     offset: number,
+    search?: string,
   ) {
     if (user.role !== 'company_admin' && user.role !== 'company_operator') {
       throw new ForbiddenException('Sem permissão.');
@@ -323,6 +325,14 @@ export class ReadersService {
     );
 
     try {
+      if (search) {
+        return await intelbrasSearchDeviceUsers(
+          plainReader,
+          search,
+          limit,
+          offset,
+        );
+      }
       return await intelbrasGetDeviceUsers(plainReader, limit, offset);
     } catch (e: any) {
       throw new BadRequestException(
