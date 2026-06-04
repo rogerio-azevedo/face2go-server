@@ -617,6 +617,88 @@ function buildDevicePlatesPageCandidateUrls(
   ];
 }
 
+/** Busca por placa na TrafficRedList — doc: condition.PlateNumber (exata) e PlateNumberVague (parcial). */
+function buildTrafficRedListPlateSearchUrls(
+  base: string,
+  term: string,
+  count: number,
+  offset: number,
+): string[] {
+  const n = String(count);
+  const off = String(offset);
+  const urls: string[] = [];
+
+  const pushConditionFind = (params: Record<string, string>) => {
+    const qs = new URLSearchParams();
+    qs.set('action', 'find');
+    qs.set('name', TRAFFIC_LIST_NAME);
+    qs.set('count', n);
+    qs.set('condition.QueryCount', n);
+    qs.set('condition.QueryResultBegin', off);
+    for (const [k, v] of Object.entries(params)) qs.set(k, v);
+    urls.push(`${base}/cgi-bin/recordFinder.cgi?${qs.toString()}`);
+  };
+
+  if (term.length >= 7) {
+    pushConditionFind({ 'condition.PlateNumber': term });
+    pushConditionFind({ 'condition.PlateNumberVague': term });
+  } else {
+    pushConditionFind({ 'condition.PlateNumberVague': term });
+    pushConditionFind({ 'condition.PlateNumber': term });
+  }
+
+  const legacy = new URLSearchParams();
+  legacy.set('action', 'find');
+  legacy.set('name', TRAFFIC_LIST_NAME);
+  legacy.set('count', n);
+  legacy.set('offset', off);
+  legacy.set('PlateNumber', term);
+  urls.push(`${base}/cgi-bin/recordFinder.cgi?${legacy.toString()}`);
+
+  const legacyCond = new URLSearchParams(legacy);
+  legacyCond.delete('PlateNumber');
+  legacyCond.set('Condition.PlateNumber', term);
+  urls.push(`${base}/cgi-bin/recordFinder.cgi?${legacyCond.toString()}`);
+
+  return urls;
+}
+
+async function tryRecordFinderUrls(
+  auth: AxiosDigestAuth,
+  candidates: string[],
+  opts?: { stopOnFirstNonEmpty?: boolean },
+): Promise<{ page: DevicePlatesListResult | null; lastErr: unknown }> {
+  const stopOnFirstNonEmpty = opts?.stopOnFirstNonEmpty ?? true;
+  let lastErr: unknown;
+  let lastPage: DevicePlatesListResult | null = null;
+
+  for (const url of candidates) {
+    try {
+      const r = await digestRequest(auth, { method: 'GET', url });
+      const st = r.status;
+      if (st != null && st >= 400) {
+        lastErr = Object.assign(new Error(`HTTP ${st}`), {
+          response: { status: st, data: r.data },
+        });
+        continue;
+      }
+      if (typeof r.data !== 'string') continue;
+      const page = parsePlateListFromText(r.data);
+      lastPage = page;
+      if (
+        stopOnFirstNonEmpty &&
+        (page.records.length > 0 || page.totalCount > 0 || page.found > 0)
+      ) {
+        return { page, lastErr: undefined };
+      }
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+
+  return { page: lastPage, lastErr };
+}
+
 const QUERY_SIZE_LIST_NAMES = [
   TRAFFIC_LIST_NAME,
   'TrafficAllowList',
@@ -672,29 +754,51 @@ async function fetchDevicePlatesPage(
     doSeekFindOnly,
   );
 
-  let lastErr: unknown;
-  for (const url of candidates) {
-    try {
-      const r = await digestRequest(auth, { method: 'GET', url });
-      const st = r.status;
-      if (st != null && st >= 400) {
-        lastErr = Object.assign(new Error(`HTTP ${st}`), {
-          response: { status: st, data: r.data },
-        });
-        continue;
-      }
-      if (typeof r.data !== 'string') continue;
-      return parsePlateListFromText(r.data);
-    } catch (e) {
-      lastErr = e;
-    }
-  }
+  const { page, lastErr } = await tryRecordFinderUrls(auth, candidates, {
+    stopOnFirstNonEmpty: false,
+  });
+  if (page) return page;
 
   if (lastErr instanceof Error) throw lastErr;
   if (typeof lastErr === 'string' && lastErr.trim()) {
     throw new Error(lastErr);
   }
   throw new Error('Resposta inválida da câmera ao listar placas.');
+}
+
+async function fetchDevicePlatesByPlateSearch(
+  camera: PlainCameraCredential,
+  term: string,
+  count: number,
+  offset: number,
+): Promise<DevicePlatesListResult | null> {
+  const auth = new AxiosDigestAuth({
+    username: camera.username,
+    password: camera.plainPassword,
+  });
+  const base = deviceUrl(camera);
+  const safeCount = Math.min(Math.max(count, 1), 500);
+  const safeOffset = Math.max(offset, 0);
+
+  const candidates = buildTrafficRedListPlateSearchUrls(
+    base,
+    term,
+    safeCount,
+    safeOffset,
+  );
+  const { page } = await tryRecordFinderUrls(auth, candidates);
+  if (!page) return null;
+
+  const records = page.records.filter((row) =>
+    normalizePlate(row.plateNumber).includes(term),
+  );
+  if (records.length === 0 && page.records.length === 0) return null;
+
+  return {
+    totalCount: page.totalCount > 0 ? page.totalCount : records.length,
+    found: page.found > 0 ? page.found : records.length,
+    records: records.length > 0 ? records : page.records,
+  };
 }
 
 async function fetchAllDevicePlates(
@@ -768,8 +872,8 @@ export async function intelbrasGetDevicePlates(
 }
 
 /**
- * Busca placas por substring no número (sem filtro nativo na TrafficRedList).
- * Carrega a lista em lotes e filtra no servidor.
+ * Busca placas na TrafficRedList por código (exato ou parcial na câmera).
+ * Prioriza condition.PlateNumber / condition.PlateNumberVague; fallback: varre lista em memória.
  */
 export async function intelbrasSearchDevicePlates(
   camera: PlainCameraCredential,
@@ -784,6 +888,25 @@ export async function intelbrasSearchDevicePlates(
 
   const safeCount = Math.min(Math.max(count, 1), 500);
   const safeOffset = Math.max(offset, 0);
+
+  try {
+    const native = await fetchDevicePlatesByPlateSearch(
+      camera,
+      term,
+      safeCount,
+      safeOffset,
+    );
+    if (native) {
+      const totalCount = resolveTotalCount(native, safeOffset, null, safeCount);
+      return {
+        totalCount,
+        found: native.found,
+        records: native.records,
+      };
+    }
+  } catch {
+    /* fallback abaixo */
+  }
 
   const all = await fetchAllDevicePlates(camera);
   const filtered = all.filter((row) =>
