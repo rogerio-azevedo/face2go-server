@@ -557,7 +557,64 @@ function resolveTotalCount(
   if (page.found > page.records.length) return page.found;
   const loaded = offset + page.records.length;
   if (page.records.length < pageSize) return loaded;
-  return Math.max(page.found, loaded);
+  // Página cheia sem total na resposta: mínimo para habilitar "Próxima" até página incompleta
+  return Math.max(page.found, loaded + 1);
+}
+
+/** URLs `action=find` — fabricante (condition.*) e legado (offset). */
+function buildTrafficRedListFindUrls(
+  base: string,
+  count: number,
+  offset: number,
+): string[] {
+  const n = String(count);
+  const off = String(offset);
+
+  const conditionQs = new URLSearchParams();
+  conditionQs.set('action', 'find');
+  conditionQs.set('name', TRAFFIC_LIST_NAME);
+  conditionQs.set('count', n);
+  conditionQs.set('condition.QueryCount', n);
+  conditionQs.set('condition.QueryResultBegin', off);
+
+  const legacyQs = new URLSearchParams();
+  legacyQs.set('action', 'find');
+  legacyQs.set('name', TRAFFIC_LIST_NAME);
+  legacyQs.set('count', n);
+  legacyQs.set('offset', off);
+
+  return [
+    `${base}/cgi-bin/recordFinder.cgi?${conditionQs.toString()}`,
+    `${base}/cgi-bin/recordFinder.cgi?${legacyQs.toString()}`,
+  ];
+}
+
+function buildDoSeekFindUrl(
+  base: string,
+  count: number,
+  offset: number,
+): string {
+  const qs = new URLSearchParams();
+  qs.set('action', 'doSeekFind');
+  qs.set('name', TRAFFIC_LIST_NAME);
+  qs.set('count', String(count));
+  qs.set('offset', String(offset));
+  return `${base}/cgi-bin/recordFinder.cgi?${qs.toString()}`;
+}
+
+function buildDevicePlatesPageCandidateUrls(
+  base: string,
+  count: number,
+  offset: number,
+  doSeekFindOnly: boolean,
+): string[] {
+  if (doSeekFindOnly) {
+    return [buildDoSeekFindUrl(base, count, offset)];
+  }
+  return [
+    ...buildTrafficRedListFindUrls(base, count, offset),
+    buildDoSeekFindUrl(base, count, offset),
+  ];
 }
 
 const QUERY_SIZE_LIST_NAMES = [
@@ -608,13 +665,12 @@ async function fetchDevicePlatesPage(
   const safeCount = Math.min(Math.max(count, 1), 500);
   const safeOffset = Math.max(offset, 0);
 
-  const findUrl = `${base}/cgi-bin/recordFinder.cgi?action=find&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
-  const doSeekUrl = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
-
-  // Doc Intelbras LPR: firmware antigo costuma aceitar só `find`; novo aceita `doSeekFind` (offset correto).
-  const candidates: string[] = doSeekFindOnly
-    ? [doSeekUrl]
-    : [findUrl, doSeekUrl];
+  const candidates = buildDevicePlatesPageCandidateUrls(
+    base,
+    safeCount,
+    safeOffset,
+    doSeekFindOnly,
+  );
 
   let lastErr: unknown;
   for (const url of candidates) {
