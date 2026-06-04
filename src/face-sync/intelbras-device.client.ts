@@ -501,6 +501,8 @@ function buildAccessCardUpdateParams(args: {
   normalizedName: string;
   timeSectionIds: number[];
 }): string {
+  const qsStart = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_START);
+  const qsEnd = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_END);
   const cardName = encodeURIComponent(args.normalizedName);
   const timeSections = buildTimeSectionsRecordUpdaterParams(
     args.timeSectionIds,
@@ -509,8 +511,12 @@ function buildAccessCardUpdateParams(args: {
   return (
     `action=update&name=AccessControlCard&recno=${args.recNo}` +
     `&CardName=${cardName}` +
+    `&CardStatus=0` +
+    `&CardType=0` +
     `&Doors[0]=0` +
-    `&${timeSections}`
+    `&${timeSections}` +
+    `&ValidDateStart=${qsStart}` +
+    `&ValidDateEnd=${qsEnd}`
   );
 }
 

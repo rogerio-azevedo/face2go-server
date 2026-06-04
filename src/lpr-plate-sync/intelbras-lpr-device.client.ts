@@ -594,29 +594,6 @@ export async function intelbrasGetDevicePlateCount(
   return null;
 }
 
-/**
- * Varre a lista em lotes (doSeekFind) quando getQuerySize não está disponível.
- */
-async function discoverDevicePlateCount(
-  camera: PlainCameraCredential,
-): Promise<number> {
-  let offset = 0;
-
-  while (true) {
-    const page = await fetchDevicePlatesPage(
-      camera,
-      DEVICE_PLATES_BATCH_SIZE,
-      offset,
-      true,
-    );
-    if (page.records.length < DEVICE_PLATES_BATCH_SIZE) {
-      return offset + page.records.length;
-    }
-    if (page.totalCount > 0) return page.totalCount;
-    offset += DEVICE_PLATES_BATCH_SIZE;
-  }
-}
-
 async function fetchDevicePlatesPage(
   camera: PlainCameraCredential,
   count: number,
@@ -631,18 +608,25 @@ async function fetchDevicePlatesPage(
   const safeCount = Math.min(Math.max(count, 1), 500);
   const safeOffset = Math.max(offset, 0);
 
-  const doSeekUrl = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
   const findUrl = `${base}/cgi-bin/recordFinder.cgi?action=find&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
+  const doSeekUrl = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=${TRAFFIC_LIST_NAME}&count=${safeCount}&offset=${safeOffset}`;
 
-  // doSeekFind respeita offset; `find` em vários firmwares ignora e quebra paginação.
+  // Doc Intelbras LPR: firmware antigo costuma aceitar só `find`; novo aceita `doSeekFind` (offset correto).
   const candidates: string[] = doSeekFindOnly
     ? [doSeekUrl]
-    : [doSeekUrl, findUrl];
+    : [findUrl, doSeekUrl];
 
   let lastErr: unknown;
   for (const url of candidates) {
     try {
       const r = await digestRequest(auth, { method: 'GET', url });
+      const st = r.status;
+      if (st != null && st >= 400) {
+        lastErr = Object.assign(new Error(`HTTP ${st}`), {
+          response: { status: st, data: r.data },
+        });
+        continue;
+      }
       if (typeof r.data !== 'string') continue;
       return parsePlateListFromText(r.data);
     } catch (e) {
@@ -668,14 +652,28 @@ async function fetchAllDevicePlates(
       camera,
       DEVICE_PLATES_BATCH_SIZE,
       offset,
-      true,
+      false,
     );
+    if (page.records.length === 0) break;
+
+    const batchFirst = page.records[0];
+    const batchKey = `${batchFirst?.recNo ?? ''}:${batchFirst?.plateNumber ?? ''}`;
+    if (offset > 0 && all.length > 0) {
+      const prevFirst = all[0];
+      const prevKey = `${prevFirst?.recNo ?? ''}:${prevFirst?.plateNumber ?? ''}`;
+      // `find` em firmware antigo ignora offset — evita loop infinito.
+      if (batchKey === prevKey) break;
+    }
+
     all.push(...page.records);
     if (page.records.length < DEVICE_PLATES_BATCH_SIZE) break;
+    if (
+      page.totalCount > 0 &&
+      offset + page.records.length >= page.totalCount
+    ) {
+      break;
+    }
     offset += DEVICE_PLATES_BATCH_SIZE;
-    const cap =
-      page.totalCount > 0 ? page.totalCount : offset + page.records.length;
-    if (offset >= cap) break;
   }
 
   return all;
@@ -699,22 +697,12 @@ export async function intelbrasGetDevicePlates(
     intelbrasGetDevicePlateCount(camera),
   ]);
 
-  let totalCount = resolveTotalCount(
+  const totalCount = resolveTotalCount(
     page,
     safeOffset,
     sizeFromQuery,
     safeCount,
   );
-
-  const needsDiscover =
-    sizeFromQuery == null &&
-    page.totalCount === 0 &&
-    page.records.length >= safeCount &&
-    page.found <= page.records.length;
-
-  if (needsDiscover) {
-    totalCount = await discoverDevicePlateCount(camera);
-  }
 
   return {
     totalCount,
