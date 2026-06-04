@@ -6,6 +6,7 @@ import {
   DEFAULT_INTELBRAS_VALID_DATE_START,
 } from '../face-sync/intelbras-valid-date.util';
 import { mapReaderError } from '../face-sync/intelbras-device.client';
+import { normalizeNameForFacialReader } from '../face-sync/normalize-name-for-reader';
 
 const TRAFFIC_LIST_NAME = 'TrafficRedList';
 
@@ -321,7 +322,8 @@ export async function intelbrasInsertPlate(
     password: camera.plainPassword,
   });
   const base = deviceUrl(camera);
-  const master = (ownerDisplayName.trim() || 'CONDUTOR').slice(0, 15);
+  const master =
+    normalizeNameForFacialReader(ownerDisplayName, 15) || 'CONDUTOR';
   const col =
     (vehicleColor ?? 'Desconhecida').trim().slice(0, 31) || 'Desconhecida';
 
