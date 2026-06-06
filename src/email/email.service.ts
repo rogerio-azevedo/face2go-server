@@ -1,42 +1,41 @@
-import { SendEmailCommand, SESClient } from '@aws-sdk/client-ses';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+
+import type {
+  EmailProvider,
+  EmailSender,
+} from './senders/email-sender.interface';
+import { SesEmailSender } from './senders/ses-email.sender';
+import { SmtpEmailSender } from './senders/smtp-email.sender';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly client: SESClient | null;
-  private readonly fromEmail: string | null;
+  private readonly sender: EmailSender;
   private readonly frontendUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
-    const region = this.configService.get<string>('AWS_REGION');
-    const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get<string>(
-      'AWS_SECRET_ACCESS_KEY',
-    );
-    const fromEmail = this.configService.get<string>('SES_FROM_EMAIL');
+  constructor(
+    private readonly configService: ConfigService,
+    smtpSender: SmtpEmailSender,
+    sesSender: SesEmailSender,
+  ) {
+    const provider =
+      this.configService.get<EmailProvider>('EMAIL_PROVIDER') ?? 'smtp';
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
 
     this.frontendUrl = frontendUrl?.replace(/\/$/, '') ?? '';
+    this.sender = provider === 'ses' ? sesSender : smtpSender;
 
-    if (region && accessKeyId && secretAccessKey && fromEmail) {
-      this.fromEmail = fromEmail;
-      this.client = new SESClient({
-        region,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-      });
+    if (this.sender.isConfigured()) {
+      this.logger.log(
+        `Provedor de e-mail ativo: ${this.sender.provider.toUpperCase()}`,
+      );
       return;
     }
 
-    this.fromEmail = null;
-    this.client = null;
     this.logger.warn(
-      'SES não configurado (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SES_FROM_EMAIL). ' +
-        'Links de redefinição de senha serão logados no console.',
+      `Provedor ${this.sender.provider.toUpperCase()} selecionado (EMAIL_PROVIDER=${provider}), ` +
+        'mas as credenciais estão incompletas. Links de redefinição de senha serão logados no console.',
     );
   }
 
@@ -48,9 +47,9 @@ export class EmailService {
     const resetUrl = `${this.frontendUrl}/redefinir-senha?token=${encodeURIComponent(token)}`;
     const greeting = name?.trim() ? `Olá, ${name.trim()}` : 'Olá';
 
-    if (!this.client || !this.fromEmail) {
+    if (!this.sender.isConfigured()) {
       this.logger.warn(
-        `[SES desabilitado] Link de redefinição para ${to}: ${resetUrl}`,
+        `[${this.sender.provider.toUpperCase()} desabilitado] Link de redefinição para ${to}: ${resetUrl}`,
       );
       return;
     }
@@ -83,20 +82,7 @@ Equipe Face2Go`;
 </body>
 </html>`;
 
-    await this.client.send(
-      new SendEmailCommand({
-        Source: this.fromEmail,
-        Destination: { ToAddresses: [to] },
-        Message: {
-          Subject: { Data: subject, Charset: 'UTF-8' },
-          Body: {
-            Text: { Data: text, Charset: 'UTF-8' },
-            Html: { Data: html, Charset: 'UTF-8' },
-          },
-        },
-      }),
-    );
-
+    await this.sender.send({ to, subject, text, html });
     this.logger.log(`E-mail de redefinição de senha enviado para ${to}`);
   }
 }

@@ -36,7 +36,15 @@ export const envSchema = z.object({
   CLOUDFLARE_R2_BUCKET: z.string().min(1),
   CLOUDFLARE_R2_ACCESS_KEY_ID: z.string().min(1),
   CLOUDFLARE_R2_SECRET_ACCESS_KEY: z.string().min(1),
-  /** AWS SES — e-mails transacionais (redefinição de senha). Opcional em dev. */
+  /** Provedor de e-mail: smtp (Zoho) ou ses (AWS). Padrão: smtp. */
+  EMAIL_PROVIDER: z.enum(['smtp', 'ses']).default('smtp'),
+  /** SMTP (ex.: Zoho) — usado quando EMAIL_PROVIDER=smtp. Opcional em dev. */
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASS: z.string().min(1).optional(),
+  SMTP_FROM_EMAIL: z.string().email().optional(),
+  /** AWS SES — usado quando EMAIL_PROVIDER=ses. Opcional em dev. */
   AWS_REGION: z.string().min(1).optional(),
   AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
   AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
