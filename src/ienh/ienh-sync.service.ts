@@ -681,7 +681,7 @@ export class IenhSyncService {
         {
           responsibleId,
           studentId,
-          relationshipType: isMother ? 'mother' : 'father',
+          relationshipType: 'parent',
         },
       );
     if (link.created) result.linksCreated += 1;

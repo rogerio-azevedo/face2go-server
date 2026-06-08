@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { normalizeVehiclePlate } from './vehicles.schema';
 
+import { normalizeCpf } from '../auth/utils/auth-identifiers';
+
 export type StoredPickupAuthorizationStatus =
   | 'active'
   | 'used'
@@ -53,18 +55,69 @@ export const createPickupAuthorizationSchema = z
     validUntil: z.coerce.date(),
     notes: z.string().trim().max(2000).nullable().optional(),
     vehicle: pickupVehicleSchema.optional(),
+    linkedResponsibleId: z.uuid().optional(),
   })
   .transform((d) => ({
     studentIds: [...new Set(d.studentIds)],
     guestName: d.guestName.trim(),
-    guestDocument: d.guestDocument.trim(),
+    guestDocument: normalizeCpf(d.guestDocument.trim()) || d.guestDocument.trim(),
     guestPhone: d.guestPhone?.trim() ? d.guestPhone.trim() : null,
     validFrom: d.validFrom,
     validUntil: d.validUntil,
     notes: d.notes?.trim() ? d.notes.trim() : null,
     vehicle: d.vehicle ?? null,
+    linkedResponsibleId: d.linkedResponsibleId ?? null,
   }))
   .refine((data) => data.validUntil.getTime() > data.validFrom.getTime(), {
     message: 'validUntil deve ser posterior a validFrom.',
     path: ['validUntil'],
+  });
+
+export const updatePickupAuthorizationSchema = z
+  .object({
+    studentIds: z.array(z.uuid()).min(1).optional(),
+    guestName: z.string().trim().min(1).max(255).optional(),
+    guestDocument: z.string().trim().min(1).max(64).optional(),
+    guestPhone: z.string().trim().max(32).nullable().optional(),
+    validFrom: z.coerce.date().optional(),
+    validUntil: z.coerce.date().optional(),
+    notes: z.string().trim().max(2000).nullable().optional(),
+    vehicle: pickupVehicleSchema.nullable().optional(),
+    linkedResponsibleId: z.uuid().nullable().optional(),
+  })
+  .transform((d) => ({
+    studentIds: d.studentIds ? [...new Set(d.studentIds)] : undefined,
+    guestName: d.guestName?.trim(),
+    guestDocument: d.guestDocument
+      ? normalizeCpf(d.guestDocument.trim()) || d.guestDocument.trim()
+      : undefined,
+    guestPhone:
+      d.guestPhone === undefined
+        ? undefined
+        : d.guestPhone?.trim()
+          ? d.guestPhone.trim()
+          : null,
+    validFrom: d.validFrom,
+    validUntil: d.validUntil,
+    notes:
+      d.notes === undefined
+        ? undefined
+        : d.notes?.trim()
+          ? d.notes.trim()
+          : null,
+    vehicle: d.vehicle === undefined ? undefined : d.vehicle,
+    linkedResponsibleId: d.linkedResponsibleId,
+  }))
+  .superRefine((data, ctx) => {
+    if (
+      data.validFrom &&
+      data.validUntil &&
+      data.validUntil.getTime() <= data.validFrom.getTime()
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'validUntil deve ser posterior a validFrom.',
+        path: ['validUntil'],
+      });
+    }
   });

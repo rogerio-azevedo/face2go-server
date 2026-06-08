@@ -130,6 +130,114 @@ export class ArrivalsService {
     return enriched;
   }
 
+  private mergeStudentsByName(
+    ...groups: ArrivalSseStudent[][]
+  ): ArrivalSseStudent[] {
+    const seen = new Set<string>();
+    const merged: ArrivalSseStudent[] = [];
+    for (const group of groups) {
+      for (const student of group) {
+        const key = student.name.trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(student);
+      }
+    }
+    return merged;
+  }
+
+  private async resolvePickupAuthStudents(
+    clientId: string,
+    authorizationId: string,
+  ): Promise<ArrivalSseStudent[]> {
+    const links = await pickupQueries.pickupAuthListStudentsForAuth(
+      this.database.db,
+      authorizationId,
+    );
+    const enriched = await Promise.all(
+      links.map(async (link) => {
+        const student = await studentsQueries.getStudentById(
+          this.database.db,
+          link.studentId,
+          clientId,
+        );
+        return {
+          name: link.studentName,
+          photoUrl: student
+            ? await this.presignPhoto(student.photoKey)
+            : null,
+          className: null as string | null,
+        };
+      }),
+    );
+    return enriched;
+  }
+
+  /** Alunos extras de autorizações ativas em que o responsável é o retirante vinculado. */
+  private async mergeLinkedPickupStudents(
+    clientId: string,
+    responsibleId: string,
+    baseStudents: ArrivalSseStudent[],
+  ): Promise<ArrivalSseStudent[]> {
+    const auths = await pickupQueries.pickupAuthFindActiveByLinkedResponsible(
+      this.database.db,
+      clientId,
+      responsibleId,
+    );
+    if (auths.length === 0) {
+      return baseStudents;
+    }
+
+    const extraGroups = await Promise.all(
+      auths.map(async (auth) => {
+        const [authStudents, requesterStudents] = await Promise.all([
+          this.resolvePickupAuthStudents(clientId, auth.id),
+          this.resolveStudentsResponsible(
+            clientId,
+            auth.requestedByResponsibleId,
+          ),
+        ]);
+        return [...authStudents, ...requesterStudents];
+      }),
+    );
+
+    return this.mergeStudentsByName(baseStudents, ...extraGroups);
+  }
+
+  private async resolveGuestArrivalStudents(
+    clientId: string,
+    guestAuth: {
+      id: string;
+      linkedResponsibleId: string | null;
+      requestedByResponsibleId: string;
+    },
+  ): Promise<ArrivalSseStudent[]> {
+    const authStudents = await this.resolvePickupAuthStudents(
+      clientId,
+      guestAuth.id,
+    );
+
+    if (guestAuth.linkedResponsibleId) {
+      const [linkedStudents, requesterStudents] = await Promise.all([
+        this.resolveStudentsResponsible(
+          clientId,
+          guestAuth.linkedResponsibleId,
+        ),
+        this.resolveStudentsResponsible(
+          clientId,
+          guestAuth.requestedByResponsibleId,
+        ),
+      ]);
+      return this.mergeStudentsByName(
+        linkedStudents,
+        requesterStudents,
+        authStudents,
+      );
+    }
+
+    return authStudents;
+  }
+
   private async getConfiguredDisplayDevices(
     clientId: string,
   ): Promise<displayDeviceQueries.ClientDisplayDeviceRow[]> {
@@ -225,9 +333,13 @@ export class ArrivalsService {
           personName = responsible.name;
         }
         personPhotoUrl = await this.presignPortraitPhoto(responsible.photoKey);
-        students = await this.resolveStudentsResponsible(
+        students = await this.mergeLinkedPickupStudents(
           payload.clientId,
           responsible.id,
+          await this.resolveStudentsResponsible(
+            payload.clientId,
+            responsible.id,
+          ),
         );
         vehiclePlate = await vehiclesQueries.findVehiclePlateForArrival(
           this.database.db,
@@ -301,9 +413,13 @@ export class ArrivalsService {
         const personPhotoUrl = await this.presignPortraitPhoto(
           responsible.photoKey,
         );
-        const students = await this.resolveStudentsResponsible(
+        const students = await this.mergeLinkedPickupStudents(
           payload.clientId,
           responsible.id,
+          await this.resolveStudentsResponsible(
+            payload.clientId,
+            responsible.id,
+          ),
         );
 
         const out: ArrivalSsePayload = {
@@ -333,25 +449,35 @@ export class ArrivalsService {
         return;
       }
 
-      const personPhotoUrl = await this.presignPortraitPhoto(
+      let personPhotoUrl = await this.presignPortraitPhoto(
         guestAuth.guestFaceImageKey,
       );
-      const studentLinks = await pickupQueries.pickupAuthListStudentsForAuth(
-        this.database.db,
-        guestAuth.id,
+      let personName = guestAuth.guestName;
+      let responsibleId: string | null = guestAuth.linkedResponsibleId;
+
+      if (guestAuth.linkedResponsibleId) {
+        const linked = await responsiblesQueries.getResponsibleById(
+          this.database.db,
+          guestAuth.linkedResponsibleId,
+          payload.clientId,
+        );
+        if (linked) {
+          personName = linked.name;
+          personPhotoUrl = await this.presignPortraitPhoto(linked.photoKey);
+        }
+      }
+
+      const students = await this.resolveGuestArrivalStudents(
+        payload.clientId,
+        guestAuth,
       );
-      const students: ArrivalSseStudent[] = studentLinks.map((s) => ({
-        name: s.studentName,
-        photoUrl: null,
-        className: null,
-      }));
 
       const out: ArrivalSsePayload = {
         type: 'arrival',
         kind: 'responsible',
         accessId: payload.accessId,
-        responsibleId: null,
-        personName: guestAuth.guestName,
+        responsibleId,
+        personName,
         personPhotoUrl,
         readerName: payload.cameraName,
         eventDate: payload.snapTime?.toISOString() ?? null,

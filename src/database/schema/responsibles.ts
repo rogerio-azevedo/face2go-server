@@ -18,7 +18,20 @@ import { students } from './students';
 
 export const responsibleRelationshipTypeEnum = pgEnum(
   'responsible_relationship_type',
-  ['father', 'mother', 'grandfather', 'grandmother', 'guardian', 'other'],
+  [
+    'parent',
+    'grandparent',
+    'aunt_uncle',
+    'sibling',
+    'godparent',
+    'guardian',
+    'other',
+    // legados (mantidos no PG após migração 0038)
+    'father',
+    'mother',
+    'grandfather',
+    'grandmother',
+  ],
 );
 
 export const responsibles = pgTable('responsibles', {

@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
 export const responsibleRelationshipSchema = z.enum([
-  'father',
-  'mother',
-  'grandfather',
-  'grandmother',
+  'parent',
+  'grandparent',
+  'aunt_uncle',
+  'sibling',
+  'godparent',
   'guardian',
   'other',
 ]);

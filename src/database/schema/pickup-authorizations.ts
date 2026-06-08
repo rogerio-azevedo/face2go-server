@@ -35,6 +35,10 @@ export const temporaryPickupAuthorizations = pgTable(
     requestedByResponsibleId: uuid('requested_by_responsible_id')
       .notNull()
       .references(() => responsibles.id, { onDelete: 'cascade' }),
+    linkedResponsibleId: uuid('linked_responsible_id').references(
+      () => responsibles.id,
+      { onDelete: 'set null' },
+    ),
     guestName: varchar('guest_name', { length: 255 }).notNull(),
     guestDocument: varchar('guest_document', { length: 64 }).notNull(),
     guestPhone: varchar('guest_phone', { length: 32 }),
@@ -107,6 +111,12 @@ export const temporaryPickupAuthorizationsRelations = relations(
     requestedBy: one(responsibles, {
       fields: [temporaryPickupAuthorizations.requestedByResponsibleId],
       references: [responsibles.id],
+      relationName: 'requestedBy',
+    }),
+    linkedResponsible: one(responsibles, {
+      fields: [temporaryPickupAuthorizations.linkedResponsibleId],
+      references: [responsibles.id],
+      relationName: 'linkedResponsible',
     }),
     studentLinks: many(pickupAuthorizationStudents),
   }),

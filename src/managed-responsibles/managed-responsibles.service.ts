@@ -542,7 +542,7 @@ export class ManagedResponsiblesService {
     );
     if (!isParent) {
       throw new ForbiddenException(
-        'Apenas pai ou mãe podem excluir outro responsável.',
+        'Apenas pai/mãe podem excluir outro responsável.',
       );
     }
 

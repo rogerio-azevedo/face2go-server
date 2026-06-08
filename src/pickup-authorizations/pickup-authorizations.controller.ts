@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -61,6 +62,18 @@ export class PickupAuthorizationsSchoolController {
   ) {
     return this.svc.cancelForSchool(user, clientId, id);
   }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Excluir autorização cancelada ou expirada (escola)',
+  })
+  delete(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.deleteForSchool(user, clientId, id);
+  }
 }
 
 @ApiTags('pickup-authorizations-responsible')
@@ -78,10 +91,43 @@ export class PickupAuthorizationsResponsibleController {
     return this.svc.listForResponsible(user);
   }
 
+  @Get('lookup-guest-responsible')
+  @ApiOperation({
+    summary: 'Buscar responsável cadastrado pelo documento (CPF)',
+  })
+  @ApiQuery({ name: 'document', required: true })
+  lookupGuestResponsible(
+    @CurrentUser() user: JwtPayload,
+    @Query('document') document: string,
+  ) {
+    return this.svc.lookupGuestResponsible(user, document);
+  }
+
   @Post('pickup-authorizations')
   @ApiOperation({ summary: 'Criar autorização temporária de retirada' })
   create(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
     return this.svc.createFromResponsible(user, body);
+  }
+
+  @Patch('pickup-authorizations/:id')
+  @ApiOperation({ summary: 'Editar ou renovar autorização temporária' })
+  update(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ) {
+    return this.svc.updateForResponsible(user, id, body);
+  }
+
+  @Delete('pickup-authorizations/:id')
+  @ApiOperation({
+    summary: 'Excluir autorização cancelada ou expirada',
+  })
+  delete(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.svc.deleteForResponsible(user, id);
   }
 
   @Post('pickup-authorizations/:id/guest-link')

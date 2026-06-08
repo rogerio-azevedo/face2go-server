@@ -267,6 +267,27 @@
       "when": 1779070000000,
       "tag": "0037_ienh_client_branding",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1779080000000,
+      "tag": "0038_responsible_relationship_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1779080000001,
+      "tag": "0039_responsible_relationship_data_migrate",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1779090000000,
+      "tag": "0040_pickup_auth_linked_responsible",
+      "breakpoints": true
     }
   ]
 }

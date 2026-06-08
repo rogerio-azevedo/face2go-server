@@ -218,14 +218,23 @@ export async function listHouseholdDriverOptions(
     )
     .orderBy(asc(responsibles.name), asc(responsibleStudents.relationshipType));
 
+  const parentTypes = new Set(['parent', 'father', 'mother']);
+
   const byId = new Map<string, HouseholdDriverOptionRow>();
   for (const r of rows) {
-    if (!byId.has(r.id)) {
+    const existing = byId.get(r.id);
+    if (!existing) {
       byId.set(r.id, {
         id: r.id,
         name: r.name,
         relationshipType: r.relationshipType,
       });
+      continue;
+    }
+    const incomingIsParent = parentTypes.has(r.relationshipType);
+    const existingIsParent = parentTypes.has(existing.relationshipType);
+    if (incomingIsParent && !existingIsParent) {
+      byId.set(r.id, { ...existing, relationshipType: r.relationshipType });
     }
   }
   return Array.from(byId.values()).sort((a, b) =>
@@ -565,7 +574,11 @@ export async function responsibleHasParentRelationship(
     .where(
       and(
         eq(responsibleStudents.responsibleId, responsibleId),
-        inArray(responsibleStudents.relationshipType, ['father', 'mother']),
+        inArray(responsibleStudents.relationshipType, [
+          'parent',
+          'father',
+          'mother',
+        ]),
       ),
     )
     .limit(1);

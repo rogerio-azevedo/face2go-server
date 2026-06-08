@@ -19,9 +19,11 @@ import { ALWAYS_TIME_ZONE_INDEX } from '../face-sync/intelbras-time-zone.constan
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
+import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import {
   computeEffectivePickupStatus,
   createPickupAuthorizationSchema,
+  updatePickupAuthorizationSchema,
 } from '../validation/pickup-authorizations.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 
@@ -45,7 +47,13 @@ export type PickupAuthorizationResponse = PickupAuthRow & {
   students: PickupAuthorizationStudentDto[];
   vehicle: PickupAuthorizationVehicleDto;
   guestRegistrationUrl: string | null;
+  linkedResponsibleName: string | null;
+  authorizedPhotoUrl: string | null;
 };
+
+type LinkedResponsibleRow = NonNullable<
+  Awaited<ReturnType<typeof responsiblesQueries.getResponsibleById>>
+>;
 
 @Injectable()
 export class PickupAuthorizationsService {
@@ -89,12 +97,105 @@ export class PickupAuthorizationsService {
       byAuth.set(link.authorizationId, list);
     }
 
-    return rows.map((row) => this.toResponse(row, byAuth.get(row.id) ?? []));
+    const linkedIds = [
+      ...new Set(
+        rows
+          .map((r) => r.linkedResponsibleId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const linkedInfoById = new Map<
+      string,
+      { name: string; photoKey: string | null }
+    >();
+    if (linkedIds.length > 0) {
+      await Promise.all(
+        linkedIds.map(async (id) => {
+          const row = rows.find((r) => r.linkedResponsibleId === id);
+          if (!row) return;
+          const responsible = await responsiblesQueries.getResponsibleById(
+            this.database.db,
+            id,
+            row.clientId,
+          );
+          if (responsible) {
+            linkedInfoById.set(id, {
+              name: responsible.name,
+              photoKey: responsible.photoKey ?? null,
+            });
+          }
+        }),
+      );
+    }
+
+    return Promise.all(
+      rows.map(async (row) => {
+        const linked = row.linkedResponsibleId
+          ? linkedInfoById.get(row.linkedResponsibleId)
+          : null;
+        const authorizedPhotoUrl = await this.resolveAuthorizedPhotoUrl(
+          row,
+          linked?.photoKey ?? null,
+        );
+        return this.toResponse(
+          row,
+          byAuth.get(row.id) ?? [],
+          linked?.name ?? null,
+          authorizedPhotoUrl,
+        );
+      }),
+    );
+  }
+
+  private async resolveAuthorizedPhotoUrl(
+    row: PickupAuthRow,
+    linkedPhotoKey: string | null,
+  ): Promise<string | null> {
+    const photoKey = linkedPhotoKey?.trim()
+      ? linkedPhotoKey.trim()
+      : row.guestFaceImageKey?.trim()
+        ? row.guestFaceImageKey.trim()
+        : null;
+    if (!photoKey) return null;
+    if (
+      !row.linkedResponsibleId &&
+      (row.guestApprovalStatus === 'pending_face' ||
+        row.guestApprovalStatus === 'rejected')
+    ) {
+      return null;
+    }
+    return this.r2.createPresignedPortraitGetUrl(photoKey);
+  }
+
+  private async toResponseWithPhoto(
+    row: PickupAuthRow,
+    students: PickupAuthorizationStudentDto[],
+    linkedResponsibleName: string | null = null,
+    linkedPhotoKey: string | null = null,
+  ): Promise<PickupAuthorizationResponse> {
+    let name = linkedResponsibleName;
+    let photoKey = linkedPhotoKey;
+    if (row.linkedResponsibleId) {
+      const linked = await responsiblesQueries.getResponsibleById(
+        this.database.db,
+        row.linkedResponsibleId,
+        row.clientId,
+      );
+      name = name ?? linked?.name ?? null;
+      photoKey = photoKey ?? linked?.photoKey ?? null;
+    }
+    const authorizedPhotoUrl = await this.resolveAuthorizedPhotoUrl(
+      row,
+      photoKey,
+    );
+    return this.toResponse(row, students, name, authorizedPhotoUrl);
   }
 
   private toResponse(
     row: PickupAuthRow,
     students: PickupAuthorizationStudentDto[],
+    linkedResponsibleName: string | null = null,
+    authorizedPhotoUrl: string | null = null,
   ): PickupAuthorizationResponse {
     const validUntil =
       row.validUntil instanceof Date
@@ -122,6 +223,75 @@ export class PickupAuthorizationsService {
       guestRegistrationUrl: row.guestLinkCode
         ? this.frontendRetiradaUrl(row.guestLinkCode)
         : null,
+      linkedResponsibleName,
+      authorizedPhotoUrl,
+    };
+  }
+
+  async lookupGuestResponsible(user: JwtPayload, document: string) {
+    this.assertResponsibleJwt(user);
+    const normalized = document.replace(/\D/g, '') || document.trim();
+    if (!normalized) {
+      throw new BadRequestException('Informe um documento válido.');
+    }
+
+    const responsible =
+      await responsiblesQueries.findResponsibleByDocumentAndClient(
+        this.database.db,
+        user.clientId,
+        normalized,
+      );
+    if (!responsible || !responsible.isActive) {
+      return null;
+    }
+    if (responsible.id === user.responsibleId) {
+      return null;
+    }
+
+    let photoUrl: string | null = null;
+    if (responsible.photoKey) {
+      photoUrl = await this.r2.createPresignedPortraitGetUrl(
+        responsible.photoKey,
+      );
+    }
+
+    return {
+      id: responsible.id,
+      name: responsible.name,
+      document: responsible.document,
+      photoUrl,
+    };
+  }
+
+  private async assertLinkedResponsible(
+    clientId: string,
+    linkedResponsibleId: string,
+    requestedByResponsibleId: string,
+  ): Promise<LinkedResponsibleRow> {
+    if (linkedResponsibleId === requestedByResponsibleId) {
+      throw new BadRequestException(
+        'Não é possível vincular você mesmo como retirante.',
+      );
+    }
+    const linked = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      linkedResponsibleId,
+      clientId,
+    );
+    if (!linked || !linked.isActive) {
+      throw new BadRequestException('Responsável vinculado não encontrado.');
+    }
+    return linked;
+  }
+
+  private linkedResponsibleApprovalPatch(linked: LinkedResponsibleRow) {
+    return {
+      guestApprovalStatus: 'approved' as const,
+      guestFaceId: linked.faceId ?? null,
+      guestFaceImageKey: linked.photoKey ?? null,
+      guestFaceSyncStatus: linked.deviceSyncStatus ?? null,
+      guestFaceSyncedAt: linked.deviceSyncedAt ?? null,
+      guestFaceSyncError: linked.deviceSyncError ?? null,
     };
   }
 
@@ -180,6 +350,28 @@ export class PickupAuthorizationsService {
       }
     }
 
+    const existingActive =
+      await pickupQueries.pickupAuthFindActiveByGuestDocumentForRequester(
+        this.database.db,
+        user.clientId,
+        user.responsibleId,
+        d.guestDocument,
+      );
+    if (existingActive) {
+      throw new BadRequestException(
+        'Já existe uma autorização ativa para este documento. Edite ou renove a autorização existente.',
+      );
+    }
+
+    let linked: LinkedResponsibleRow | undefined;
+    if (d.linkedResponsibleId) {
+      linked = await this.assertLinkedResponsible(
+        user.clientId,
+        d.linkedResponsibleId,
+        user.responsibleId,
+      );
+    }
+
     const vehiclePatch = d.vehicle
       ? {
           guestVehiclePlate: d.vehicle.plate,
@@ -196,15 +388,17 @@ export class PickupAuthorizationsService {
         {
           clientId: user.clientId,
           requestedByResponsibleId: user.responsibleId,
-          guestName: d.guestName,
-          guestDocument: d.guestDocument,
+          linkedResponsibleId: d.linkedResponsibleId,
+          guestName: linked?.name ?? d.guestName,
+          guestDocument: linked?.document ?? d.guestDocument,
           guestPhone: d.guestPhone,
-          guestApprovalStatus: 'pending_face',
+          guestApprovalStatus: linked ? 'approved' : 'pending_face',
           status: 'active',
           validFrom: d.validFrom,
           validUntil: d.validUntil,
           notes: d.notes ?? null,
           usedAt: null,
+          ...(linked ? this.linkedResponsibleApprovalPatch(linked) : {}),
           ...vehiclePatch,
         },
         d.studentIds,
@@ -216,15 +410,184 @@ export class PickupAuthorizationsService {
         this.database.db,
         row.id,
       );
-      return this.toResponse(
+      return this.toResponseWithPhoto(
         row,
         students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
+        linked?.name ?? null,
+        linked?.photoKey ?? null,
       );
-    } catch {
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
       throw new BadRequestException(
         'Não foi possível registrar a autorização.',
       );
     }
+  }
+
+  async updateForResponsible(user: JwtPayload, id: string, body: unknown) {
+    this.assertResponsibleJwt(user);
+    const parsed = updatePickupAuthorizationSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const d = parsed.data;
+
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
+    const effectiveStatus = computeEffectivePickupStatus({
+      status: row.status,
+      validUntil:
+        row.validUntil instanceof Date
+          ? row.validUntil
+          : new Date(String(row.validUntil)),
+    });
+
+    const canEditActive = effectiveStatus === 'active';
+    const canRenew =
+      effectiveStatus === 'cancelled' || effectiveStatus === 'expired';
+    if (!canEditActive && !canRenew) {
+      throw new BadRequestException(
+        'Somente autorizações ativas podem ser editadas ou renovadas.',
+      );
+    }
+
+    if (d.studentIds?.length) {
+      const allowed = await studentsQueries.listStudentIdsForResponsible(
+        this.database.db,
+        user.responsibleId,
+      );
+      for (const sid of d.studentIds) {
+        if (!allowed.includes(sid)) {
+          throw new BadRequestException(
+            'Um ou mais alunos não estão vinculados ao seu cadastro.',
+          );
+        }
+      }
+    }
+
+    let linked: LinkedResponsibleRow | undefined;
+    if (d.linkedResponsibleId) {
+      linked = await this.assertLinkedResponsible(
+        user.clientId,
+        d.linkedResponsibleId,
+        user.responsibleId,
+      );
+    } else if (d.linkedResponsibleId === null) {
+      linked = undefined;
+    } else if (row.linkedResponsibleId) {
+      const existing = await responsiblesQueries.getResponsibleById(
+        this.database.db,
+        row.linkedResponsibleId,
+        user.clientId,
+      );
+      linked = existing ?? undefined;
+    }
+
+    const vehiclePatch =
+      d.vehicle === null
+        ? {
+            guestVehiclePlate: null,
+            guestVehicleBrand: null,
+            guestVehicleModel: null,
+            guestVehicleColor: null,
+            guestVehicleLprSyncStatus: null,
+            guestVehicleLprSyncedAt: null,
+            guestVehicleLprSyncError: null,
+          }
+        : d.vehicle
+          ? {
+              guestVehiclePlate: d.vehicle.plate,
+              guestVehicleBrand: d.vehicle.brand,
+              guestVehicleModel: d.vehicle.model,
+              guestVehicleColor: d.vehicle.color,
+              guestVehicleLprSyncStatus: 'pending_sync' as const,
+            }
+          : {};
+
+    const updated = await pickupQueries.pickupAuthUpdate(
+      this.database.db,
+      id,
+      user.clientId,
+      {
+        ...(canRenew
+          ? {
+              status: 'active' as const,
+              usedAt: null,
+            }
+          : {}),
+        ...(d.guestName !== undefined ? { guestName: d.guestName } : {}),
+        ...(d.guestDocument !== undefined
+          ? { guestDocument: d.guestDocument }
+          : {}),
+        ...(d.guestPhone !== undefined ? { guestPhone: d.guestPhone } : {}),
+        ...(d.validFrom !== undefined ? { validFrom: d.validFrom } : {}),
+        ...(d.validUntil !== undefined ? { validUntil: d.validUntil } : {}),
+        ...(d.notes !== undefined ? { notes: d.notes } : {}),
+        ...(d.linkedResponsibleId !== undefined
+          ? { linkedResponsibleId: d.linkedResponsibleId }
+          : {}),
+        ...(linked ? this.linkedResponsibleApprovalPatch(linked) : {}),
+        ...vehiclePatch,
+      },
+    );
+    if (!updated) {
+      throw new NotFoundException('Autorização não encontrada.');
+    }
+
+    if (d.studentIds?.length) {
+      await pickupQueries.pickupAuthReplaceStudents(
+        this.database.db,
+        id,
+        d.studentIds,
+      );
+    }
+
+    const students = await pickupQueries.pickupAuthListStudentsForAuth(
+      this.database.db,
+      id,
+    );
+    return this.toResponseWithPhoto(
+      updated,
+      students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
+      linked?.name ?? null,
+      linked?.photoKey ?? null,
+    );
+  }
+
+  async deleteForResponsible(user: JwtPayload, id: string) {
+    this.assertResponsibleJwt(user);
+    await this.expireStale(user.clientId);
+    const deleted = await pickupQueries.pickupAuthDelete(
+      this.database.db,
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
+    if (!deleted) {
+      throw new BadRequestException(
+        'Somente autorizações canceladas ou expiradas podem ser excluídas.',
+      );
+    }
+    return { ok: true };
+  }
+
+  async deleteForSchool(user: JwtPayload, clientId: string, id: string) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    await this.expireStale(clientId);
+    const deleted = await pickupQueries.pickupAuthDelete(
+      this.database.db,
+      id,
+      clientId,
+    );
+    if (!deleted) {
+      throw new BadRequestException(
+        'Somente autorizações canceladas ou expiradas podem ser excluídas.',
+      );
+    }
+    return { ok: true };
   }
 
   async generateGuestLink(user: JwtPayload, id: string) {
@@ -374,7 +737,7 @@ export class PickupAuthorizationsService {
       this.database.db,
       id,
     );
-    return this.toResponse(
+    return this.toResponseWithPhoto(
       updated,
       students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
     );
@@ -412,7 +775,7 @@ export class PickupAuthorizationsService {
       this.database.db,
       id,
     );
-    return this.toResponse(
+    return this.toResponseWithPhoto(
       updated,
       students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
     );
@@ -459,7 +822,7 @@ export class PickupAuthorizationsService {
       this.database.db,
       id,
     );
-    return this.toResponse(
+    return this.toResponseWithPhoto(
       updated,
       students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
     );
@@ -526,7 +889,7 @@ export class PickupAuthorizationsService {
       this.database.db,
       id,
     );
-    return this.toResponse(
+    return this.toResponseWithPhoto(
       updated,
       students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
     );

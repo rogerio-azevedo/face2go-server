@@ -27,10 +27,11 @@ export async function findOrCreateResponsibleStudentLink(
     responsibleId: string;
     studentId: string;
     relationshipType:
-      | 'father'
-      | 'mother'
-      | 'grandfather'
-      | 'grandmother'
+      | 'parent'
+      | 'grandparent'
+      | 'aunt_uncle'
+      | 'sibling'
+      | 'godparent'
       | 'guardian'
       | 'other';
   },
