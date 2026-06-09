@@ -238,6 +238,20 @@ export class ArrivalsService {
     return authStudents;
   }
 
+  private async resolvePickupGuestArrivalStudents(
+    clientId: string,
+    auths: Array<{
+      id: string;
+      linkedResponsibleId: string | null;
+      requestedByResponsibleId: string;
+    }>,
+  ): Promise<ArrivalSseStudent[]> {
+    const groups = await Promise.all(
+      auths.map((auth) => this.resolveGuestArrivalStudents(clientId, auth)),
+    );
+    return this.mergeStudentsByName(...groups);
+  }
+
   private async getConfiguredDisplayDevices(
     clientId: string,
   ): Promise<displayDeviceQueries.ClientDisplayDeviceRow[]> {
@@ -358,11 +372,33 @@ export class ArrivalsService {
           personPhotoUrl = await this.presignPhoto(student.photoKey);
           students = [];
         } else {
-          kind = 'student';
-          if (!personName) {
-            personName = payload.personName ?? 'Visitante';
+          const pickupAuths =
+            await pickupQueries.pickupAuthFindActiveByGuestFaceId(
+              this.database.db,
+              payload.clientId,
+              payload.faceId,
+            );
+          if (pickupAuths.length > 0) {
+            const primary = pickupAuths[0];
+            kind = 'responsible';
+            if (!personName) {
+              personName = primary.guestName ?? null;
+            }
+            personPhotoUrl = await this.presignPortraitPhoto(
+              primary.guestFaceImageKey,
+            );
+            students = await this.resolvePickupGuestArrivalStudents(
+              payload.clientId,
+              pickupAuths,
+            );
+            vehiclePlate = primary.guestVehiclePlate ?? null;
+          } else {
+            kind = 'student';
+            if (!personName) {
+              personName = payload.personName ?? 'Visitante';
+            }
+            students = [];
           }
-          students = [];
         }
       }
 

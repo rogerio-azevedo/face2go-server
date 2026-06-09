@@ -379,54 +379,90 @@ export class ManagedResponsiblesService {
     const studentIds = d.students.map((s) => s.studentId);
     await this.assertOwnedStudents(user.responsibleId, studentIds);
 
-    const existing = await this.database.db.query.users.findFirst({
-      where: eq(users.email, d.email),
-    });
-    if (existing) {
-      throw new ConflictException('E-mail já cadastrado.');
+    let responsible: NonNullable<
+      Awaited<ReturnType<typeof responsiblesQueries.getResponsibleById>>
+    >;
+
+    if (d.linkedResponsibleId) {
+      const existing = await responsiblesQueries.getResponsibleById(
+        this.database.db,
+        d.linkedResponsibleId,
+        user.clientId,
+      );
+      if (!existing || !existing.isActive) {
+        throw new NotFoundException('Responsável não encontrado.');
+      }
+      responsible = existing;
+
+      await this.database.db.transaction(async (tx) => {
+        for (const link of d.students) {
+          await responsiblesQueries.insertResponsibleStudentLink(tx, {
+            responsibleId: existing.id,
+            studentId: link.studentId,
+            relationshipType: link.relationshipType,
+            isAuthorizedPickup: link.isAuthorizedPickup,
+          });
+        }
+      });
+    } else {
+      const wantsAppAccess = Boolean(d.email?.trim() && d.password);
+
+      if (wantsAppAccess) {
+        const existingUser = await this.database.db.query.users.findFirst({
+          where: eq(users.email, d.email!),
+        });
+        if (existingUser) {
+          throw new ConflictException('E-mail já cadastrado.');
+        }
+      }
+
+      const created = await this.database.db.transaction(async (tx) => {
+        let userId: string | null = null;
+
+        if (wantsAppAccess) {
+          userId = crypto.randomUUID();
+          const hashed = await bcrypt.hash(d.password!, 10);
+          await tx.insert(users).values({
+            id: userId,
+            email: d.email!,
+            password: hashed,
+            name: d.name,
+            role: 'member',
+            isActive: true,
+          });
+        }
+
+        const row = await responsiblesQueries.insertResponsible(tx, {
+          clientId: user.clientId,
+          userId,
+          name: d.name,
+          phone: d.phone ?? null,
+          document: d.document ?? null,
+          isActive: d.isActive,
+        });
+
+        if (!row) {
+          throw new BadRequestException(
+            'Não foi possível cadastrar o responsável.',
+          );
+        }
+
+        for (const link of d.students) {
+          await responsiblesQueries.insertResponsibleStudentLink(tx, {
+            responsibleId: row.id,
+            studentId: link.studentId,
+            relationshipType: link.relationshipType,
+            isAuthorizedPickup: link.isAuthorizedPickup,
+          });
+        }
+
+        return row;
+      });
+
+      responsible = created;
     }
 
-    const userId = crypto.randomUUID();
-    const hashed = await bcrypt.hash(d.password, 10);
-
-    const responsible = await this.database.db.transaction(async (tx) => {
-      await tx.insert(users).values({
-        id: userId,
-        email: d.email,
-        password: hashed,
-        name: d.name,
-        role: 'member',
-        isActive: true,
-      });
-
-      const created = await responsiblesQueries.insertResponsible(tx, {
-        clientId: user.clientId,
-        userId,
-        name: d.name,
-        phone: d.phone ?? null,
-        document: d.document ?? null,
-        isActive: d.isActive,
-      });
-
-      if (!created) {
-        throw new BadRequestException(
-          'Não foi possível cadastrar o responsável.',
-        );
-      }
-
-      for (const link of d.students) {
-        await responsiblesQueries.insertResponsibleStudentLink(tx, {
-          responsibleId: created.id,
-          studentId: link.studentId,
-          relationshipType: link.relationshipType,
-          isAuthorizedPickup: link.isAuthorizedPickup,
-        });
-      }
-
-      return created;
-    });
-
-    if (d.imageBase64) {
+    if (!d.linkedResponsibleId && d.imageBase64) {
       const buffer = Buffer.from(
         d.imageBase64.replace(/^data:[^;]+;base64,/, '').replace(/\s/g, ''),
         'base64',
@@ -502,7 +538,7 @@ export class ManagedResponsiblesService {
     return {
       id: responsible.id,
       name: responsible.name,
-      email: d.email,
+      email: d.email ?? null,
     };
   }
 

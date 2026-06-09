@@ -39,8 +39,8 @@ export const temporaryPickupAuthorizations = pgTable(
       () => responsibles.id,
       { onDelete: 'set null' },
     ),
-    guestName: varchar('guest_name', { length: 255 }).notNull(),
-    guestDocument: varchar('guest_document', { length: 64 }).notNull(),
+    guestName: varchar('guest_name', { length: 255 }),
+    guestDocument: varchar('guest_document', { length: 64 }),
     guestPhone: varchar('guest_phone', { length: 32 }),
     guestLinkCode: varchar('guest_link_code', { length: 50 }),
     guestApprovalStatus: pickupGuestApprovalStatusEnum('guest_approval_status')

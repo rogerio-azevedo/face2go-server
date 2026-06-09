@@ -9,6 +9,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
+import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import {
   ACCESS_FACIAL_RECORDED,
   type AccessFacialRecordedPayload,
@@ -57,6 +58,14 @@ export class NotificationsService {
     } catch (err: unknown) {
       this.logger.warn(
         `Push pós-acesso falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    try {
+      await this.notifyParentsOfPickupGuestAccess(payload);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push pickup guest pós-acesso falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -160,6 +169,121 @@ export class NotificationsService {
     await this.dispatchExpoPush(tokens, title, body, {
       type: 'student_access',
       studentId: student.id,
+      accessId: payload.accessId,
+      faceId: String(payload.faceId),
+      clientId: payload.clientId,
+    });
+  }
+
+  private accessVerb(readerDirection: AccessFacialRecordedPayload['readerDirection']): string {
+    if (readerDirection === 'in') {
+      return 'ENTROU em';
+    }
+    if (readerDirection === 'out') {
+      return 'SAIU de';
+    }
+    return 'acessou';
+  }
+
+  private collectPushTokens(
+    targets: Array<{ pushToken: string | null }>,
+  ): string[] {
+    return [
+      ...new Set(
+        targets
+          .map((t) => t.pushToken)
+          .filter((t): t is string => typeof t === 'string' && t.length > 0),
+      ),
+    ];
+  }
+
+  private async notifyParentsOfPickupGuestAccess(
+    payload: AccessFacialRecordedPayload,
+  ): Promise<void> {
+    const verb = this.accessVerb(payload.readerDirection);
+    const title = 'Acesso facial';
+
+    const responsible =
+      await responsiblesQueries.findResponsibleByFaceIdAndClientId(
+        this.database.db,
+        payload.faceId,
+        payload.clientId,
+      );
+
+    if (responsible) {
+      const auths = await pickupQueries.pickupAuthFindActiveByLinkedResponsible(
+        this.database.db,
+        payload.clientId,
+        responsible.id,
+      );
+      if (auths.length === 0) {
+        return;
+      }
+
+      const responsibleIds = [
+        ...new Set(auths.map((auth) => auth.requestedByResponsibleId)),
+      ];
+      const targets = await responsiblesQueries.findPushTokensByResponsibleIds(
+        this.database.db,
+        responsibleIds,
+      );
+      const tokens = this.collectPushTokens(targets);
+      if (tokens.length === 0) {
+        return;
+      }
+
+      const displayName = payload.personName?.trim() || responsible.name;
+      const body = `${displayName} ${verb} ${payload.readerName} (autorizado por você).`;
+
+      await this.dispatchExpoPush(tokens, title, body, {
+        type: 'pickup_guest_access',
+        accessId: payload.accessId,
+        faceId: String(payload.faceId),
+        clientId: payload.clientId,
+      });
+      return;
+    }
+
+    const pickupAuths = await pickupQueries.pickupAuthFindActiveByGuestFaceId(
+      this.database.db,
+      payload.clientId,
+      payload.faceId,
+    );
+    if (pickupAuths.length === 0) {
+      return;
+    }
+
+    const primary = pickupAuths[0];
+    let responsibleIds = pickupAuths.map((auth) => auth.requestedByResponsibleId);
+
+    const guestDocument = primary.guestDocument?.trim();
+    if (guestDocument) {
+      const docAuths = await pickupQueries.pickupAuthFindActiveByGuestDocument(
+        this.database.db,
+        payload.clientId,
+        guestDocument,
+      );
+      responsibleIds = docAuths.map((auth) => auth.requestedByResponsibleId);
+    }
+
+    const uniqueIds = [...new Set(responsibleIds)];
+    const targets = await responsiblesQueries.findPushTokensByResponsibleIds(
+      this.database.db,
+      uniqueIds,
+    );
+    const tokens = this.collectPushTokens(targets);
+    if (tokens.length === 0) {
+      return;
+    }
+
+    const displayName =
+      payload.personName?.trim() ||
+      primary.guestName?.trim() ||
+      'Convidado';
+    const body = `${displayName} ${verb} ${payload.readerName}.`;
+
+    await this.dispatchExpoPush(tokens, title, body, {
+      type: 'pickup_guest_access',
       accessId: payload.accessId,
       faceId: String(payload.faceId),
       clientId: payload.clientId,

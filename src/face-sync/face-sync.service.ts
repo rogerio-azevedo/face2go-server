@@ -24,6 +24,7 @@ import {
   intelbrasUpsertFaceOnReader,
   toPlainReaderCredential,
 } from './intelbras-device.client';
+import { dateToIntelbrasFormat } from './intelbras-valid-date.util';
 import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
 import { AccessTimeZoneService } from './access-time-zone.service';
 import {
@@ -168,6 +169,8 @@ export class FaceSyncService {
     imageBuffer: Buffer;
     timeSectionIds?: number[];
     logContext?: string;
+    validFrom?: Date;
+    validUntil?: Date;
   }): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed';
     deviceSyncError: string | null;
@@ -178,12 +181,20 @@ export class FaceSyncService {
         ? params.timeSectionIds
         : [ALWAYS_TIME_ZONE_INDEX];
     const logPrefix = logContext ? `${logContext} ` : '';
+    const validDateStart = params.validFrom
+      ? dateToIntelbrasFormat(params.validFrom)
+      : undefined;
+    const validDateEnd = params.validUntil
+      ? dateToIntelbrasFormat(params.validUntil)
+      : undefined;
 
     syncLog('syncPersonOnReaders:inicio', {
       clientId,
       faceId,
       name,
       timeSectionIds,
+      validDateStart,
+      validDateEnd,
       logContext: logPrefix.trim() || undefined,
       imageBytes: imageBuffer.length,
     });
@@ -272,6 +283,8 @@ export class FaceSyncService {
               name || 'USUARIO',
               base64,
               timeSectionIds,
+              validDateStart,
+              validDateEnd,
             );
             syncLog('syncPersonOnReaders:leitorOk', {
               clientId,

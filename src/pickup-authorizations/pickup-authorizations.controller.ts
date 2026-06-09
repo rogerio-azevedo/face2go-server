@@ -148,6 +148,19 @@ export class PickupAuthorizationsResponsibleController {
     return this.svc.getGuestFacePreviewUrl(user, id);
   }
 
+  @Post('pickup-authorizations/:id/guest-face')
+  @ApiOperation({
+    summary:
+      'Enviar face do convidado presencialmente e aprovar automaticamente',
+  })
+  submitGuestFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+  ) {
+    return this.svc.submitGuestFaceDirect(user, id, body);
+  }
+
   @Post('pickup-authorizations/:id/approve-guest-face')
   @ApiOperation({
     summary: 'Aprovar face do convidado e sincronizar leitores/LPR',

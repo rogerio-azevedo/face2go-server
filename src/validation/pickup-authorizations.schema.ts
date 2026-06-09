@@ -21,6 +21,31 @@ export function computeEffectivePickupStatus(row: {
 
 const BR_PLATE_RE = /^([A-Z]{3}[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})$/;
 
+/**
+ * Interpreta datetime como relógio de parede (sem fuso) — o mesmo valor enviado ao leitor.
+ * ISO com Z/offset continua aceito por compatibilidade com registros antigos.
+ */
+export function parseWallClockDate(val: unknown): Date | undefined {
+  if (val === undefined || val === null || val === '') return undefined;
+  const raw = String(val).trim();
+  if (/[zZ]$/.test(raw) || /[+-]\d{2}:\d{2}$/.test(raw)) {
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(
+    raw,
+  );
+  if (m) {
+    return new Date(
+      Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0)),
+    );
+  }
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+const optionalValidDate = z.preprocess((val) => parseWallClockDate(val), z.date().optional());
+
 const pickupVehicleSchema = z
   .object({
     plate: z.string(),
@@ -48,29 +73,55 @@ const pickupVehicleSchema = z
 export const createPickupAuthorizationSchema = z
   .object({
     studentIds: z.array(z.uuid()).min(1, 'Selecione ao menos um aluno.'),
-    guestName: z.string().trim().min(1).max(255),
-    guestDocument: z.string().trim().min(1).max(64),
+    guestName: z.string().trim().min(1).max(255).optional(),
+    guestDocument: z.string().trim().min(1).max(64).optional(),
     guestPhone: z.string().trim().max(32).nullable().optional(),
-    validFrom: z.coerce.date(),
-    validUntil: z.coerce.date(),
+    validFrom: optionalValidDate,
+    validUntil: optionalValidDate,
     notes: z.string().trim().max(2000).nullable().optional(),
     vehicle: pickupVehicleSchema.optional(),
     linkedResponsibleId: z.uuid().optional(),
   })
-  .transform((d) => ({
-    studentIds: [...new Set(d.studentIds)],
-    guestName: d.guestName.trim(),
-    guestDocument: normalizeCpf(d.guestDocument.trim()) || d.guestDocument.trim(),
-    guestPhone: d.guestPhone?.trim() ? d.guestPhone.trim() : null,
-    validFrom: d.validFrom,
-    validUntil: d.validUntil,
-    notes: d.notes?.trim() ? d.notes.trim() : null,
-    vehicle: d.vehicle ?? null,
-    linkedResponsibleId: d.linkedResponsibleId ?? null,
-  }))
-  .refine((data) => data.validUntil.getTime() > data.validFrom.getTime(), {
-    message: 'validUntil deve ser posterior a validFrom.',
-    path: ['validUntil'],
+  .transform((d) => {
+    const now = new Date();
+    const validFrom = d.validFrom ?? now;
+    const validUntil =
+      d.validUntil ?? new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    return {
+      studentIds: [...new Set(d.studentIds)],
+      guestName: d.guestName?.trim() ? d.guestName.trim() : null,
+      guestDocument: d.guestDocument?.trim()
+        ? normalizeCpf(d.guestDocument.trim()) || d.guestDocument.trim()
+        : null,
+      guestPhone: d.guestPhone?.trim() ? d.guestPhone.trim() : null,
+      validFrom,
+      validUntil,
+      notes: d.notes?.trim() ? d.notes.trim() : null,
+      vehicle: d.vehicle ?? null,
+      linkedResponsibleId: d.linkedResponsibleId ?? null,
+    };
+  })
+  .superRefine((data, ctx) => {
+    if (data.validUntil.getTime() <= data.validFrom.getTime()) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'validUntil deve ser posterior a validFrom.',
+        path: ['validUntil'],
+      });
+    }
+
+    if (data.linkedResponsibleId) return;
+
+    const hasName = Boolean(data.guestName);
+    const hasDoc = Boolean(data.guestDocument);
+    if (hasName !== hasDoc) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Informe nome e documento do convidado, ou omita ambos para cadastro por link.',
+        path: ['guestName'],
+      });
+    }
   });
 
 export const updatePickupAuthorizationSchema = z
@@ -79,8 +130,8 @@ export const updatePickupAuthorizationSchema = z
     guestName: z.string().trim().min(1).max(255).optional(),
     guestDocument: z.string().trim().min(1).max(64).optional(),
     guestPhone: z.string().trim().max(32).nullable().optional(),
-    validFrom: z.coerce.date().optional(),
-    validUntil: z.coerce.date().optional(),
+    validFrom: z.preprocess((val) => parseWallClockDate(val), z.date().optional()),
+    validUntil: z.preprocess((val) => parseWallClockDate(val), z.date().optional()),
     notes: z.string().trim().max(2000).nullable().optional(),
     vehicle: pickupVehicleSchema.nullable().optional(),
     linkedResponsibleId: z.uuid().nullable().optional(),

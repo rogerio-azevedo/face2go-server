@@ -213,7 +213,11 @@ export async function pickupAuthDelete(
   const conditions: SQL[] = [
     eq(temporaryPickupAuthorizations.id, id),
     eq(temporaryPickupAuthorizations.clientId, clientId),
-    inArray(temporaryPickupAuthorizations.status, ['cancelled', 'expired']),
+    inArray(temporaryPickupAuthorizations.status, [
+      'cancelled',
+      'expired',
+      'used',
+    ]),
   ];
   if (requestedByResponsibleId) {
     conditions.push(
@@ -258,6 +262,103 @@ export async function pickupAuthFindActiveByGuestDocumentForRequester(
   return row;
 }
 
+/** Autorizações ativas cujo guestFaceId coincide com o faceId reconhecido no leitor. */
+export async function pickupAuthFindActiveByGuestFaceId(
+  db: AppDb,
+  clientId: string,
+  guestFaceId: number,
+): Promise<
+  Array<{
+    id: string;
+    requestedByResponsibleId: string;
+    guestName: string | null;
+    guestFaceImageKey: string | null;
+    linkedResponsibleId: string | null;
+    guestDocument: string | null;
+    guestVehiclePlate: string | null;
+  }>
+> {
+  const now = new Date();
+  return db
+    .select({
+      id: temporaryPickupAuthorizations.id,
+      requestedByResponsibleId:
+        temporaryPickupAuthorizations.requestedByResponsibleId,
+      guestName: temporaryPickupAuthorizations.guestName,
+      guestFaceImageKey: temporaryPickupAuthorizations.guestFaceImageKey,
+      linkedResponsibleId: temporaryPickupAuthorizations.linkedResponsibleId,
+      guestDocument: temporaryPickupAuthorizations.guestDocument,
+      guestVehiclePlate: temporaryPickupAuthorizations.guestVehiclePlate,
+    })
+    .from(temporaryPickupAuthorizations)
+    .where(
+      and(
+        eq(temporaryPickupAuthorizations.clientId, clientId),
+        eq(temporaryPickupAuthorizations.guestFaceId, guestFaceId),
+        eq(temporaryPickupAuthorizations.status, 'active'),
+        eq(temporaryPickupAuthorizations.guestApprovalStatus, 'approved'),
+        lte(temporaryPickupAuthorizations.validFrom, now),
+        gte(temporaryPickupAuthorizations.validUntil, now),
+      ),
+    )
+    .orderBy(desc(temporaryPickupAuthorizations.createdAt));
+}
+
+/** Autorizações ativas com o mesmo documento do convidado (multi-pai). */
+export async function pickupAuthFindActiveByGuestDocument(
+  db: AppDb,
+  clientId: string,
+  guestDocument: string,
+): Promise<Array<{ id: string; requestedByResponsibleId: string }>> {
+  const now = new Date();
+  return db
+    .select({
+      id: temporaryPickupAuthorizations.id,
+      requestedByResponsibleId:
+        temporaryPickupAuthorizations.requestedByResponsibleId,
+    })
+    .from(temporaryPickupAuthorizations)
+    .where(
+      and(
+        eq(temporaryPickupAuthorizations.clientId, clientId),
+        eq(temporaryPickupAuthorizations.guestDocument, guestDocument),
+        eq(temporaryPickupAuthorizations.status, 'active'),
+        eq(temporaryPickupAuthorizations.guestApprovalStatus, 'approved'),
+        lte(temporaryPickupAuthorizations.validFrom, now),
+        gte(temporaryPickupAuthorizations.validUntil, now),
+      ),
+    )
+    .orderBy(desc(temporaryPickupAuthorizations.createdAt));
+}
+
+/** FaceIds de convidados com o mesmo documento (histórico no feed multi-pai). */
+export async function pickupAuthListGuestFaceIdsByDocument(
+  db: AppDb,
+  clientId: string,
+  guestDocument: string,
+): Promise<
+  Array<{
+    guestFaceId: number | null;
+    guestName: string | null;
+    guestFaceImageKey: string | null;
+  }>
+> {
+  return db
+    .select({
+      guestFaceId: temporaryPickupAuthorizations.guestFaceId,
+      guestName: temporaryPickupAuthorizations.guestName,
+      guestFaceImageKey: temporaryPickupAuthorizations.guestFaceImageKey,
+    })
+    .from(temporaryPickupAuthorizations)
+    .where(
+      and(
+        eq(temporaryPickupAuthorizations.clientId, clientId),
+        eq(temporaryPickupAuthorizations.guestDocument, guestDocument),
+      ),
+    )
+    .orderBy(desc(temporaryPickupAuthorizations.createdAt));
+}
+
 /** Autorizações ativas em que o responsável cadastrado é o retirante vinculado. */
 export async function pickupAuthFindActiveByLinkedResponsible(
   db: AppDb,
@@ -292,7 +393,7 @@ export async function pickupAuthUpdateStatus(
   id: string,
   clientId: string,
   status: PickupAuthRow['status'],
-  extras: { usedAt?: Date | null },
+  extras: { usedAt?: Date | null; guestFaceId?: null },
 ) {
   const rows = await db
     .update(temporaryPickupAuthorizations)
@@ -300,6 +401,7 @@ export async function pickupAuthUpdateStatus(
       status,
       updatedAt: new Date(),
       ...(extras.usedAt !== undefined ? { usedAt: extras.usedAt } : {}),
+      ...(extras.guestFaceId !== undefined ? { guestFaceId: extras.guestFaceId } : {}),
     })
     .where(
       and(
@@ -340,6 +442,28 @@ export async function pickupAuthUpdateGuestFaceSubmitted(
     .set({
       guestFaceImageKey,
       guestApprovalStatus: 'submitted',
+      updatedAt: new Date(),
+    })
+    .where(eq(temporaryPickupAuthorizations.id, id))
+    .returning();
+  return rows[0];
+}
+
+export async function pickupAuthUpdateGuestProfile(
+  db: AppDb,
+  id: string,
+  patch: {
+    guestName: string;
+    guestDocument: string;
+    guestPhone?: string | null;
+  },
+) {
+  const rows = await db
+    .update(temporaryPickupAuthorizations)
+    .set({
+      guestName: patch.guestName,
+      guestDocument: patch.guestDocument,
+      ...(patch.guestPhone !== undefined ? { guestPhone: patch.guestPhone } : {}),
       updatedAt: new Date(),
     })
     .where(eq(temporaryPickupAuthorizations.id, id))
@@ -399,7 +523,7 @@ export async function pickupAuthFindActiveGuestByPlate(
   plate: string,
 ): Promise<{
   id: string;
-  guestName: string;
+  guestName: string | null;
   guestFaceImageKey: string | null;
   guestVehiclePlate: string | null;
   linkedResponsibleId: string | null;

@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { z } from 'zod';
 import { ConfigService } from '@nestjs/config';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -18,8 +20,10 @@ import { FaceSyncService } from '../face-sync/face-sync.service';
 import { ALWAYS_TIME_ZONE_INDEX } from '../face-sync/intelbras-time-zone.constants';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
+import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
+import * as vehiclesQueries from '../database/queries/vehicles.queries';
 import {
   computeEffectivePickupStatus,
   createPickupAuthorizationSchema,
@@ -249,17 +253,26 @@ export class PickupAuthorizationsService {
     }
 
     let photoUrl: string | null = null;
-    if (responsible.photoKey) {
+    const hasFace = Boolean(responsible.photoKey);
+    if (hasFace && responsible.photoKey) {
       photoUrl = await this.r2.createPresignedPortraitGetUrl(
         responsible.photoKey,
       );
     }
+
+    const existingVehicles = await vehiclesQueries.vehicleListByResponsible(
+      this.database.db,
+      responsible.id,
+      user.clientId,
+    );
 
     return {
       id: responsible.id,
       name: responsible.name,
       document: responsible.document,
       photoUrl,
+      hasFace,
+      hasVehicle: existingVehicles.length > 0,
     };
   }
 
@@ -350,17 +363,19 @@ export class PickupAuthorizationsService {
       }
     }
 
-    const existingActive =
-      await pickupQueries.pickupAuthFindActiveByGuestDocumentForRequester(
-        this.database.db,
-        user.clientId,
-        user.responsibleId,
-        d.guestDocument,
-      );
-    if (existingActive) {
-      throw new BadRequestException(
-        'Já existe uma autorização ativa para este documento. Edite ou renove a autorização existente.',
-      );
+    if (d.guestDocument) {
+      const existingActive =
+        await pickupQueries.pickupAuthFindActiveByGuestDocumentForRequester(
+          this.database.db,
+          user.clientId,
+          user.responsibleId,
+          d.guestDocument,
+        );
+      if (existingActive) {
+        throw new BadRequestException(
+          'Já existe uma autorização ativa para este documento. Edite ou renove a autorização existente.',
+        );
+      }
     }
 
     let linked: LinkedResponsibleRow | undefined;
@@ -389,8 +404,8 @@ export class PickupAuthorizationsService {
           clientId: user.clientId,
           requestedByResponsibleId: user.responsibleId,
           linkedResponsibleId: d.linkedResponsibleId,
-          guestName: linked?.name ?? d.guestName,
-          guestDocument: linked?.document ?? d.guestDocument,
+          guestName: linked?.name ?? d.guestName ?? null,
+          guestDocument: linked?.document ?? d.guestDocument ?? null,
           guestPhone: d.guestPhone,
           guestApprovalStatus: linked ? 'approved' : 'pending_face',
           status: 'active',
@@ -560,6 +575,16 @@ export class PickupAuthorizationsService {
   async deleteForResponsible(user: JwtPayload, id: string) {
     this.assertResponsibleJwt(user);
     await this.expireStale(user.clientId);
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
+    await this.removeGuestFaceFromReadersBeforeDelete(
+      row,
+      user.clientId,
+      id,
+    );
     const deleted = await pickupQueries.pickupAuthDelete(
       this.database.db,
       id,
@@ -568,7 +593,7 @@ export class PickupAuthorizationsService {
     );
     if (!deleted) {
       throw new BadRequestException(
-        'Somente autorizações canceladas ou expiradas podem ser excluídas.',
+        'Autorizações ativas não podem ser excluídas. Cancele ou marque como utilizada antes.',
       );
     }
     return { ok: true };
@@ -577,6 +602,15 @@ export class PickupAuthorizationsService {
   async deleteForSchool(user: JwtPayload, clientId: string, id: string) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
     await this.expireStale(clientId);
+    const row = await pickupQueries.pickupAuthGetById(
+      this.database.db,
+      id,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Autorização não encontrada.');
+    }
+    await this.removeGuestFaceFromReadersBeforeDelete(row, clientId, id);
     const deleted = await pickupQueries.pickupAuthDelete(
       this.database.db,
       id,
@@ -584,7 +618,7 @@ export class PickupAuthorizationsService {
     );
     if (!deleted) {
       throw new BadRequestException(
-        'Somente autorizações canceladas ou expiradas podem ser excluídas.',
+        'Autorizações ativas não podem ser excluídas. Cancele ou marque como utilizada antes.',
       );
     }
     return { ok: true };
@@ -656,25 +690,22 @@ export class PickupAuthorizationsService {
     return { url };
   }
 
-  async approveGuestFace(user: JwtPayload, id: string) {
-    this.assertResponsibleJwt(user);
-    const row = await this.assertOwnedAuth(
-      id,
-      user.clientId,
-      user.responsibleId,
-    );
-    if (row.guestApprovalStatus !== 'submitted') {
-      throw new BadRequestException(
-        'Só é possível aprovar após o convidado enviar a foto.',
-      );
-    }
+  private async executeGuestFaceApproval(
+    row: PickupAuthRow,
+    id: string,
+    clientId: string,
+  ) {
     if (!row.guestFaceImageKey) {
       throw new BadRequestException('Foto do convidado não encontrada.');
+    }
+    const guestName = row.guestName?.trim();
+    if (!guestName) {
+      throw new BadRequestException('Nome do convidado não informado.');
     }
 
     const client = await clientsQueries.getClientByIdOnly(
       this.database.db,
-      user.clientId,
+      clientId,
     );
     if (!client) {
       throw new BadRequestException('Cliente não encontrado.');
@@ -683,16 +714,24 @@ export class PickupAuthorizationsService {
     const { buffer } = await this.r2.getObjectBytes(row.guestFaceImageKey);
     const faceId = await registrationsQueries.bumpClientFaceCounter(
       this.database.db,
-      user.clientId,
+      clientId,
     );
 
     const sync = await this.faceSync.syncPersonOnReaders({
-      clientId: user.clientId,
+      clientId,
       faceId,
-      name: row.guestName,
+      name: guestName,
       imageBuffer: buffer,
       timeSectionIds: [ALWAYS_TIME_ZONE_INDEX],
       logContext: `pickup-guest=${id}`,
+      validFrom:
+        row.validFrom instanceof Date
+          ? row.validFrom
+          : new Date(String(row.validFrom)),
+      validUntil:
+        row.validUntil instanceof Date
+          ? row.validUntil
+          : new Date(String(row.validUntil)),
     });
 
     let lprResult: {
@@ -701,9 +740,9 @@ export class PickupAuthorizationsService {
     } | null = null;
     if (row.guestVehiclePlate?.trim()) {
       lprResult = await this.lprPlateSync.pushPlateToLprCameras({
-        clientId: user.clientId,
+        clientId,
         plate: row.guestVehiclePlate,
-        ownerDisplayName: row.guestName,
+        ownerDisplayName: guestName,
         vehicleColor: row.guestVehicleColor,
         logContext: `pickup-guest=${id}`,
       });
@@ -712,7 +751,7 @@ export class PickupAuthorizationsService {
     const updated = await pickupQueries.pickupAuthUpdateGuestApproval(
       this.database.db,
       id,
-      user.clientId,
+      clientId,
       {
         guestApprovalStatus: 'approved',
         guestFaceId: faceId,
@@ -741,6 +780,98 @@ export class PickupAuthorizationsService {
       updated,
       students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
     );
+  }
+
+  async submitGuestFaceDirect(user: JwtPayload, id: string, body: unknown) {
+    this.assertResponsibleJwt(user);
+    const parsed = z.object({ imageBase64: z.string().min(64) }).safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
+    if (row.linkedResponsibleId) {
+      throw new BadRequestException(
+        'Responsável já cadastrado; foto não necessária.',
+      );
+    }
+    if (row.guestApprovalStatus === 'approved') {
+      throw new ConflictException('Face já aprovada.');
+    }
+    if (!row.guestName?.trim()) {
+      throw new BadRequestException(
+        'Informe os dados do convidado antes de enviar a foto.',
+      );
+    }
+
+    let payload = parsed.data.imageBase64.trim();
+    let mime = 'image/jpeg';
+    const dataUrlMatch = /^data:([^;,]+);base64,(.+)$/i.exec(payload);
+    if (dataUrlMatch) {
+      mime = dataUrlMatch[1].trim().toLowerCase();
+      payload = dataUrlMatch[2].replace(/\s/g, '');
+    } else {
+      payload = payload.replace(/\s/g, '');
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(payload, 'base64');
+    } catch {
+      throw new BadRequestException('Imagem inválida.');
+    }
+
+    if (buffer.length < 256 || !(await isPortraitImageUsable(buffer))) {
+      throw new BadRequestException('Foto inválida para sincronização.');
+    }
+
+    const client = await clientsQueries.getClientByIdOnly(
+      this.database.db,
+      user.clientId,
+    );
+    if (!client) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+
+    const ext = this.r2.extForImageMime(mime);
+    const contentType = mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const key = this.r2.buildPickupGuestFaceKey(
+      client.companyId,
+      user.clientId,
+      id,
+      ext,
+    );
+    await this.r2.putObject(key, buffer, contentType);
+
+    const submitted = await pickupQueries.pickupAuthUpdateGuestFaceSubmitted(
+      this.database.db,
+      id,
+      key,
+    );
+    if (!submitted) {
+      throw new NotFoundException('Autorização não encontrada.');
+    }
+
+    return this.executeGuestFaceApproval(submitted, id, user.clientId);
+  }
+
+  async approveGuestFace(user: JwtPayload, id: string) {
+    this.assertResponsibleJwt(user);
+    const row = await this.assertOwnedAuth(
+      id,
+      user.clientId,
+      user.responsibleId,
+    );
+    if (row.guestApprovalStatus !== 'submitted') {
+      throw new BadRequestException(
+        'Só é possível aprovar após o convidado enviar a foto.',
+      );
+    }
+    return this.executeGuestFaceApproval(row, id, user.clientId);
   }
 
   async rejectGuestFace(user: JwtPayload, id: string) {
@@ -875,12 +1006,29 @@ export class PickupAuthorizationsService {
         'Somente autorizações ativas podem ser canceladas.',
       );
     }
+
+    const guestFaceIdToRemove =
+      !row.linkedResponsibleId &&
+      row.guestFaceId != null &&
+      row.guestFaceSyncStatus === 'synced'
+        ? row.guestFaceId
+        : null;
+
+    if (guestFaceIdToRemove != null) {
+      await this.faceSync.removePersonFromReaders({
+        clientId,
+        faceId: guestFaceIdToRemove,
+        logContext: `cancel-pickup-auth=${id}`,
+        requireAll: true,
+      });
+    }
+
     const updated = await pickupQueries.pickupAuthUpdateStatus(
       this.database.db,
       id,
       clientId,
       'cancelled',
-      {},
+      guestFaceIdToRemove != null ? { guestFaceId: null } : {},
     );
     if (!updated) {
       throw new NotFoundException('Autorização não encontrada.');
@@ -893,6 +1041,23 @@ export class PickupAuthorizationsService {
       updated,
       students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
     );
+  }
+
+  private async removeGuestFaceFromReadersBeforeDelete(
+    row: PickupAuthRow,
+    clientId: string,
+    id: string,
+  ) {
+    if (row.linkedResponsibleId || row.guestFaceId == null) {
+      return;
+    }
+
+    await this.faceSync.removePersonFromReaders({
+      clientId,
+      faceId: row.guestFaceId,
+      logContext: `delete-pickup-auth=${id}`,
+      requireAll: true,
+    });
   }
 
   private async assertOwnedAuth(

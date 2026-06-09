@@ -24,6 +24,7 @@ import * as clientsQueries from '../database/queries/clients.queries';
 import * as readersQueries from '../database/queries/readers.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
+import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import { R2StorageService } from '../storage/r2-storage.service';
 
 const UUID_RE =
@@ -326,6 +327,79 @@ export class ResponsibleDashboardService {
     return map;
   }
 
+  private async buildPickupGuestFaceSubjectMap(
+    responsibleId: string,
+    clientId: string,
+  ): Promise<Map<number, { name: string; photoKey: string | null }>> {
+    const map = new Map<number, { name: string; photoKey: string | null }>();
+    const auths = await pickupQueries.pickupAuthListByResponsible(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+
+    const documentsToExpand = new Set<string>();
+
+    for (const auth of auths) {
+      if (auth.guestFaceId != null) {
+        map.set(auth.guestFaceId, {
+          name: auth.guestName?.trim() || 'Convidado',
+          photoKey: auth.guestFaceImageKey ?? null,
+        });
+      }
+
+      const doc = auth.guestDocument?.trim();
+      if (doc) {
+        documentsToExpand.add(doc);
+      }
+
+      if (auth.linkedResponsibleId) {
+        const linked = await responsiblesQueries.getResponsibleById(
+          this.database.db,
+          auth.linkedResponsibleId,
+          clientId,
+        );
+        if (linked?.faceId != null && !map.has(linked.faceId)) {
+          map.set(linked.faceId, {
+            name: linked.name,
+            photoKey: linked.photoKey ?? null,
+          });
+        }
+      }
+    }
+
+    for (const doc of documentsToExpand) {
+      const crossAuths = await pickupQueries.pickupAuthListGuestFaceIdsByDocument(
+        this.database.db,
+        clientId,
+        doc,
+      );
+      for (const entry of crossAuths) {
+        if (entry.guestFaceId == null || map.has(entry.guestFaceId)) {
+          continue;
+        }
+        map.set(entry.guestFaceId, {
+          name: entry.guestName?.trim() || 'Convidado',
+          photoKey: entry.guestFaceImageKey ?? null,
+        });
+      }
+    }
+
+    return map;
+  }
+
+  private mergeFaceSubjectMaps(
+    base: Map<number, { name: string; photoKey: string | null }>,
+    extra: Map<number, { name: string; photoKey: string | null }>,
+  ): Map<number, { name: string; photoKey: string | null }> {
+    for (const [faceId, subject] of extra) {
+      if (!base.has(faceId)) {
+        base.set(faceId, subject);
+      }
+    }
+    return base;
+  }
+
   private async lastAccessForFaceUserId(
     clientId: string,
     faceUserId: number,
@@ -465,9 +539,9 @@ export class ResponsibleDashboardService {
     const timezoneOffsetMinutes =
       await this.schoolTimezoneOffsetMinutes(clientId);
 
-    const subjectMap = await this.buildHouseholdFaceSubjectMap(
-      responsibleId,
-      clientId,
+    const subjectMap = this.mergeFaceSubjectMaps(
+      await this.buildHouseholdFaceSubjectMap(responsibleId, clientId),
+      await this.buildPickupGuestFaceSubjectMap(responsibleId, clientId),
     );
     const userIds = [...subjectMap.keys()];
     const { items, total } = await this.paginateFacialAccessByUserIds(

@@ -468,6 +468,33 @@ export async function findResponsiblesWithPushTokenForStudent(
     );
 }
 
+export async function findPushTokensByResponsibleIds(
+  db: AppDb,
+  responsibleIds: string[],
+): Promise<Array<{ id: string; pushToken: string }>> {
+  if (responsibleIds.length === 0) {
+    return [];
+  }
+  const rows = await db
+    .select({
+      id: responsibles.id,
+      pushToken: responsibles.pushToken,
+    })
+    .from(responsibles)
+    .where(
+      and(
+        inArray(responsibles.id, responsibleIds),
+        eq(responsibles.isActive, true),
+        isNotNull(responsibles.pushToken),
+        ne(responsibles.pushToken, ''),
+      ),
+    );
+  return rows.filter(
+    (row): row is { id: string; pushToken: string } =>
+      typeof row.pushToken === 'string' && row.pushToken.length > 0,
+  );
+}
+
 export async function insertResponsible(db: AppDb, values: ResponsibleInsert) {
   const rows = await db.insert(responsibles).values(values).returning();
   return rows[0];

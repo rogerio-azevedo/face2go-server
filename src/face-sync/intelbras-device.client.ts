@@ -9,7 +9,6 @@ import {
 import {
   buildAccessTimeScheduleQueryString,
   buildTimeSectionsRecordUpdaterParams,
-  formatTimeSectionsQueryValue,
 } from './intelbras-time-schedule.util';
 import { normalizeNameForFacialReader } from './normalize-name-for-reader';
 import {
@@ -473,9 +472,15 @@ function buildAccessCardInsertParams(args: {
   faceId: string;
   normalizedName: string;
   timeSectionIds: number[];
+  validDateStart?: string;
+  validDateEnd?: string;
 }): string {
-  const qsStart = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_START);
-  const qsEnd = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_END);
+  const qsStart = encodeURIComponent(
+    args.validDateStart ?? DEFAULT_INTELBRAS_VALID_DATE_START,
+  );
+  const qsEnd = encodeURIComponent(
+    args.validDateEnd ?? DEFAULT_INTELBRAS_VALID_DATE_END,
+  );
   const timeSections = buildTimeSectionsRecordUpdaterParams(
     args.timeSectionIds,
   );
@@ -500,9 +505,15 @@ function buildAccessCardUpdateParams(args: {
   recNo: number;
   normalizedName: string;
   timeSectionIds: number[];
+  validDateStart?: string;
+  validDateEnd?: string;
 }): string {
-  const qsStart = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_START);
-  const qsEnd = encodeURIComponent(DEFAULT_INTELBRAS_VALID_DATE_END);
+  const qsStart = encodeURIComponent(
+    args.validDateStart ?? DEFAULT_INTELBRAS_VALID_DATE_START,
+  );
+  const qsEnd = encodeURIComponent(
+    args.validDateEnd ?? DEFAULT_INTELBRAS_VALID_DATE_END,
+  );
   const cardName = encodeURIComponent(args.normalizedName);
   const timeSections = buildTimeSectionsRecordUpdaterParams(
     args.timeSectionIds,
@@ -531,6 +542,8 @@ export async function intelbrasUpsertFaceOnReader(
   displayName: string,
   rawBase64: string,
   timeSectionIds: number[] = [255],
+  validDateStart?: string,
+  validDateEnd?: string,
 ): Promise<void> {
   const label = readerLabel(reader);
   const normalizedName =
@@ -582,11 +595,15 @@ export async function intelbrasUpsertFaceOnReader(
           recNo,
           normalizedName,
           timeSectionIds,
+          validDateStart,
+          validDateEnd,
         })
       : buildAccessCardInsertParams({
           faceId,
           normalizedName,
           timeSectionIds,
+          validDateStart,
+          validDateEnd,
         });
     const cardUrl = `${base}/cgi-bin/recordUpdater.cgi?${cardParams}`;
     const cardAction = hasExisting ? 'update' : 'insert';

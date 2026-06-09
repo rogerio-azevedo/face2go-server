@@ -5,15 +5,15 @@ import type {
 import { normalizeZoneNameForReader } from './normalize-name-for-reader';
 
 /** Intelbras: 0=domingo … 6=sábado. */
-const WEEKDAY_TO_DEVICE: Record<ShiftWeekday, number> = {
-  sunday: 0,
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-};
+// const WEEKDAY_TO_DEVICE: Record<ShiftWeekday, number> = {
+//   sunday: 0,
+//   monday: 1,
+//   tuesday: 2,
+//   wednesday: 3,
+//   thursday: 4,
+//   friday: 5,
+//   saturday: 6,
+// };
 
 const DEVICE_DAY_TO_WEEKDAY: Record<number, ShiftWeekday | null> = {
   0: 'sunday',

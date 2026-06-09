@@ -9,6 +9,7 @@ import { Types } from 'mongoose';
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
+import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
 import type { VideoEvent } from '../face-listener/face-listener.types';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -192,6 +193,25 @@ export class AccessesService {
       this.logger.warn(
         `Lookup personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+
+    if (!personName) {
+      try {
+        const pickupAuths =
+          await pickupQueries.pickupAuthFindActiveByGuestFaceId(
+            this.database.db,
+            ctx.clientId,
+            faceIdNum,
+          );
+        const guestName = pickupAuths[0]?.guestName?.trim();
+        if (guestName) {
+          personName = guestName;
+        }
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Lookup pickup guestName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
     const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);

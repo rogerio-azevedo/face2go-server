@@ -7,6 +7,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { z } from 'zod';
 
+import { normalizeCpf } from '../auth/utils/auth-identifiers';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import { DatabaseService } from '../database/database.service';
@@ -69,7 +70,8 @@ export class PublicPickupRegisterService {
     );
     return {
       clientName: client.name,
-      guestName: row.guestName,
+      guestName: row.guestName ?? '',
+      needsGuestData: !row.guestName,
       studentNames: students.map((s) => s.studentName),
       validFrom: row.validFrom,
       validUntil: row.validUntil,
@@ -140,7 +142,12 @@ export class PublicPickupRegisterService {
 
   async submit(code: string, body: unknown) {
     const parsed = z
-      .object({ faceImageKey: z.string().min(1) })
+      .object({
+        faceImageKey: z.string().min(1),
+        guestName: z.string().trim().min(1).max(255).optional(),
+        guestDocument: z.string().trim().min(1).max(64).optional(),
+        guestPhone: z.string().trim().max(32).nullable().optional(),
+      })
       .safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
@@ -172,6 +179,23 @@ export class PublicPickupRegisterService {
       throw new ConflictException('A foto já foi enviada.');
     }
 
+    if (!row.guestName) {
+      const gn = parsed.data.guestName?.trim();
+      const gd = parsed.data.guestDocument?.trim();
+      if (!gn || !gd) {
+        throw new BadRequestException(
+          'Informe nome e documento antes de concluir.',
+        );
+      }
+      await pickupQueries.pickupAuthUpdateGuestProfile(this.database.db, row.id, {
+        guestName: gn,
+        guestDocument: normalizeCpf(gd) || gd,
+        guestPhone: parsed.data.guestPhone?.trim()
+          ? parsed.data.guestPhone.trim()
+          : null,
+      });
+    }
+
     const updated = await pickupQueries.pickupAuthUpdateGuestFaceSubmitted(
       this.database.db,
       row.id,
@@ -181,11 +205,17 @@ export class PublicPickupRegisterService {
       throw new NotFoundException('Autorização não encontrada.');
     }
 
+    const guestName =
+      updated.guestName?.trim() ||
+      row.guestName?.trim() ||
+      parsed.data.guestName?.trim() ||
+      'Convidado';
+
     this.eventEmitter.emit(PICKUP_GUEST_FACE_SUBMITTED, {
       authorizationId: row.id,
       clientId: row.clientId,
       requestedByResponsibleId: row.requestedByResponsibleId,
-      guestName: row.guestName,
+      guestName,
     } satisfies PickupGuestFaceSubmittedPayload);
 
     return {

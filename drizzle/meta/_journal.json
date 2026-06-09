@@ -288,6 +288,13 @@
       "when": 1779090000000,
       "tag": "0040_pickup_auth_linked_responsible",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1779100000000,
+      "tag": "0041_pickup_guest_nullable",
+      "breakpoints": true
     }
   ]
 }
