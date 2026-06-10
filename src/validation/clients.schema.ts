@@ -77,6 +77,9 @@ const baseClientShape = {
         'Opcional — se preencher, use uma URL completa com http ou https.',
     },
   ),
+  privacyAlias: optionalTrimmed.pipe(
+    z.string().max(100, 'Alias muito longo (máx. 100 caracteres)').optional(),
+  ),
   isActive: z.boolean(),
 };
 
@@ -100,10 +103,21 @@ const timezoneOffsetUpdate = z.preprocess((raw: unknown) => {
   }
 }, z.number().int().min(-TZ_OFFSET_ABS_MAX).max(TZ_OFFSET_ABS_MAX).optional());
 
-export const clientSchemaForCreate = z.object({
-  ...baseClientShape,
-  timezoneOffsetMinutes: timezoneOffsetCreate,
-});
+export const clientSchemaForCreate = z
+  .object({
+    ...baseClientShape,
+    timezoneOffsetMinutes: timezoneOffsetCreate,
+  })
+  .superRefine((data, ctx) => {
+    if (data.privacyAlias && !data.privacyPolicyUrl) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Informe a URL da política de privacidade ao definir um alias.',
+        path: ['privacyPolicyUrl'],
+      });
+    }
+  });
 
 /** Alias do shape completo incluindo timezone (uso em formulários). */
 export const clientSchema = clientSchemaForCreate;

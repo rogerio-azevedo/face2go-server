@@ -44,6 +44,8 @@ export const clients = pgTable(
     primaryColor: varchar('primary_color', { length: 7 }),
     /** URL da política de privacidade do cliente (exibida no app mobile). */
     privacyPolicyUrl: varchar('privacy_policy_url', { length: 500 }),
+    /** Nome curto exibido no link da política no app mobile (fallback: name). */
+    privacyAlias: varchar('privacy_alias', { length: 100 }),
     /** Segredo público só para SSE do display TV (opcional até gerar/regenerar). */
     displayToken: uuid('display_token'),
     /** Código curto público para URL do display (ex.: /display/eA1tP). */

@@ -263,6 +263,7 @@ export class ClientsService {
       logoUrl: parsed.data.logoUrl,
       primaryColor: parsed.data.primaryColor,
       privacyPolicyUrl: parsed.data.privacyPolicyUrl,
+      privacyAlias: parsed.data.privacyAlias,
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
     });
@@ -288,6 +289,7 @@ export class ClientsService {
       d.logoUrl === undefined &&
       d.primaryColor === undefined &&
       d.privacyPolicyUrl === undefined &&
+      d.privacyAlias === undefined &&
       d.timezoneOffsetMinutes === undefined &&
       d.isActive === undefined &&
       d.ienhFilialCode === undefined
@@ -318,6 +320,9 @@ export class ClientsService {
           : {}),
         ...(d.privacyPolicyUrl !== undefined
           ? { privacyPolicyUrl: d.privacyPolicyUrl }
+          : {}),
+        ...(d.privacyAlias !== undefined
+          ? { privacyAlias: d.privacyAlias }
           : {}),
         ...(d.timezoneOffsetMinutes !== undefined
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
