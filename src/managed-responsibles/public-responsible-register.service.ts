@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
@@ -10,6 +11,7 @@ import { z } from 'zod';
 
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as invitationQueries from '../database/queries/responsible-invitations.queries';
+import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -158,7 +160,27 @@ export class PublicResponsibleRegisterService {
       where: eq(users.email, parsed.data.email),
     });
     if (existing) {
-      throw new ConflictException('E-mail já cadastrado.');
+      if (!existing.password) {
+        throw new ConflictException('E-mail já cadastrado.');
+      }
+      const passwordOk = await bcrypt.compare(
+        parsed.data.password,
+        existing.password,
+      );
+      if (!passwordOk) {
+        throw new UnauthorizedException(
+          'Este e-mail já possui conta. Informe a senha correta para vincular à nova escola.',
+        );
+      }
+      const alreadyInSchool =
+        await responsiblesQueries.getResponsibleByUserIdAndClient(
+          this.database.db,
+          existing.id,
+          row.clientId,
+        );
+      if (alreadyInSchool) {
+        throw new ConflictException('Você já está vinculado a esta escola.');
+      }
     }
 
     const { faceImageKey } = parsed.data;

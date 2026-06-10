@@ -191,6 +191,87 @@ export class ManagedResponsiblesService {
     return true;
   }
 
+  private async syncResponsibleFace(params: {
+    clientId: string;
+    responsibleId: string;
+    name: string;
+    imageBuffer: Buffer;
+    logContext: string;
+  }) {
+    const faceId = await registrationsQueries.bumpClientFaceCounter(
+      this.database.db,
+      params.clientId,
+    );
+    const photoKey = `responsibles/${params.clientId}/${params.responsibleId}/face.jpg`;
+    await this.r2.putObject(photoKey, params.imageBuffer, 'image/jpeg');
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      params.responsibleId,
+      params.clientId,
+      {
+        photoKey,
+        faceId,
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    const faceSync = await this.faceSync.syncPersonOnReaders({
+      clientId: params.clientId,
+      faceId,
+      name: params.name,
+      imageBuffer: params.imageBuffer,
+      timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
+        params.clientId,
+        params.responsibleId,
+      ),
+      logContext: params.logContext,
+    });
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      params.responsibleId,
+      params.clientId,
+      {
+        deviceSyncStatus: faceSync.deviceSyncStatus,
+        deviceSyncedAt:
+          faceSync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: faceSync.deviceSyncError,
+      },
+    );
+
+    return faceSync;
+  }
+
+  private async copyFaceFromExistingResponsibleIfAvailable(params: {
+    userId: string;
+    clientId: string;
+    responsibleId: string;
+    name: string;
+    logContext: string;
+  }): Promise<boolean> {
+    const source = await responsiblesQueries.findResponsibleWithPhotoByUserId(
+      this.database.db,
+      params.userId,
+      params.clientId,
+    );
+    if (!source?.photoKey) return false;
+
+    const { buffer } = await this.r2.getObjectBytes(source.photoKey);
+    if (!(await isPortraitImageUsable(buffer))) return false;
+
+    await this.syncResponsibleFace({
+      clientId: params.clientId,
+      responsibleId: params.responsibleId,
+      name: params.name,
+      imageBuffer: buffer,
+      logContext: `${params.logContext}-face-copy`,
+    });
+    return true;
+  }
+
   private async createResponsibleFromInvitation(
     row: ResponsibleInvitationRow,
   ): Promise<string> {
@@ -205,11 +286,18 @@ export class ManagedResponsiblesService {
       throw new BadRequestException('Foto do convidado não encontrada.');
     }
 
-    const existing = await this.database.db.query.users.findFirst({
+    const existingUser = await this.database.db.query.users.findFirst({
       where: eq(users.email, row.submittedEmail),
     });
-    if (existing) {
-      throw new ConflictException('E-mail já cadastrado.');
+    if (
+      existingUser &&
+      (await responsiblesQueries.getResponsibleByUserIdAndClient(
+        this.database.db,
+        existingUser.id,
+        row.clientId,
+      ))
+    ) {
+      throw new ConflictException('Este usuário já está vinculado a esta escola.');
     }
 
     const studentLinks =
@@ -218,16 +306,18 @@ export class ManagedResponsiblesService {
         row.id,
       );
 
-    const userId = crypto.randomUUID();
+    const userId = existingUser?.id ?? crypto.randomUUID();
     const responsible = await this.database.db.transaction(async (tx) => {
-      await tx.insert(users).values({
-        id: userId,
-        email: row.submittedEmail!,
-        password: row.submittedPasswordHash!,
-        name: row.submittedName!,
-        role: 'member',
-        isActive: true,
-      });
+      if (!existingUser) {
+        await tx.insert(users).values({
+          id: userId,
+          email: row.submittedEmail!,
+          password: row.submittedPasswordHash!,
+          name: row.submittedName!,
+          role: 'member',
+          isActive: true,
+        });
+      }
 
       const created = await responsiblesQueries.insertResponsible(tx, {
         clientId: row.clientId,
@@ -267,49 +357,13 @@ export class ManagedResponsiblesService {
       throw new BadRequestException('Foto inválida para sincronização.');
     }
 
-    const faceId = await registrationsQueries.bumpClientFaceCounter(
-      this.database.db,
-      row.clientId,
-    );
-    const photoKey = `responsibles/${row.clientId}/${responsible.id}/face.jpg`;
-    await this.r2.putObject(photoKey, buffer, 'image/jpeg');
-
-    await responsiblesQueries.updateResponsibleFace(
-      this.database.db,
-      responsible.id,
-      row.clientId,
-      {
-        photoKey,
-        faceId,
-        deviceSyncStatus: 'pending_sync',
-        deviceSyncedAt: null,
-        deviceSyncError: null,
-      },
-    );
-
-    const faceSync = await this.faceSync.syncPersonOnReaders({
+    const faceSync = await this.syncResponsibleFace({
       clientId: row.clientId,
-      faceId,
+      responsibleId: responsible.id,
       name: row.submittedName,
       imageBuffer: buffer,
-      timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
-        row.clientId,
-        responsible.id,
-      ),
       logContext: `responsible-invitation=${row.id}`,
     });
-
-    await responsiblesQueries.updateResponsibleFace(
-      this.database.db,
-      responsible.id,
-      row.clientId,
-      {
-        deviceSyncStatus: faceSync.deviceSyncStatus,
-        deviceSyncedAt:
-          faceSync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: faceSync.deviceSyncError,
-      },
-    );
 
     let plateLprResult: {
       lprSyncStatus: 'pending_sync' | 'synced' | 'sync_failed';
@@ -406,20 +460,32 @@ export class ManagedResponsiblesService {
       });
     } else {
       const wantsAppAccess = Boolean(d.email?.trim() && d.password);
+      let linkedUserId: string | null = null;
 
       if (wantsAppAccess) {
         const existingUser = await this.database.db.query.users.findFirst({
           where: eq(users.email, d.email!),
         });
         if (existingUser) {
-          throw new ConflictException('E-mail já cadastrado.');
+          const alreadyInSchool =
+            await responsiblesQueries.getResponsibleByUserIdAndClient(
+              this.database.db,
+              existingUser.id,
+              user.clientId,
+            );
+          if (alreadyInSchool) {
+            throw new ConflictException(
+              'Este e-mail já está vinculado a um responsável nesta escola.',
+            );
+          }
+          linkedUserId = existingUser.id;
         }
       }
 
       const created = await this.database.db.transaction(async (tx) => {
-        let userId: string | null = null;
+        let userId: string | null = linkedUserId;
 
-        if (wantsAppAccess) {
+        if (wantsAppAccess && !linkedUserId) {
           userId = crypto.randomUUID();
           const hashed = await bcrypt.hash(d.password!, 10);
           await tx.insert(users).values({
@@ -468,46 +534,26 @@ export class ManagedResponsiblesService {
         'base64',
       );
       if (buffer.length >= 256 && (await isPortraitImageUsable(buffer))) {
-        const faceId = await registrationsQueries.bumpClientFaceCounter(
-          this.database.db,
-          user.clientId,
-        );
-        const photoKey = `responsibles/${user.clientId}/${responsible.id}/face.jpg`;
-        await this.r2.putObject(photoKey, buffer, 'image/jpeg');
-        await responsiblesQueries.updateResponsibleFace(
-          this.database.db,
-          responsible.id,
-          user.clientId,
-          {
-            photoKey,
-            faceId,
-            deviceSyncStatus: 'pending_sync',
-          },
-        );
-        const sync = await this.faceSync.syncPersonOnReaders({
+        await this.syncResponsibleFace({
           clientId: user.clientId,
-          faceId,
+          responsibleId: responsible.id,
           name: d.name,
           imageBuffer: buffer,
-          timeSectionIds:
-            await this.accessTimeZone.resolveResponsibleTimeSections(
-              user.clientId,
-              responsible.id,
-            ),
           logContext: `managed-responsible=${responsible.id}`,
         });
-        await responsiblesQueries.updateResponsibleFace(
-          this.database.db,
-          responsible.id,
-          user.clientId,
-          {
-            deviceSyncStatus: sync.deviceSyncStatus,
-            deviceSyncedAt:
-              sync.deviceSyncStatus === 'synced' ? new Date() : null,
-            deviceSyncError: sync.deviceSyncError,
-          },
-        );
       }
+    } else if (
+      !d.linkedResponsibleId &&
+      responsible.userId &&
+      !d.imageBase64
+    ) {
+      await this.copyFaceFromExistingResponsibleIfAvailable({
+        userId: responsible.userId,
+        clientId: user.clientId,
+        responsibleId: responsible.id,
+        name: d.name,
+        logContext: `managed-responsible=${responsible.id}`,
+      });
     }
 
     if (d.vehicle) {
@@ -652,10 +698,16 @@ export class ManagedResponsiblesService {
         },
       );
       if (target.userId) {
-        await tx
-          .update(users)
-          .set({ isActive: false })
-          .where(eq(users.id, target.userId));
+        const remaining = await responsiblesQueries.countActiveResponsiblesByUserId(
+          tx,
+          target.userId,
+        );
+        if (remaining <= 1) {
+          await tx
+            .update(users)
+            .set({ isActive: false })
+            .where(eq(users.id, target.userId));
+        }
       }
     });
 

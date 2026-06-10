@@ -400,6 +400,60 @@ export async function getResponsibleByUserId(db: AppDb, userId: string) {
   return rows[0];
 }
 
+export async function getResponsibleByUserIdAndClient(
+  db: AppDb,
+  userId: string,
+  clientId: string,
+) {
+  const [row] = await db
+    .select()
+    .from(responsibles)
+    .where(
+      and(
+        eq(responsibles.userId, userId),
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.isActive, true),
+      ),
+    )
+    .limit(1);
+  return row;
+}
+
+/** Responsável ativo do usuário com foto cadastrada (outra escola). */
+export async function findResponsibleWithPhotoByUserId(
+  db: AppDb,
+  userId: string,
+  excludeClientId?: string,
+) {
+  const conditions = [
+    eq(responsibles.userId, userId),
+    eq(responsibles.isActive, true),
+    isNotNull(responsibles.photoKey),
+  ];
+  if (excludeClientId) {
+    conditions.push(ne(responsibles.clientId, excludeClientId));
+  }
+  const [row] = await db
+    .select()
+    .from(responsibles)
+    .where(and(...conditions))
+    .limit(1);
+  return row;
+}
+
+export async function countActiveResponsiblesByUserId(
+  db: AppDb,
+  userId: string,
+) {
+  const [row] = await db
+    .select({ total: count() })
+    .from(responsibles)
+    .where(
+      and(eq(responsibles.userId, userId), eq(responsibles.isActive, true)),
+    );
+  return row?.total ?? 0;
+}
+
 export type ResponsibleInsert = typeof responsibles.$inferInsert;
 
 export async function updateResponsiblePushTokenById(

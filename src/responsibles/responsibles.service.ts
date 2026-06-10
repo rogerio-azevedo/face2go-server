@@ -122,25 +122,37 @@ export class ResponsiblesService {
     }
     const d = parsed.data;
 
-    const existing = await this.database.db.query.users.findFirst({
+    const existingUser = await this.database.db.query.users.findFirst({
       where: eq(users.email, d.email),
     });
-    if (existing) {
-      throw new ConflictException('E-mail já cadastrado.');
+    if (
+      existingUser &&
+      (await responsiblesQueries.getResponsibleByUserIdAndClient(
+        this.database.db,
+        existingUser.id,
+        clientId,
+      ))
+    ) {
+      throw new ConflictException(
+        'Este e-mail já está vinculado a um responsável nesta escola.',
+      );
     }
 
-    const userId = crypto.randomUUID();
-    const hashed = await bcrypt.hash(d.password, 10);
+    const userId = existingUser?.id ?? crypto.randomUUID();
+    const hashed =
+      existingUser?.password ?? (await bcrypt.hash(d.password, 10));
 
     try {
-      await this.database.db.insert(users).values({
-        id: userId,
-        email: d.email,
-        password: hashed,
-        name: d.name,
-        role: 'member',
-        isActive: true,
-      });
+      if (!existingUser) {
+        await this.database.db.insert(users).values({
+          id: userId,
+          email: d.email,
+          password: hashed,
+          name: d.name,
+          role: 'member',
+          isActive: true,
+        });
+      }
 
       return responsiblesQueries.insertResponsible(this.database.db, {
         clientId,
@@ -151,7 +163,9 @@ export class ResponsiblesService {
         isActive: d.isActive,
       });
     } catch {
-      await this.database.db.delete(users).where(eq(users.id, userId));
+      if (!existingUser) {
+        await this.database.db.delete(users).where(eq(users.id, userId));
+      }
       throw new BadRequestException(
         'Não foi possível cadastrar o responsável.',
       );
