@@ -8,6 +8,7 @@ import {
   isNotNull,
   isNull,
   ne,
+  notInArray,
   or,
   type SQL,
 } from 'drizzle-orm';
@@ -642,6 +643,64 @@ export async function deleteResponsibleStudentLink(
     )
     .returning({ id: responsibleStudents.id });
   return rows[0];
+}
+
+export async function deleteResponsibleStudentLinksForStudents(
+  db: AppDb,
+  responsibleId: string,
+  studentIds: string[],
+) {
+  if (studentIds.length === 0) return [];
+  return db
+    .delete(responsibleStudents)
+    .where(
+      and(
+        eq(responsibleStudents.responsibleId, responsibleId),
+        inArray(responsibleStudents.studentId, studentIds),
+      ),
+    )
+    .returning({ id: responsibleStudents.id });
+}
+
+/** Vínculos do responsável com alunos fora do conjunto informado. */
+export async function countStudentLinksOutsideSet(
+  db: AppDb,
+  responsibleId: string,
+  studentIds: string[],
+): Promise<number> {
+  const conditions = [eq(responsibleStudents.responsibleId, responsibleId)];
+  if (studentIds.length > 0) {
+    conditions.push(notInArray(responsibleStudents.studentId, studentIds));
+  }
+
+  const [row] = await db
+    .select({ total: count() })
+    .from(responsibleStudents)
+    .where(and(...conditions));
+  return row?.total ?? 0;
+}
+
+/**
+ * Responsável já existente no sistema (pai de outros alunos ou vínculos fora do meu núcleo)
+ * deve ser apenas desvinculado, não desativado.
+ */
+export async function shouldPartialUnlinkManagedResponsible(
+  db: AppDb,
+  inviterResponsibleId: string,
+  targetResponsibleId: string,
+): Promise<boolean> {
+  const myStudentIds = await studentsQueries.listStudentIdsForResponsible(
+    db,
+    inviterResponsibleId,
+  );
+  const linksOutsideMyHousehold = await countStudentLinksOutsideSet(
+    db,
+    targetResponsibleId,
+    myStudentIds,
+  );
+  if (linksOutsideMyHousehold > 0) return true;
+
+  return responsibleHasParentRelationship(db, targetResponsibleId);
 }
 
 /** Verifica se o responsável é pai ou mãe de pelo menos um aluno. */

@@ -611,7 +611,11 @@ export class ManagedResponsiblesService {
   async deleteManagedResponsible(
     user: JwtPayload,
     targetResponsibleId: string,
-  ) {
+  ): Promise<{
+    removed: true;
+    mode: 'unlinked' | 'deactivated';
+    id: string;
+  }> {
     this.assertResponsibleJwt(user);
 
     if (targetResponsibleId === user.responsibleId) {
@@ -646,14 +650,70 @@ export class ManagedResponsiblesService {
       throw new NotFoundException('Responsável não encontrado.');
     }
 
+    const shouldPartialUnlink =
+      await responsiblesQueries.shouldPartialUnlinkManagedResponsible(
+        this.database.db,
+        user.responsibleId,
+        targetResponsibleId,
+      );
+
+    if (shouldPartialUnlink) {
+      return this.unlinkManagedResponsibleFromHousehold(user, target);
+    }
+
+    return this.deactivateManagedResponsible(user, target);
+  }
+
+  private async unlinkManagedResponsibleFromHousehold(
+    user: JwtPayload & { clientId: string; responsibleId: string },
+    target: NonNullable<
+      Awaited<ReturnType<typeof responsiblesQueries.getResponsibleById>>
+    >,
+  ): Promise<{ removed: true; mode: 'unlinked'; id: string }> {
+    const myStudentIds = await studentsQueries.listStudentIdsForResponsible(
+      this.database.db,
+      user.responsibleId,
+    );
+    const removedLinks =
+      await responsiblesQueries.deleteResponsibleStudentLinksForStudents(
+        this.database.db,
+        target.id,
+        myStudentIds,
+      );
+    if (removedLinks.length === 0) {
+      throw new NotFoundException('Nenhum vínculo encontrado para remover.');
+    }
+
+    try {
+      await this.resyncResponsibleFaceTimeSections({
+        clientId: user.clientId,
+        responsibleId: target.id,
+        name: target.name,
+        logContext: `unlink-responsible=${target.id}`,
+      });
+    } catch (err) {
+      this.log.warn(
+        `Falha ao re-sincronizar zonas de horário após desvincular ${target.id}: ${String(err)}`,
+      );
+    }
+
+    return { removed: true, mode: 'unlinked', id: target.id };
+  }
+
+  private async deactivateManagedResponsible(
+    user: JwtPayload & { clientId: string; responsibleId: string },
+    target: NonNullable<
+      Awaited<ReturnType<typeof responsiblesQueries.getResponsibleById>>
+    >,
+  ): Promise<{ removed: true; mode: 'deactivated'; id: string }> {
     const targetVehicles = await vehicleQueries.vehicleListByResponsible(
       this.database.db,
-      targetResponsibleId,
+      target.id,
       user.clientId,
     );
 
     const faceId = target.faceId;
-    const logContext = `delete-responsible=${targetResponsibleId}`;
+    const logContext = `delete-responsible=${target.id}`;
 
     if (faceId != null) {
       await this.faceSync.removePersonFromReaders({
@@ -676,33 +736,28 @@ export class ManagedResponsiblesService {
     await this.database.db.transaction(async (tx) => {
       await responsiblesQueries.deleteAllResponsibleStudentLinks(
         tx,
-        targetResponsibleId,
+        target.id,
       );
       await vehicleQueries.vehicleDeleteAllForResponsible(
         tx,
-        targetResponsibleId,
+        target.id,
         user.clientId,
       );
-      await responsiblesQueries.updateResponsible(
-        tx,
-        targetResponsibleId,
-        user.clientId,
-        {
-          isActive: false,
-          pushToken: null,
-          faceId: null,
-          photoKey: null,
-          deviceSyncStatus: null,
-          deviceSyncedAt: null,
-          deviceSyncError: null,
-        },
-      );
+      await responsiblesQueries.updateResponsible(tx, target.id, user.clientId, {
+        isActive: false,
+        pushToken: null,
+        faceId: null,
+        photoKey: null,
+        deviceSyncStatus: null,
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      });
       if (target.userId) {
         const remaining = await responsiblesQueries.countActiveResponsiblesByUserId(
           tx,
           target.userId,
         );
-        if (remaining <= 1) {
+        if (remaining === 0) {
           await tx
             .update(users)
             .set({ isActive: false })
@@ -711,7 +766,59 @@ export class ManagedResponsiblesService {
       }
     });
 
-    return { removed: true, id: targetResponsibleId };
+    return { removed: true, mode: 'deactivated', id: target.id };
+  }
+
+  private async resyncResponsibleFaceTimeSections(params: {
+    clientId: string;
+    responsibleId: string;
+    name: string;
+    logContext: string;
+  }): Promise<void> {
+    const row = await responsiblesQueries.getResponsibleWithFaceStatus(
+      this.database.db,
+      params.responsibleId,
+      params.clientId,
+    );
+    if (!row?.photoKey || row.faceId == null) return;
+
+    const { buffer } = await this.r2.getObjectBytes(row.photoKey);
+    if (buffer.length < 256 || !(await isPortraitImageUsable(buffer))) return;
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      params.responsibleId,
+      params.clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    const sync = await this.faceSync.syncPersonOnReaders({
+      clientId: params.clientId,
+      faceId: row.faceId,
+      name: params.name,
+      imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
+        params.clientId,
+        params.responsibleId,
+      ),
+      logContext: params.logContext,
+    });
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      params.responsibleId,
+      params.clientId,
+      {
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt:
+          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+    );
   }
 
   async createInvitation(user: JwtPayload, body: unknown) {
