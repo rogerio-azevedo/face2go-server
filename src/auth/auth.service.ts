@@ -212,6 +212,7 @@ export class AuthService implements AuthServiceContract {
         companyId: clients.companyId,
         logoUrl: clients.logoUrl,
         primaryColor: clients.primaryColor,
+        privacyPolicyUrl: clients.privacyPolicyUrl,
         clientActive: clients.isActive,
       })
       .from(clientUsers)
@@ -233,6 +234,7 @@ export class AuthService implements AuthServiceContract {
         branding: {
           logoUrl: link.logoUrl,
           primaryColor: link.primaryColor,
+          privacyPolicyUrl: link.privacyPolicyUrl,
         },
         label: `${link.clientName} (${link.role === 'client_admin' ? 'Admin' : 'Operador'})`,
       });
@@ -246,6 +248,7 @@ export class AuthService implements AuthServiceContract {
         clientName: clients.name,
         logoUrl: clients.logoUrl,
         primaryColor: clients.primaryColor,
+        privacyPolicyUrl: clients.privacyPolicyUrl,
         clientActive: clients.isActive,
       })
       .from(responsibles)
@@ -265,6 +268,7 @@ export class AuthService implements AuthServiceContract {
         branding: {
           logoUrl: link.logoUrl,
           primaryColor: link.primaryColor,
+          privacyPolicyUrl: link.privacyPolicyUrl,
         },
         label: `Responsável — ${link.clientName}`,
       });

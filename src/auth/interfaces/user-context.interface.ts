@@ -8,6 +8,7 @@ export type UserContextType =
 export type TenantBranding = {
   logoUrl: string | null;
   primaryColor: string | null;
+  privacyPolicyUrl: string | null;
 };
 
 export type UserContext =

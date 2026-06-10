@@ -70,6 +70,13 @@ const baseClientShape = {
       message: 'Opcional — use cor hexadecimal (#RRGGBB).',
     },
   ),
+  privacyPolicyUrl: optionalTrimmed.refine(
+    (val) => val === undefined || /^https?:\/\/[^\s]+$/.test(val),
+    {
+      message:
+        'Opcional — se preencher, use uma URL completa com http ou https.',
+    },
+  ),
   isActive: z.boolean(),
 };
 
