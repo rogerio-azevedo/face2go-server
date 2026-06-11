@@ -15,6 +15,8 @@ import * as clientUsersQueries from '../database/queries/client-users.queries';
 import * as verificationTokensQueries from '../database/queries/verification-tokens.queries';
 import {
   clients,
+  clientMembers,
+  clientRoles,
   clientUsers,
   companies,
   companyUsers,
@@ -76,6 +78,7 @@ export class AuthService implements AuthServiceContract {
       companyUserId: null,
       clientUserId: null,
       responsibleId: null,
+      memberId: null,
     };
   }
 
@@ -91,6 +94,7 @@ export class AuthService implements AuthServiceContract {
       companyUserId: user.companyUserId ?? null,
       clientUserId: user.clientUserId ?? null,
       responsibleId: user.responsibleId ?? null,
+      memberId: user.memberId ?? null,
     };
   }
 
@@ -278,6 +282,45 @@ export class AuthService implements AuthServiceContract {
       });
     }
 
+    const memberLinks = await db
+      .select({
+        memberId: clientMembers.id,
+        clientId: clientMembers.clientId,
+        memberName: clientMembers.name,
+        roleName: clientRoles.name,
+        clientName: clients.name,
+        logoUrl: clients.logoUrl,
+        primaryColor: clients.primaryColor,
+        privacyPolicyUrl: clients.privacyPolicyUrl,
+        privacyAlias: clients.privacyAlias,
+        clientActive: clients.isActive,
+      })
+      .from(clientMembers)
+      .innerJoin(clientRoles, eq(clientMembers.roleId, clientRoles.id))
+      .innerJoin(clients, eq(clientMembers.clientId, clients.id))
+      .where(
+        and(eq(clientMembers.userId, userId), eq(clientMembers.isActive, true)),
+      );
+
+    for (const link of memberLinks) {
+      if (!link.clientActive) continue;
+      contexts.push({
+        type: 'member',
+        contextId: link.memberId,
+        memberId: link.memberId,
+        clientId: link.clientId,
+        clientName: link.clientName,
+        roleName: link.roleName,
+        branding: {
+          logoUrl: link.logoUrl,
+          primaryColor: link.primaryColor,
+          privacyPolicyUrl: link.privacyPolicyUrl,
+          privacyAlias: link.privacyAlias,
+        },
+        label: `${link.roleName} — ${link.clientName}`,
+      });
+    }
+
     if (userRow.role === 'face_user') {
       contexts.push({
         type: 'face_user',
@@ -345,6 +388,14 @@ export class AuthService implements AuthServiceContract {
           contextType: 'responsible',
           clientId: context.clientId,
           responsibleId: context.responsibleId,
+        };
+      case 'member':
+        return {
+          ...identity,
+          role: 'member',
+          contextType: 'member',
+          clientId: context.clientId,
+          memberId: context.memberId,
         };
       case 'face_user':
         return {
@@ -843,6 +894,7 @@ export class AuthService implements AuthServiceContract {
       companyUserId: payload.companyUserId ?? undefined,
       clientUserId: payload.clientUserId ?? undefined,
       responsibleId: payload.responsibleId ?? undefined,
+      memberId: payload.memberId ?? undefined,
     };
   }
 }

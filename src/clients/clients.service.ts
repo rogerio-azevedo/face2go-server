@@ -13,6 +13,7 @@ import * as clientsQueries from '../database/queries/clients.queries';
 import * as clientDisplayDevicesQueries from '../database/queries/client-display-devices.queries';
 import * as clientInviteLinksQueries from '../database/queries/client-invite-links.queries';
 import * as clientUsersQueries from '../database/queries/client-users.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import {
   createClientSchema,
@@ -267,6 +268,11 @@ export class ClientsService {
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
     });
+    await membersQueries.seedDefaultRolesForClient(
+      this.database.db,
+      created.id,
+      created.type,
+    );
     return this.omitDisplayToken(created);
   }
 

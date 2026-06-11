@@ -11,6 +11,7 @@ import {
 import { clients } from './clients';
 import { deviceSyncStatusEnum } from './registrations';
 import { responsibles } from './responsibles';
+import { clientMembers } from './members';
 
 export const vehicles = pgTable(
   'vehicles',
@@ -19,10 +20,14 @@ export const vehicles = pgTable(
     clientId: uuid('client_id')
       .notNull()
       .references(() => clients.id, { onDelete: 'cascade' }),
-    /** Condutor (responsável vinculado ao aluno): LPR resolve placa → esta pessoa. */
-    responsibleId: uuid('responsible_id')
-      .notNull()
-      .references(() => responsibles.id, { onDelete: 'cascade' }),
+    /** Condutor responsável (escola). */
+    responsibleId: uuid('responsible_id').references(() => responsibles.id, {
+      onDelete: 'cascade',
+    }),
+    /** Condutor membro (funcionário, morador etc.). */
+    memberId: uuid('member_id').references(() => clientMembers.id, {
+      onDelete: 'cascade',
+    }),
     plate: varchar('plate', { length: 10 }).notNull(),
     brand: varchar('brand', { length: 100 }).notNull(),
     model: varchar('model', { length: 100 }).notNull(),
@@ -51,5 +56,9 @@ export const vehiclesRelations = relations(vehicles, ({ one }) => ({
   responsible: one(responsibles, {
     fields: [vehicles.responsibleId],
     references: [responsibles.id],
+  }),
+  member: one(clientMembers, {
+    fields: [vehicles.memberId],
+    references: [clientMembers.id],
   }),
 }));

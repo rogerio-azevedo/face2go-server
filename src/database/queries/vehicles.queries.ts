@@ -11,7 +11,8 @@ import {
 
 import type { AppDb } from '../database.types';
 import { listHouseholdResponsibleIds } from './responsibles.queries';
-import { responsibles, vehicles } from '../schema';
+import { clientMembers, responsibles, vehicles } from '../schema';
+import { sql } from 'drizzle-orm';
 
 export type VehicleRow = typeof vehicles.$inferSelect;
 
@@ -40,6 +41,7 @@ export async function vehicleListForHousehold(
       id: vehicles.id,
       clientId: vehicles.clientId,
       responsibleId: vehicles.responsibleId,
+      memberId: vehicles.memberId,
       plate: vehicles.plate,
       brand: vehicles.brand,
       model: vehicles.model,
@@ -97,6 +99,26 @@ export async function findVehiclePlateForArrival(
   const rows = await vehicleListForHousehold(db, otherDriverIds, clientId);
   const fallback = rows[0]?.plate?.trim();
   return fallback || null;
+}
+
+export async function findVehiclePlateForMember(
+  db: AppDb,
+  memberId: string,
+  clientId: string,
+): Promise<string | null> {
+  const [own] = await db
+    .select({ plate: vehicles.plate })
+    .from(vehicles)
+    .where(
+      and(
+        eq(vehicles.clientId, clientId),
+        eq(vehicles.memberId, memberId),
+      ),
+    )
+    .orderBy(desc(vehicles.createdAt))
+    .limit(1);
+  const ownPlate = own?.plate?.trim();
+  return ownPlate || null;
 }
 
 export async function findResponsibleByPlate(
@@ -219,6 +241,7 @@ const vehicleListSelect = {
   id: vehicles.id,
   clientId: vehicles.clientId,
   responsibleId: vehicles.responsibleId,
+  memberId: vehicles.memberId,
   plate: vehicles.plate,
   brand: vehicles.brand,
   model: vehicles.model,
@@ -228,7 +251,9 @@ const vehicleListSelect = {
   lprSyncStatus: vehicles.lprSyncStatus,
   lprSyncError: vehicles.lprSyncError,
   lprSyncedAt: vehicles.lprSyncedAt,
-  driverName: responsibles.name,
+  driverName: sql<string>`coalesce(${responsibles.name}, ${clientMembers.name}, 'Condutor')`.as(
+    'driver_name',
+  ),
 };
 
 export async function countVehiclesForClient(
@@ -239,7 +264,8 @@ export async function countVehiclesForClient(
   const [row] = await db
     .select({ total: count() })
     .from(vehicles)
-    .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
     .where(vehicleClientWhere(clientId, options.search));
   return Number(row?.total ?? 0);
 }
@@ -253,7 +279,8 @@ export async function vehicleListForClient(
   const q = db
     .select(vehicleListSelect)
     .from(vehicles)
-    .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
     .where(vehicleClientWhere(clientId, options.search))
     .orderBy(desc(vehicles.createdAt));
 
@@ -342,29 +369,143 @@ export async function vehicleDeleteAllForResponsible(
     .returning({ id: vehicles.id, plate: vehicles.plate });
 }
 
+export async function vehicleListByMember(
+  db: AppDb,
+  memberId: string,
+  clientId: string,
+) {
+  return db
+    .select({
+      id: vehicles.id,
+      plate: vehicles.plate,
+    })
+    .from(vehicles)
+    .where(
+      and(eq(vehicles.memberId, memberId), eq(vehicles.clientId, clientId)),
+    );
+}
+
+export async function vehicleListForMember(
+  db: AppDb,
+  memberId: string,
+  clientId: string,
+): Promise<VehicleWithDriverRow[]> {
+  const rows = await db
+    .select(vehicleListSelect)
+    .from(vehicles)
+    .leftJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
+    .where(
+      and(eq(vehicles.clientId, clientId), eq(vehicles.memberId, memberId)),
+    )
+    .orderBy(desc(vehicles.createdAt));
+  return rows;
+}
+
+export async function findMemberByPlate(
+  db: AppDb,
+  plateNumber: string,
+  clientId: string,
+): Promise<{ id: string; name: string; photoKey: string | null } | null> {
+  const normalizedPlate = plateNumber.trim().toUpperCase();
+  if (!normalizedPlate) return null;
+
+  const [row] = await db
+    .select({
+      id: clientMembers.id,
+      name: clientMembers.name,
+      photoKey: clientMembers.photoKey,
+    })
+    .from(vehicles)
+    .innerJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
+    .where(
+      and(eq(vehicles.clientId, clientId), eq(vehicles.plate, normalizedPlate)),
+    )
+    .orderBy(desc(vehicles.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function vehicleUpdateForMember(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  memberId: string,
+  values: {
+    plate: string;
+    brand: string;
+    model: string;
+    color: string;
+  },
+) {
+  const rows = await db
+    .update(vehicles)
+    .set({
+      plate: values.plate,
+      brand: values.brand,
+      model: values.model,
+      color: values.color,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(vehicles.id, id),
+        eq(vehicles.clientId, clientId),
+        eq(vehicles.memberId, memberId),
+      ),
+    )
+    .returning();
+  return rows[0];
+}
+
+export async function vehicleDeleteForMember(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  memberId: string,
+) {
+  const rows = await db
+    .delete(vehicles)
+    .where(
+      and(
+        eq(vehicles.id, id),
+        eq(vehicles.clientId, clientId),
+        eq(vehicles.memberId, memberId),
+      ),
+    )
+    .returning({ id: vehicles.id });
+  return rows[0];
+}
+
+export async function vehicleGetMemberName(
+  db: AppDb,
+  memberId: string,
+  clientId: string,
+) {
+  const [row] = await db
+    .select({ name: clientMembers.name })
+    .from(clientMembers)
+    .where(
+      and(
+        eq(clientMembers.id, memberId),
+        eq(clientMembers.clientId, clientId),
+        eq(clientMembers.isActive, true),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export async function vehicleGetWithDriver(
   db: AppDb,
   id: string,
   clientId: string,
 ): Promise<VehicleWithDriverRow | undefined> {
   const [row] = await db
-    .select({
-      id: vehicles.id,
-      clientId: vehicles.clientId,
-      responsibleId: vehicles.responsibleId,
-      plate: vehicles.plate,
-      brand: vehicles.brand,
-      model: vehicles.model,
-      color: vehicles.color,
-      createdAt: vehicles.createdAt,
-      updatedAt: vehicles.updatedAt,
-      lprSyncStatus: vehicles.lprSyncStatus,
-      lprSyncError: vehicles.lprSyncError,
-      lprSyncedAt: vehicles.lprSyncedAt,
-      driverName: responsibles.name,
-    })
+    .select(vehicleListSelect)
     .from(vehicles)
-    .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
     .where(and(eq(vehicles.id, id), eq(vehicles.clientId, clientId)))
     .limit(1);
   return row;
@@ -414,23 +555,10 @@ export async function listVehiclesPendingLprSync(
   clientId: string,
 ): Promise<VehicleWithDriverRow[]> {
   const rows = await db
-    .select({
-      id: vehicles.id,
-      clientId: vehicles.clientId,
-      responsibleId: vehicles.responsibleId,
-      plate: vehicles.plate,
-      brand: vehicles.brand,
-      model: vehicles.model,
-      color: vehicles.color,
-      createdAt: vehicles.createdAt,
-      updatedAt: vehicles.updatedAt,
-      lprSyncStatus: vehicles.lprSyncStatus,
-      lprSyncError: vehicles.lprSyncError,
-      lprSyncedAt: vehicles.lprSyncedAt,
-      driverName: responsibles.name,
-    })
+    .select(vehicleListSelect)
     .from(vehicles)
-    .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
     .where(
       and(
         eq(vehicles.clientId, clientId),

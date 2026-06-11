@@ -8,6 +8,7 @@ import {
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { FaceSyncService } from '../face-sync/face-sync.service';
@@ -556,5 +557,154 @@ export class FaceEnrollmentService {
       throw new NotFoundException('Aluno não encontrado ou sem vínculo.');
     }
     return this.resyncStudentFromR2(clientId, studentId);
+  }
+
+  private assertMemberScope(user: JwtPayload): {
+    memberId: string;
+    clientId: string;
+  } {
+    if (user.role !== 'member' || !user.memberId || !user.clientId) {
+      throw new ForbiddenException('Acesso apenas para conta de membro.');
+    }
+    return { memberId: user.memberId, clientId: user.clientId };
+  }
+
+  private async memberFaceStatusDto(
+    memberId: string,
+    clientId: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const row = await membersQueries.getMemberWithFaceStatus(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    return {
+      photoUrl: await this.optionalPhotoUrl(row.photoKey),
+      faceId: row.faceId ?? null,
+      deviceSyncStatus: row.deviceSyncStatus ?? null,
+      deviceSyncError: row.deviceSyncError ?? null,
+      deviceSyncedAt: row.deviceSyncedAt
+        ? row.deviceSyncedAt.toISOString()
+        : null,
+    };
+  }
+
+  async getMemberMyFaceStatus(user: JwtPayload): Promise<FaceEnrollmentStatusDto> {
+    const { memberId, clientId } = this.assertMemberScope(user);
+    return this.memberFaceStatusDto(memberId, clientId);
+  }
+
+  async uploadAndSyncMemberMyFace(
+    user: JwtPayload,
+    imageBase64: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { memberId, clientId } = this.assertMemberScope(user);
+    const member = await membersQueries.getMemberById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!member) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+
+    const buffer = decodeBase64ToBuffer(imageBase64);
+    if (buffer.length < 256) {
+      throw new BadRequestException('Imagem muito pequena ou inválida.');
+    }
+    if (!(await isPortraitImageUsable(buffer))) {
+      throw new BadRequestException(
+        'Foto muito escura ou inválida. Melhore a iluminação e enquadre o rosto.',
+      );
+    }
+
+    const photoKey = `members/${clientId}/${memberId}/face.jpg`;
+    await this.r2.putObject(photoKey, buffer, 'image/jpeg');
+
+    let faceId = member.faceId ?? null;
+    if (faceId == null) {
+      faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+    }
+
+    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
+      photoKey,
+      faceId,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncedAt: null,
+      deviceSyncError: null,
+    });
+
+    const sync = await this.faceSync.syncPersonOnReaders({
+      clientId,
+      faceId,
+      name: member.name,
+      imageBuffer: buffer,
+      logContext: `member=${memberId}`,
+    });
+
+    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
+      deviceSyncStatus: sync.deviceSyncStatus,
+      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+      deviceSyncError: sync.deviceSyncError,
+    });
+
+    return {
+      photoUrl: await this.optionalPhotoUrl(photoKey),
+      faceId,
+      deviceSyncStatus: sync.deviceSyncStatus,
+      deviceSyncError: sync.deviceSyncError,
+      deviceSyncedAt:
+        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+    };
+  }
+
+  async resyncMemberMyFaceFromR2(
+    user: JwtPayload,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { memberId, clientId } = this.assertMemberScope(user);
+    const member = await membersQueries.getMemberById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!member?.photoKey || member.faceId == null) {
+      throw new BadRequestException('Sem foto cadastrada para sincronizar.');
+    }
+
+    const got = await this.r2.getObjectBytes(member.photoKey);
+    const buffer = got.buffer;
+    if (buffer.length < 256) {
+      throw new BadRequestException(
+        'Imagem armazenada inválida ou muito pequena.',
+      );
+    }
+
+    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncedAt: null,
+      deviceSyncError: null,
+    });
+
+    const sync = await this.faceSync.syncPersonOnReaders({
+      clientId,
+      faceId: member.faceId,
+      name: member.name,
+      imageBuffer: buffer,
+      logContext: `member-resync=${memberId}`,
+    });
+
+    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
+      deviceSyncStatus: sync.deviceSyncStatus,
+      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+      deviceSyncError: sync.deviceSyncError,
+    });
+
+    return this.memberFaceStatusDto(memberId, clientId);
   }
 }

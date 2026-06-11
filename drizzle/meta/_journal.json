@@ -309,6 +309,27 @@
       "when": 1779120000000,
       "tag": "0043_client_privacy_alias",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1779130000000,
+      "tag": "0044_situacao_matricula_locked",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1779140000000,
+      "tag": "0045_client_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1779150000000,
+      "tag": "0046_client_members_user_fk_fix",
+      "breakpoints": true
     }
   ]
 }

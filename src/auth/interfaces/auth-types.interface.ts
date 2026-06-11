@@ -13,6 +13,7 @@ export type AuthenticatedUser = {
   companyUserId?: string;
   clientUserId?: string;
   responsibleId?: string;
+  memberId?: string;
 };
 
 export type IdentityUser = {

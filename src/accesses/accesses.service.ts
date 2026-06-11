@@ -8,7 +8,10 @@ import { Types } from 'mongoose';
 
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
+import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
+import * as responsiblesQueries from '../database/queries/responsibles.queries';
+import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
 import type { VideoEvent } from '../face-listener/face-listener.types';
@@ -184,15 +187,58 @@ export class AccessesService {
     let personName: string | null = null;
     try {
       personName =
-        await registrationsQueries.findApprovedRegistrationNameByFaceId(
+        await responsiblesQueries.findResponsibleByFaceIdAndClientId(
+          this.database.db,
+          faceIdNum,
+          ctx.clientId,
+        ).then((r) => r?.name ?? null);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Lookup responsible personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    if (!personName) {
+      try {
+        personName = await studentsQueries.findStudentByFaceIdAndClientId(
+          this.database.db,
+          faceIdNum,
+          ctx.clientId,
+        ).then((s) => s?.name ?? null);
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Lookup student personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    if (!personName) {
+      try {
+        personName = await membersQueries.findMemberNameByFaceId(
           this.database.db,
           ctx.clientId,
           faceIdNum,
         );
-    } catch (err: unknown) {
-      this.logger.warn(
-        `Lookup personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
-      );
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Lookup member personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    if (!personName) {
+      try {
+        personName =
+          await registrationsQueries.findApprovedRegistrationNameByFaceId(
+            this.database.db,
+            ctx.clientId,
+            faceIdNum,
+          );
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Lookup personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
     if (!personName) {

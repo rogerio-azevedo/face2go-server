@@ -4,6 +4,7 @@ export type JwtContextType =
   | 'company'
   | 'client'
   | 'responsible'
+  | 'member'
   | 'face_user';
 
 export interface JwtPayload {
@@ -18,4 +19,6 @@ export interface JwtPayload {
   clientUserId?: string | null;
   /** Responsável (escola); presente quando `role === 'responsible'`. */
   responsibleId?: string | null;
+  /** Membro (funcionário, morador etc.); presente quando `role === 'member'`. */
+  memberId?: string | null;
 }

@@ -22,6 +22,10 @@ import {
   type ListPaginationParams,
 } from '../common/pagination';
 import {
+  createMemberVehicleSchema,
+  updateMemberVehicleSchema,
+} from '../validation/members.schema';
+import {
   createVehicleSchema,
   updateVehicleSchema,
 } from '../validation/vehicles.schema';
@@ -213,7 +217,7 @@ export class VehiclesService {
       }
       const driver = await responsiblesQueries.getResponsibleById(
         this.database.db,
-        row.responsibleId,
+        row.responsibleId!,
         user.clientId,
       );
       const driverName = driver?.name ?? '';
@@ -258,7 +262,7 @@ export class VehiclesService {
         id,
         user.clientId,
       );
-      if (!prev || !household.includes(prev.responsibleId)) {
+      if (!prev?.responsibleId || !household.includes(prev.responsibleId)) {
         throw new NotFoundException('Veículo não encontrado.');
       }
 
@@ -280,7 +284,7 @@ export class VehiclesService {
       }
       const driver = await responsiblesQueries.getResponsibleById(
         this.database.db,
-        row.responsibleId,
+        row.responsibleId!,
         user.clientId,
       );
 
@@ -328,7 +332,7 @@ export class VehiclesService {
       id,
       user.clientId,
     );
-    if (!v || !household.includes(v.responsibleId)) {
+    if (!v?.responsibleId || !household.includes(v.responsibleId)) {
       throw new NotFoundException('Veículo não encontrado.');
     }
     return this.lprPlateSync.syncVehiclePlateOnCameras({
@@ -349,7 +353,7 @@ export class VehiclesService {
       id,
       user.clientId,
     );
-    if (!existing || !household.includes(existing.responsibleId)) {
+    if (!existing?.responsibleId || !household.includes(existing.responsibleId)) {
       throw new NotFoundException('Veículo não encontrado.');
     }
 
@@ -583,6 +587,208 @@ export class VehiclesService {
       this.database.db,
       id,
       clientId,
+    );
+    if (!deleted) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+  }
+
+  private assertMemberJwt(user: JwtPayload): asserts user is JwtPayload & {
+    clientId: string;
+    memberId: string;
+  } {
+    if (user.role !== 'member' || !user.clientId || !user.memberId) {
+      throw new ForbiddenException('Acesso apenas para conta de membro.');
+    }
+  }
+
+  async listForMember(user: JwtPayload): Promise<VehicleWithDriverRow[]> {
+    this.assertMemberJwt(user);
+    return vehicleQueries.vehicleListForMember(
+      this.database.db,
+      user.memberId,
+      user.clientId,
+    );
+  }
+
+  async createFromMember(
+    user: JwtPayload,
+    body: unknown,
+  ): Promise<VehicleWithDriverRow> {
+    this.assertMemberJwt(user);
+    const parsed = createMemberVehicleSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const d = parsed.data;
+
+    const member = await vehicleQueries.vehicleGetMemberName(
+      this.database.db,
+      user.memberId,
+      user.clientId,
+    );
+    if (!member) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+
+    try {
+      const row = await vehicleQueries.vehicleInsert(this.database.db, {
+        clientId: user.clientId,
+        memberId: user.memberId,
+        plate: d.plate,
+        brand: d.brand,
+        model: d.model,
+        color: d.color,
+      });
+      if (!row) {
+        throw new BadRequestException('Não foi possível cadastrar o veículo.');
+      }
+      return this.syncLprForVehicleRow(
+        { ...row, driverName: member.name },
+        user.clientId,
+        member.name,
+        `create member vehicle=${row.id}`,
+      );
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new BadRequestException(
+          'Já existe um veículo com esta placa cadastrado neste cliente.',
+        );
+      }
+      throw err;
+    }
+  }
+
+  async updateFromMember(
+    user: JwtPayload,
+    id: string,
+    body: unknown,
+  ): Promise<VehicleWithDriverRow> {
+    this.assertMemberJwt(user);
+    const parsed = updateMemberVehicleSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const d = parsed.data;
+    if (
+      d.plate === undefined &&
+      d.brand === undefined &&
+      d.model === undefined &&
+      d.color === undefined
+    ) {
+      throw new BadRequestException('Nada para atualizar.');
+    }
+
+    const prev = await vehicleQueries.vehicleGetWithDriver(
+      this.database.db,
+      id,
+      user.clientId,
+    );
+    if (!prev || prev.memberId !== user.memberId) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+
+    const member = await vehicleQueries.vehicleGetMemberName(
+      this.database.db,
+      user.memberId,
+      user.clientId,
+    );
+    if (!member) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+
+    const updated = await vehicleQueries.vehicleUpdateForMember(
+      this.database.db,
+      id,
+      user.clientId,
+      user.memberId,
+      {
+        plate: d.plate ?? prev.plate,
+        brand: d.brand ?? prev.brand,
+        model: d.model ?? prev.model,
+        color: d.color ?? prev.color,
+      },
+    );
+    if (!updated) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+
+    const plateChanged =
+      normalizeVehiclePlateCmp(updated.plate) !==
+      normalizeVehiclePlateCmp(prev.plate);
+
+    if (plateChanged) {
+      return this.syncLprAfterPlateChange(
+        { ...updated, driverName: member.name },
+        user.clientId,
+        prev.plate,
+        member.name,
+        `update member vehicle=${id}`,
+      );
+    }
+
+    return { ...updated, driverName: member.name };
+  }
+
+  async syncForMember(
+    user: JwtPayload,
+    id: string,
+  ): Promise<VehicleWithDriverRow> {
+    this.assertMemberJwt(user);
+    const row = await vehicleQueries.vehicleGetWithDriver(
+      this.database.db,
+      id,
+      user.clientId,
+    );
+    if (!row || row.memberId !== user.memberId) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+    const member = await vehicleQueries.vehicleGetMemberName(
+      this.database.db,
+      user.memberId,
+      user.clientId,
+    );
+    if (!member) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    return this.syncLprForVehicleRow(
+      row,
+      user.clientId,
+      member.name,
+      `sync member vehicle=${id}`,
+    );
+  }
+
+  async deleteForMember(user: JwtPayload, id: string): Promise<void> {
+    this.assertMemberJwt(user);
+    const existing = await vehicleQueries.vehicleGetWithDriver(
+      this.database.db,
+      id,
+      user.clientId,
+    );
+    if (!existing || existing.memberId !== user.memberId) {
+      throw new NotFoundException('Veículo não encontrado.');
+    }
+
+    void this.lprPlateSync
+      .removePlateFromAllLprCameras(
+        user.clientId,
+        existing.plate,
+        `delete member vehicle=${id}`,
+      )
+      .catch((e) =>
+        this.log.warn(
+          `LPR remove ao excluir veículo ${id}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        ),
+      );
+
+    const deleted = await vehicleQueries.vehicleDeleteForMember(
+      this.database.db,
+      id,
+      user.clientId,
+      user.memberId,
     );
     if (!deleted) {
       throw new NotFoundException('Veículo não encontrado.');

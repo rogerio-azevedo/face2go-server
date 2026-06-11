@@ -13,6 +13,7 @@ import * as clientsQueries from '../database/queries/clients.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { DatabaseService } from '../database/database.service';
 import { PermissionsService } from '../permissions/permissions.service';
+import { MembersService } from '../members/members.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { zodFirstMessage } from '../validation/zod-utils';
@@ -34,6 +35,7 @@ export class RegistrationsAdminService {
     private readonly permissionsService: PermissionsService,
     private readonly r2: R2StorageService,
     private readonly faceSync: FaceSyncService,
+    private readonly membersService: MembersService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -196,6 +198,14 @@ export class RegistrationsAdminService {
     registrationId: string,
     decidedByUserId: string,
   ) {
+    const client = await clientsQueries.getClientByIdOnly(
+      this.database.db,
+      clientId,
+    );
+    if (!client) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+
     const updated = await registrationsQueries.approveRegistration(
       this.database.db,
       registrationId,
@@ -234,6 +244,21 @@ export class RegistrationsAdminService {
               : 'Erro ao sincronizar face com os leitores.';
           this.logger.warn(`sync pós-aprovação reg=${registrationId}: ${msg}`);
         });
+    }
+
+    if (client.type !== 'school') {
+      try {
+        await this.membersService.upsertFromApprovedRegistration(
+          rowOut,
+          client.type,
+        );
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Falha ao criar membro pós-aprovação reg=${registrationId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
 
     return this.mapRow(rowOut);

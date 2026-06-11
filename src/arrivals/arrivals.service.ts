@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import * as displayDeviceQueries from '../database/queries/client-display-devices.queries';
 import type { ClientDisplayDeviceType } from '../database/queries/client-display-devices.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
@@ -372,6 +373,22 @@ export class ArrivalsService {
           personPhotoUrl = await this.presignPhoto(student.photoKey);
           students = [];
         } else {
+          const member = await membersQueries.findMemberByFaceIdAndClientId(
+            this.database.db,
+            payload.faceId,
+            payload.clientId,
+          );
+          if (member) {
+            kind = 'responsible';
+            personName = member.name;
+            personPhotoUrl = await this.presignPortraitPhoto(member.photoKey);
+            students = [];
+            vehiclePlate = await vehiclesQueries.findVehiclePlateForMember(
+              this.database.db,
+              member.id,
+              payload.clientId,
+            );
+          } else {
           const pickupAuths =
             await pickupQueries.pickupAuthFindActiveByGuestFaceId(
               this.database.db,
@@ -398,6 +415,7 @@ export class ArrivalsService {
               personName = payload.personName ?? 'Visitante';
             }
             students = [];
+          }
           }
         }
       }
@@ -471,6 +489,29 @@ export class ArrivalsService {
           students,
         };
 
+        this.emitToHub(payload.clientId, out);
+        return;
+      }
+
+      const member = await vehiclesQueries.findMemberByPlate(
+        this.database.db,
+        payload.plateNumber,
+        payload.clientId,
+      );
+
+      if (member) {
+        const out: ArrivalSsePayload = {
+          type: 'arrival',
+          kind: 'responsible',
+          accessId: payload.accessId,
+          responsibleId: null,
+          personName: member.name,
+          personPhotoUrl: await this.presignPortraitPhoto(member.photoKey),
+          readerName: payload.cameraName,
+          eventDate: payload.snapTime?.toISOString() ?? null,
+          vehiclePlate: payload.plateNumber,
+          students: [],
+        };
         this.emitToHub(payload.clientId, out);
         return;
       }
