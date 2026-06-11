@@ -161,4 +161,17 @@ export class StudentsController {
   ) {
     return this.studentsService.update(user, clientId, studentId, body);
   }
+
+  @Delete(':studentId')
+  @Roles('company_admin')
+  @ApiOperation({
+    summary: 'Excluir aluno (remove face dos leitores e vínculos)',
+  })
+  deleteStudent(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.studentsService.delete(user, clientId, studentId);
+  }
 }

@@ -198,4 +198,18 @@ export class ResponsiblesController {
   ) {
     return this.responsiblesService.update(user, clientId, responsibleId, body);
   }
+
+  @Delete(':responsibleId')
+  @Roles('company_admin')
+  @ApiOperation({
+    summary:
+      'Excluir responsável (remove face, placas, veículos e vínculos)',
+  })
+  deleteResponsible(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+  ) {
+    return this.responsiblesService.delete(user, clientId, responsibleId);
+  }
 }

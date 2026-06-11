@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -487,5 +488,53 @@ export class StudentsService {
       deviceSyncStatus: sync.deviceSyncStatus,
       deviceSyncError: sync.deviceSyncError,
     };
+  }
+
+  async delete(
+    user: JwtPayload,
+    clientId: string,
+    studentId: string,
+  ): Promise<{ removed: true; id: string }> {
+    if (user.role !== 'company_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+
+    const student = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!student) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+
+    const faceId = student.faceId;
+    const logContext = `delete-student=${studentId}`;
+
+    if (faceId != null) {
+      await this.faceSync.removePersonFromReaders({
+        clientId,
+        faceId,
+        logContext,
+        requireAll: true,
+      });
+    }
+
+    await this.database.db.transaction(async (tx) => {
+      await studentsQueries.deleteAllStudentClassLinks(tx, studentId);
+      await studentsQueries.deleteAllStudentResponsibleLinks(tx, studentId);
+      await studentsQueries.updateStudent(tx, studentId, clientId, {
+        isActive: false,
+        faceId: null,
+        photoKey: null,
+        deviceSyncStatus: null,
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      });
+    });
+
+    return { removed: true, id: studentId };
   }
 }

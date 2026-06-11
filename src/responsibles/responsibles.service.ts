@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,10 +12,12 @@ import { eq } from 'drizzle-orm';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
+import * as vehicleQueries from '../database/queries/vehicles.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
@@ -40,6 +43,7 @@ export class ResponsiblesService {
     private readonly r2Storage: R2StorageService,
     private readonly faceSync: FaceSyncService,
     private readonly accessTimeZone: AccessTimeZoneService,
+    private readonly lprPlateSync: LprPlateSyncService,
   ) {}
 
   async list(
@@ -541,5 +545,89 @@ export class ResponsiblesService {
       deviceSyncStatus: sync.deviceSyncStatus,
       deviceSyncError: sync.deviceSyncError,
     };
+  }
+
+  async delete(
+    user: JwtPayload,
+    clientId: string,
+    responsibleId: string,
+  ): Promise<{ removed: true; id: string }> {
+    if (user.role !== 'company_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+
+    const target = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!target) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    const targetVehicles = await vehicleQueries.vehicleListByResponsible(
+      this.database.db,
+      target.id,
+      clientId,
+    );
+
+    const faceId = target.faceId;
+    const logContext = `delete-responsible=${target.id}`;
+
+    if (faceId != null) {
+      await this.faceSync.removePersonFromReaders({
+        clientId,
+        faceId,
+        logContext,
+        requireAll: true,
+      });
+    }
+
+    for (const vehicle of targetVehicles) {
+      await this.lprPlateSync.removePlateFromAllLprCameras(
+        clientId,
+        vehicle.plate,
+        logContext,
+        { requireAll: true },
+      );
+    }
+
+    await this.database.db.transaction(async (tx) => {
+      await responsiblesQueries.deleteAllResponsibleStudentLinks(
+        tx,
+        target.id,
+      );
+      await vehicleQueries.vehicleDeleteAllForResponsible(
+        tx,
+        target.id,
+        clientId,
+      );
+      await responsiblesQueries.updateResponsible(tx, target.id, clientId, {
+        isActive: false,
+        pushToken: null,
+        faceId: null,
+        photoKey: null,
+        deviceSyncStatus: null,
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      });
+      if (target.userId) {
+        const remaining =
+          await responsiblesQueries.countActiveResponsiblesByUserId(
+            tx,
+            target.userId,
+          );
+        if (remaining === 0) {
+          await tx
+            .update(users)
+            .set({ isActive: false })
+            .where(eq(users.id, target.userId));
+        }
+      }
+    });
+
+    return { removed: true, id: target.id };
   }
 }

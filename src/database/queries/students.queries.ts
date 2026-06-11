@@ -422,3 +422,20 @@ export async function deactivateStudentsNotInList(
     .returning({ id: students.id });
   return rows.length;
 }
+
+export async function deleteAllStudentClassLinks(db: AppDb, studentId: string) {
+  return db
+    .delete(studentClasses)
+    .where(eq(studentClasses.studentId, studentId))
+    .returning({ id: studentClasses.id });
+}
+
+export async function deleteAllStudentResponsibleLinks(
+  db: AppDb,
+  studentId: string,
+) {
+  return db
+    .delete(responsibleStudents)
+    .where(eq(responsibleStudents.studentId, studentId))
+    .returning({ id: responsibleStudents.id });
+}
