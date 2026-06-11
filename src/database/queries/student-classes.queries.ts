@@ -95,6 +95,7 @@ export type UpsertStudentClassLinkInput = {
     | 'transferred'
     | 'cancelled'
     | 'pre_enrolled'
+    | 'locked'
     | null;
   isActive: boolean;
 };

@@ -325,27 +325,36 @@ export type UpsertStudentByEnrollmentInput = {
     | 'transferred'
     | 'cancelled'
     | 'pre_enrolled'
+    | 'locked'
     | null;
   isActive: boolean;
+};
+
+export type UpsertStudentByEnrollmentResult = {
+  row: typeof students.$inferSelect;
+  created: boolean;
+  /** `null` quando o aluno foi criado neste upsert. */
+  wasActive: boolean | null;
 };
 
 export async function upsertStudentByEnrollment(
   db: AppDb,
   input: UpsertStudentByEnrollmentInput,
-): Promise<{ row: typeof students.$inferSelect; created: boolean }> {
+): Promise<UpsertStudentByEnrollmentResult> {
   const existing = await findStudentByEnrollment(
     db,
     input.clientId,
     input.enrollment,
   );
   if (existing) {
+    const wasActive = existing.isActive;
     const row = await updateStudent(db, existing.id, input.clientId, {
       name: input.name,
       birthDate: input.birthDate,
       situacaoMatricula: input.situacaoMatricula,
       isActive: input.isActive,
     });
-    return { row: row, created: false };
+    return { row: row, created: false, wasActive };
   }
   const row = await insertStudent(db, {
     clientId: input.clientId,
@@ -355,7 +364,7 @@ export async function upsertStudentByEnrollment(
     situacaoMatricula: input.situacaoMatricula ?? null,
     isActive: input.isActive,
   });
-  return { row: row, created: true };
+  return { row: row, created: true, wasActive: null };
 }
 
 export type StudentForGlobalSyncRow = {
@@ -396,18 +405,26 @@ export async function listStudentsForGlobalSync(
   );
 }
 
+export type DeactivateStudentsNotInListResult = {
+  count: number;
+  enrollments: string[];
+};
+
 export async function deactivateStudentsNotInList(
   db: AppDb,
   clientId: string,
   activeEnrollments: string[],
-): Promise<number> {
+): Promise<DeactivateStudentsNotInListResult> {
   if (activeEnrollments.length === 0) {
     const rows = await db
       .update(students)
       .set({ isActive: false, updatedAt: new Date() })
       .where(and(eq(students.clientId, clientId), eq(students.isActive, true)))
-      .returning({ id: students.id });
-    return rows.length;
+      .returning({ id: students.id, enrollment: students.enrollment });
+    return {
+      count: rows.length,
+      enrollments: rows.map((r) => r.enrollment),
+    };
   }
   const rows = await db
     .update(students)
@@ -419,8 +436,11 @@ export async function deactivateStudentsNotInList(
         notInArray(students.enrollment, activeEnrollments),
       ),
     )
-    .returning({ id: students.id });
-  return rows.length;
+    .returning({ id: students.id, enrollment: students.enrollment });
+  return {
+    count: rows.length,
+    enrollments: rows.map((r) => r.enrollment),
+  };
 }
 
 export async function deleteAllStudentClassLinks(db: AppDb, studentId: string) {

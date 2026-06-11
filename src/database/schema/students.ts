@@ -22,6 +22,7 @@ export const situacaoMatriculaEnum = pgEnum('situacao_matricula', [
   'transferred',
   'cancelled',
   'pre_enrolled',
+  'locked',
 ]);
 
 /** Janela/turnos de acesso opcionais por aluno (além dos turnos das turmas). */

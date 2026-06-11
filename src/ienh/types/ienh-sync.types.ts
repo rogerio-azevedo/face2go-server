@@ -8,6 +8,12 @@ export interface IenhSyncResult {
   studentsCreated: number;
   studentsUpdated: number;
   studentsDeactivated: number;
+  /** Desativados via upsert (STATUSACESSO = Bloqueado). */
+  studentsDeactivatedByStatus: number;
+  /** Desativados por ausência no snapshot (deactivateStudentsNotInList). */
+  studentsDeactivatedByAbsence: number;
+  /** Matrículas desativadas por ausência no snapshot (diagnóstico). */
+  deactivatedByAbsenceEnrollments: string[];
   responsiblesCreated: number;
   responsiblesUpdated: number;
   accountsCreated: number;
@@ -32,4 +38,5 @@ export interface IenhSnapshotInfo {
   recordCount: number;
   fetchedAt: string;
   perlet: string;
+  perlets?: string[];
 }

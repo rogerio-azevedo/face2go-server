@@ -35,7 +35,10 @@ export interface TotvsIenhFetchParams {
 
 export interface TotvsIenhSnapshotMeta {
   fetchedAt: string;
+  /** PERLET informado pelo usuário (ex.: "2026"). */
   perlet: string;
+  /** PERLETs efetivamente buscados na API (ex.: ["2026", "2026/1", "2026/2"]). */
+  perlets?: string[];
   filiais: number[];
   niveis: number[];
   requests: TotvsIenhFetchParams[];

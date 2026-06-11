@@ -30,8 +30,10 @@ import {
   normalizeEnrollment,
   normalizePhone,
   parsePerletYear,
+  perletMergePriority,
   parseTotvsDate,
   resolveFilialFromRecord,
+  resolvePerlets,
 } from './ienh.mapper';
 import { IenhService } from './ienh.service';
 import type {
@@ -80,6 +82,7 @@ export class IenhSyncService {
     }
 
     const perlet = parsed.data.perlet ?? String(new Date().getFullYear());
+    const perlets = resolvePerlets(perlet);
     const filialClientMap = await this.buildFilialClientMap(companyId);
     if (Object.keys(filialClientMap).length === 0) {
       throw new BadRequestException(
@@ -94,37 +97,23 @@ export class IenhSyncService {
     emit?.({
       type: 'start',
       perlet,
+      perlets,
       totalFiliais: filiais.length,
     });
 
     const started = Date.now();
-    const tagged: TotvsIenhRecordWithFilial[] = [];
-
-    for (const filial of filiais) {
-      emit?.({
-        type: 'filial_start',
-        filial,
-        filialName: IENH_FILIAL_LABELS[filial] ?? `Filial ${filial}`,
-      });
-
-      const batch = await this.ienhService.fetchFilialRecordsTagged({
-        perlet,
-        filial,
-        niveis: parsed.data.niveis,
-      });
-      tagged.push(...batch);
-
-      emit?.({
-        type: 'filial_fetched',
-        filial,
-        count: batch.length,
-      });
-    }
+    const tagged = await this.fetchAndMergeTaggedRecords({
+      filiais,
+      perlets,
+      niveis: parsed.data.niveis,
+      emit,
+    });
 
     const niveis = parsed.data.niveis ?? [1, 2, 3];
     const saved = await this.ienhService.persistTaggedSnapshot({
       tagged,
       perlet,
+      perlets,
       filiais,
       niveis,
     });
@@ -210,6 +199,7 @@ export class IenhSyncService {
           recordCount: snap.meta.recordCount,
           fetchedAt: snap.meta.fetchedAt,
           perlet: snap.meta.perlet,
+          ...(snap.meta.perlets?.length ? { perlets: snap.meta.perlets } : {}),
         });
       } catch {
         // ignora arquivos corrompidos
@@ -265,6 +255,9 @@ export class IenhSyncService {
       studentsCreated: 0,
       studentsUpdated: 0,
       studentsDeactivated: 0,
+      studentsDeactivatedByStatus: 0,
+      studentsDeactivatedByAbsence: 0,
+      deactivatedByAbsenceEnrollments: [],
       responsiblesCreated: 0,
       responsiblesUpdated: 0,
       accountsCreated: 0,
@@ -337,6 +330,8 @@ export class IenhSyncService {
     emit?.({ type: 'deactivate_start' });
 
     const syncedClientIds = new Set(Object.values(filialClientMap));
+    const clientToFilial = this.buildClientToFilialMap(filialClientMap);
+
     for (const clientId of syncedClientIds) {
       const merged =
         await schoolClassQueries.mergeDuplicateSchoolClassesForClient(
@@ -346,14 +341,36 @@ export class IenhSyncService {
       result.classesMerged += merged.classesRemoved;
     }
 
-    for (const [clientId, enrollments] of enrollmentsByClient) {
+    for (const clientId of syncedClientIds) {
+      const enrollments = enrollmentsByClient.get(clientId) ?? new Set<string>();
       const deactivated = await studentsQueries.deactivateStudentsNotInList(
         this.database.db,
         clientId,
         [...enrollments],
       );
-      result.studentsDeactivated += deactivated;
+      result.studentsDeactivatedByAbsence += deactivated.count;
+      result.deactivatedByAbsenceEnrollments.push(...deactivated.enrollments);
+
+      if (deactivated.count > 0) {
+        const filial = clientToFilial[clientId];
+        const filialLabel =
+          filial != null
+            ? (IENH_FILIAL_LABELS[filial] ?? `Filial ${filial}`)
+            : clientId;
+        const sample = deactivated.enrollments.slice(0, 20).join(', ');
+        const suffix =
+          deactivated.enrollments.length > 20
+            ? ` … (+${deactivated.enrollments.length - 20})`
+            : '';
+        this.logger.warn(
+          `IENH sync: ${deactivated.count} aluno(s) desativados por ausência no snapshot ` +
+            `(${filialLabel}): ${sample}${suffix}`,
+        );
+      }
     }
+
+    result.studentsDeactivated =
+      result.studentsDeactivatedByStatus + result.studentsDeactivatedByAbsence;
 
     const studentCleanupEntries = [...activeClassIdsByStudent.entries()];
     let cleanupProcessed = 0;
@@ -391,7 +408,8 @@ export class IenhSyncService {
     this.logger.log(
       `IENH sync: ${result.processedRecords} registros, ` +
         `${result.studentsCreated} alunos criados, ${result.studentsUpdated} atualizados, ` +
-        `${result.studentsDeactivated} desativados, ` +
+        `${result.studentsDeactivated} desativados ` +
+        `(${result.studentsDeactivatedByStatus} por status, ${result.studentsDeactivatedByAbsence} por ausência), ` +
         `${result.classLinksCreated} vínculos turma criados, ` +
         `${result.classLinksDeactivated} vínculos turma desativados, ` +
         `${result.classLinksDeduped} vínculos duplicados removidos, ` +
@@ -399,6 +417,86 @@ export class IenhSyncService {
     );
 
     return result;
+  }
+
+  private buildClientToFilialMap(
+    filialClientMap: Record<number, string>,
+  ): Record<string, number> {
+    const map: Record<string, number> = {};
+    for (const [filial, clientId] of Object.entries(filialClientMap)) {
+      map[clientId] = Number(filial);
+    }
+    return map;
+  }
+
+  private async fetchAndMergeTaggedRecords(args: {
+    filiais: number[];
+    perlets: string[];
+    niveis?: number[];
+    emit?: IenhSyncEmit;
+  }): Promise<TotvsIenhRecordWithFilial[]> {
+    const merged = new Map<
+      string,
+      { item: TotvsIenhRecordWithFilial; perlet: string }
+    >();
+
+    for (const filial of args.filiais) {
+      args.emit?.({
+        type: 'filial_start',
+        filial,
+        filialName: IENH_FILIAL_LABELS[filial] ?? `Filial ${filial}`,
+      });
+
+      let filialTotal = 0;
+
+      for (const perlet of args.perlets) {
+        args.emit?.({
+          type: 'perlet_start',
+          filial,
+          perlet,
+        });
+
+        const batch = await this.ienhService.fetchFilialRecordsTagged({
+          perlet,
+          filial,
+          niveis: args.niveis,
+        });
+
+        args.emit?.({
+          type: 'perlet_fetched',
+          filial,
+          perlet,
+          count: batch.length,
+        });
+
+        for (const item of batch) {
+          const enrollment = normalizeEnrollment(item.record.CODALUNO);
+          if (!enrollment) continue;
+
+          const key = `${item.filial}:${enrollment}`;
+          const existing = merged.get(key);
+          if (
+            !existing ||
+            perletMergePriority(perlet) <
+              perletMergePriority(existing.perlet)
+          ) {
+            merged.set(key, { item, perlet });
+          }
+        }
+
+        filialTotal += batch.length;
+      }
+
+      args.emit?.({
+        type: 'filial_fetched',
+        filial,
+        count: filialTotal,
+        mergedCount: [...merged.values()].filter((e) => e.item.filial === filial)
+          .length,
+      });
+    }
+
+    return [...merged.values()].map((entry) => entry.item);
   }
 
   private async runWithConcurrency<T>(
@@ -515,6 +613,8 @@ export class IenhSyncService {
     );
     if (studentUpsert.created) {
       result.studentsCreated += 1;
+    } else if (studentUpsert.wasActive === true && !studentIsActive) {
+      result.studentsDeactivatedByStatus += 1;
     } else {
       result.studentsUpdated += 1;
     }

@@ -117,6 +117,7 @@ export class IenhService {
   async persistTaggedSnapshot(args: {
     tagged: TotvsIenhRecordWithFilial[];
     perlet: string;
+    perlets?: string[];
     filiais: number[];
     niveis: number[];
     requests?: TotvsIenhFetchParams[];
@@ -126,6 +127,7 @@ export class IenhService {
     const file = await this.persistSnapshot({
       fetchedAt,
       perlet: args.perlet,
+      perlets: args.perlets,
       filiais: args.filiais,
       niveis: args.niveis,
       requests: args.requests ?? [],
@@ -172,6 +174,7 @@ export class IenhService {
   private async persistSnapshot(args: {
     fetchedAt: Date;
     perlet: string;
+    perlets?: string[];
     filiais: number[];
     niveis: number[];
     requests: TotvsIenhFetchParams[];
@@ -189,6 +192,7 @@ export class IenhService {
       meta: {
         fetchedAt: args.fetchedAt.toISOString(),
         perlet: args.perlet,
+        ...(args.perlets?.length ? { perlets: args.perlets } : {}),
         filiais: args.filiais,
         niveis: args.niveis,
         requests: args.requests,
