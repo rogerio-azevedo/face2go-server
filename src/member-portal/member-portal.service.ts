@@ -90,6 +90,14 @@ export class MemberPortalService {
       row.faceId,
       page,
       limit,
+      row.faceId != null
+        ? new Map([
+            [
+              row.faceId,
+              { name: row.name, photoKey: row.photoKey ?? null },
+            ],
+          ])
+        : undefined,
     );
   }
 

@@ -7,14 +7,15 @@ export class SimulateFaceAccessDto {
   clientId!: string;
 
   @ApiProperty({
-    description: 'ID da pessoa (`students.id` ou `responsibles.id`)',
+    description:
+      'ID da pessoa (`students.id`, `responsibles.id` ou `client_members.id`)',
   })
   @IsUUID()
   personId!: string;
 
-  @ApiProperty({ enum: ['student', 'responsible'] })
-  @IsIn(['student', 'responsible'])
-  personType!: 'student' | 'responsible';
+  @ApiProperty({ enum: ['student', 'responsible', 'member'] })
+  @IsIn(['student', 'responsible', 'member'])
+  personType!: 'student' | 'responsible' | 'member';
 
   @ApiProperty({
     required: false,

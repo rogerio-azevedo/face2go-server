@@ -16,6 +16,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as readersQueries from '../database/queries/readers.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
@@ -122,12 +123,14 @@ export class SimulateService {
   ): Promise<{
     students: SimulatePersonDto[];
     responsibles: SimulatePersonDto[];
+    members: SimulatePersonDto[];
   }> {
     await this.resolveClientForUser(user, clientId);
 
-    const [students, responsibles] = await Promise.all([
+    const [students, responsibles, members] = await Promise.all([
       studentsQueries.listStudentsByClient(this.database.db, clientId),
       responsiblesQueries.listResponsiblesByClient(this.database.db, clientId),
+      membersQueries.listMembersByClientWithRole(this.database.db, clientId),
     ]);
 
     const studentsOut: SimulatePersonDto[] = await Promise.all(
@@ -148,9 +151,19 @@ export class SimulateService {
       })),
     );
 
+    const membersOut: SimulatePersonDto[] = await Promise.all(
+      members.map(async (m) => ({
+        id: m.id,
+        name: m.name,
+        photoUrl: await this.presignPhoto(m.photoKey),
+        hasFace: m.faceId != null,
+      })),
+    );
+
     return {
       students: studentsOut,
       responsibles: responsiblesOut,
+      members: membersOut,
     };
   }
 
@@ -232,36 +245,102 @@ export class SimulateService {
       return { accessId: String(doc._id) };
     }
 
-    const responsible = await responsiblesQueries.getResponsibleById(
+    if (dto.personType === 'responsible') {
+      const responsible = await responsiblesQueries.getResponsibleById(
+        this.database.db,
+        dto.personId,
+        dto.clientId,
+      );
+      if (!responsible) {
+        throw new NotFoundException('Responsável não encontrado.');
+      }
+      if (responsible.faceId == null) {
+        throw new BadRequestException(
+          'Este responsável não possui face cadastrada.',
+        );
+      }
+
+      let personName: string | null = responsible.name;
+      try {
+        const fromRegistration =
+          await registrationsQueries.findApprovedRegistrationNameByFaceId(
+            this.database.db,
+            dto.clientId,
+            responsible.faceId,
+          );
+        personName = fromRegistration ?? responsible.name;
+      } catch {
+        personName = responsible.name;
+      }
+
+      const snapKey =
+        typeof responsible.photoKey === 'string' && responsible.photoKey.trim()
+          ? responsible.photoKey.trim()
+          : null;
+
+      const doc = await this.accessModel.create({
+        companyId: client.companyId,
+        readerId: simReader.mongoReaderId,
+        readerName: simReader.readerName,
+        clientId: dto.clientId,
+        clientName: client.name,
+        userId: responsible.faceId,
+        personName,
+        eventCode: 'Simulated',
+        eventAction: 'pulse',
+        similarity: 1,
+        eventDate: new Date(),
+        snapPath: null,
+        snapR2Key: snapKey,
+      });
+
+      this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
+        accessId: String(doc._id),
+        faceId: responsible.faceId,
+        clientId: dto.clientId,
+        personName,
+        readerId: simReader.mongoReaderId,
+        readerName: simReader.readerName,
+        readerDirection: simReader.readerDirection,
+        eventDate:
+          doc.eventDate instanceof Date
+            ? doc.eventDate
+            : doc.eventDate
+              ? new Date(doc.eventDate)
+              : null,
+      });
+
+      return { accessId: String(doc._id) };
+    }
+
+    const member = await membersQueries.getMemberById(
       this.database.db,
       dto.personId,
       dto.clientId,
     );
-    if (!responsible) {
-      throw new NotFoundException('Responsável não encontrado.');
+    if (!member) {
+      throw new NotFoundException('Membro não encontrado.');
     }
-    if (responsible.faceId == null) {
-      throw new BadRequestException(
-        'Este responsável não possui face cadastrada.',
-      );
+    if (member.faceId == null) {
+      throw new BadRequestException('Este membro não possui face cadastrada.');
     }
 
-    let personName: string | null = responsible.name;
+    let personName: string | null = member.name;
     try {
       const fromRegistration =
         await registrationsQueries.findApprovedRegistrationNameByFaceId(
           this.database.db,
           dto.clientId,
-          responsible.faceId,
+          member.faceId,
         );
-      personName = fromRegistration ?? responsible.name;
+      personName = fromRegistration ?? member.name;
     } catch {
-      personName = responsible.name;
+      personName = member.name;
     }
 
     const snapKey =
-      typeof responsible.photoKey === 'string' && responsible.photoKey.trim()
-        ? responsible.photoKey.trim()
+      typeof member.photoKey === 'string' && member.photoKey.trim()
+        ? member.photoKey.trim()
         : null;
 
     const doc = await this.accessModel.create({
@@ -270,7 +349,7 @@ export class SimulateService {
       readerName: simReader.readerName,
       clientId: dto.clientId,
       clientName: client.name,
-      userId: responsible.faceId,
+      userId: member.faceId,
       personName,
       eventCode: 'Simulated',
       eventAction: 'pulse',
@@ -282,7 +361,7 @@ export class SimulateService {
 
     this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
       accessId: String(doc._id),
-      faceId: responsible.faceId,
+      faceId: member.faceId,
       clientId: dto.clientId,
       personName,
       readerId: simReader.mongoReaderId,

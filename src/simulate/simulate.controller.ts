@@ -25,7 +25,7 @@ export class SimulateController {
   @Get('people')
   @ApiOperation({
     summary:
-      '[Dev] Lista alunos e responsáveis com indicador se possuem faceId (para simular acesso)',
+      '[Dev] Lista alunos, responsáveis e membros com indicador se possuem faceId (para simular acesso)',
   })
   people(
     @CurrentUser() user: JwtPayload,

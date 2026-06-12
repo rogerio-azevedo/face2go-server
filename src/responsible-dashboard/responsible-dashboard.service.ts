@@ -239,6 +239,7 @@ export class ResponsibleDashboardService {
     faceUserId: number,
     page: number,
     limit: number,
+    subjectByFaceId?: Map<number, { name: string; photoKey: string | null }>,
   ): Promise<{
     items: ResponsibleAccessHistoryItemDto[];
     total: number;
@@ -255,7 +256,7 @@ export class ResponsibleDashboardService {
       .lean()
       .exec();
 
-    const items = await this.mapFacialDocsToDto(docs);
+    const items = await this.mapFacialDocsToDto(docs, subjectByFaceId);
     return { items, total };
   }
 
@@ -680,6 +681,7 @@ export class ResponsibleDashboardService {
     faceUserId: number | null | undefined,
     page: number,
     limit: number,
+    subjectByFaceId?: Map<number, { name: string; photoKey: string | null }>,
   ): Promise<{
     items: ResponsibleAccessHistoryItemDto[];
     page: number;
@@ -705,6 +707,7 @@ export class ResponsibleDashboardService {
       faceUserId,
       page,
       limit,
+      subjectByFaceId,
     );
 
     return { items, page, limit, total, timezoneOffsetMinutes };
