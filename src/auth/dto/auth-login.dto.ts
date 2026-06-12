@@ -26,7 +26,7 @@ export class LoginDto {
 }
 
 export class SelectContextDto {
-  @IsIn(['super_admin', 'company', 'client', 'responsible', 'face_user'])
+  @IsIn(['super_admin', 'company', 'client', 'responsible', 'member', 'face_user'])
   contextType!: UserContextType;
 
   @IsOptional()

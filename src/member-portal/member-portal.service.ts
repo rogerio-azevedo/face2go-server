@@ -7,6 +7,7 @@ import {
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import * as membersQueries from '../database/queries/members.queries';
 import { DatabaseService } from '../database/database.service';
+import { ResponsibleDashboardService } from '../responsible-dashboard/responsible-dashboard.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 
 @Injectable()
@@ -14,6 +15,7 @@ export class MemberPortalService {
   constructor(
     private readonly database: DatabaseService,
     private readonly r2Storage: R2StorageService,
+    private readonly responsibleDashboard: ResponsibleDashboardService,
   ) {}
 
   private assertMemberScope(user: JwtPayload): {
@@ -70,5 +72,32 @@ export class MemberPortalService {
       additionalData: row.additionalData,
       isActive: row.isActive,
     };
+  }
+
+  async listAccesses(user: JwtPayload, page: number, limit: number) {
+    const { memberId, clientId } = this.assertMemberScope(user);
+    const row = await membersQueries.getMemberWithRoleById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+
+    return this.responsibleDashboard.listAccessesForFaceUserId(
+      clientId,
+      row.faceId,
+      page,
+      limit,
+    );
+  }
+
+  async proxyAccessSnapshot(user: JwtPayload, rawUrl: string) {
+    const { clientId } = this.assertMemberScope(user);
+    return this.responsibleDashboard.proxyAccessSnapshotForClient(
+      clientId,
+      rawUrl,
+    );
   }
 }

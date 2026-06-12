@@ -31,6 +31,15 @@ export type PickupGuestFaceSubmittedPayload = {
   guestName: string;
 };
 
+export const INVITE_GUEST_FACE_SUBMITTED = 'invite.guest.face.submitted';
+
+export type InviteGuestFaceSubmittedPayload = {
+  inviteId: string;
+  clientId: string;
+  requestedByMemberId: string;
+  guestName: string;
+};
+
 export const RESPONSIBLE_INVITATION_SUBMITTED =
   'responsible.invitation.submitted';
 

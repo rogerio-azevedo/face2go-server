@@ -480,3 +480,15 @@ export async function getMemberEmailByUserId(
     .limit(1);
   return row?.email ?? null;
 }
+
+export async function getMemberPushToken(
+  db: AppDb,
+  memberId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ pushToken: clientMembers.pushToken })
+    .from(clientMembers)
+    .where(eq(clientMembers.id, memberId))
+    .limit(1);
+  return row?.pushToken ?? null;
+}

@@ -17,5 +17,6 @@ import { ResponsibleDashboardService } from './responsible-dashboard.service';
   ],
   controllers: [ResponsibleDashboardController],
   providers: [ResponsibleDashboardService],
+  exports: [ResponsibleDashboardService],
 })
 export class ResponsibleDashboardModule {}

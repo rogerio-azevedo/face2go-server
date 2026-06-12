@@ -7,6 +7,7 @@ import * as membersQueries from '../database/queries/members.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
+import * as visitorInviteQueries from '../database/queries/client-invites.queries';
 import * as vehiclesQueries from '../database/queries/vehicles.queries';
 import type {
   AccessFacialRecordedPayload,
@@ -410,11 +411,30 @@ export class ArrivalsService {
             );
             vehiclePlate = primary.guestVehiclePlate ?? null;
           } else {
+            const inviteAuths =
+              await visitorInviteQueries.inviteFindActiveByGuestFaceId(
+                this.database.db,
+                payload.clientId,
+                payload.faceId,
+              );
+            if (inviteAuths.length > 0) {
+              const primary = inviteAuths[0];
+              kind = 'responsible';
+              if (!personName) {
+                personName = primary.guestName ?? 'Visitante';
+              }
+              personPhotoUrl = await this.presignPortraitPhoto(
+                primary.guestFaceImageKey,
+              );
+              students = [];
+              vehiclePlate = primary.guestVehiclePlate ?? null;
+            } else {
             kind = 'student';
             if (!personName) {
               personName = payload.personName ?? 'Visitante';
             }
             students = [];
+          }
           }
           }
         }
@@ -522,44 +542,73 @@ export class ArrivalsService {
         payload.plateNumber,
       );
 
-      if (!guestAuth) {
+      if (guestAuth) {
+        let personPhotoUrl = await this.presignPortraitPhoto(
+          guestAuth.guestFaceImageKey,
+        );
+        let personName = guestAuth.guestName;
+        let responsibleId: string | null = guestAuth.linkedResponsibleId;
+
+        if (guestAuth.linkedResponsibleId) {
+          const linked = await responsiblesQueries.getResponsibleById(
+            this.database.db,
+            guestAuth.linkedResponsibleId,
+            payload.clientId,
+          );
+          if (linked) {
+            personName = linked.name;
+            personPhotoUrl = await this.presignPortraitPhoto(linked.photoKey);
+          }
+        }
+
+        const students = await this.resolveGuestArrivalStudents(
+          payload.clientId,
+          guestAuth,
+        );
+
+        const out: ArrivalSsePayload = {
+          type: 'arrival',
+          kind: 'responsible',
+          accessId: payload.accessId,
+          responsibleId,
+          personName,
+          personPhotoUrl,
+          readerName: payload.cameraName,
+          eventDate: payload.snapTime?.toISOString() ?? null,
+          vehiclePlate: payload.plateNumber,
+          students,
+        };
+
+        this.emitToHub(payload.clientId, out);
         return;
       }
 
-      let personPhotoUrl = await this.presignPortraitPhoto(
-        guestAuth.guestFaceImageKey,
+      const inviteGuest = await visitorInviteQueries.inviteFindActiveGuestByPlate(
+        this.database.db,
+        payload.clientId,
+        payload.plateNumber,
       );
-      let personName = guestAuth.guestName;
-      let responsibleId: string | null = guestAuth.linkedResponsibleId;
 
-      if (guestAuth.linkedResponsibleId) {
-        const linked = await responsiblesQueries.getResponsibleById(
-          this.database.db,
-          guestAuth.linkedResponsibleId,
-          payload.clientId,
-        );
-        if (linked) {
-          personName = linked.name;
-          personPhotoUrl = await this.presignPortraitPhoto(linked.photoKey);
-        }
+      if (!inviteGuest) {
+        return;
       }
 
-      const students = await this.resolveGuestArrivalStudents(
-        payload.clientId,
-        guestAuth,
+      const personPhotoUrl = await this.presignPortraitPhoto(
+        inviteGuest.guestFaceImageKey,
       );
+      const personName = inviteGuest.guestName ?? 'Visitante';
 
       const out: ArrivalSsePayload = {
         type: 'arrival',
         kind: 'responsible',
         accessId: payload.accessId,
-        responsibleId,
+        responsibleId: null,
         personName,
         personPhotoUrl,
         readerName: payload.cameraName,
         eventDate: payload.snapTime?.toISOString() ?? null,
         vehiclePlate: payload.plateNumber,
-        students,
+        students: [],
       };
 
       this.emitToHub(payload.clientId, out);

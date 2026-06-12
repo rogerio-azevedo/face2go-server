@@ -330,6 +330,13 @@
       "when": 1779150000000,
       "tag": "0046_client_members_user_fk_fix",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1779160000000,
+      "tag": "0047_client_invites",
+      "breakpoints": true
     }
   ]
 }

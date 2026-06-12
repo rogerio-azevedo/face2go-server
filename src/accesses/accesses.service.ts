@@ -13,6 +13,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
+import * as visitorInviteQueries from '../database/queries/client-invites.queries';
 import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
 import type { VideoEvent } from '../face-listener/face-listener.types';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -256,6 +257,24 @@ export class AccessesService {
       } catch (err: unknown) {
         this.logger.warn(
           `Lookup pickup guestName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    if (!personName) {
+      try {
+        const inviteAuths = await visitorInviteQueries.inviteFindActiveByGuestFaceId(
+          this.database.db,
+          ctx.clientId,
+          faceIdNum,
+        );
+        const guestName = inviteAuths[0]?.guestName?.trim();
+        if (guestName) {
+          personName = guestName;
+        }
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Lookup invite guestName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }

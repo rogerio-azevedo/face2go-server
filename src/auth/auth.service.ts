@@ -33,6 +33,7 @@ import type {
 } from './interfaces/auth-types.interface';
 import type {
   SelectContextInput,
+  TenantBranding,
   UserContext,
 } from './interfaces/user-context.interface';
 import type { AuthServiceContract } from './interfaces/auth-service.interface';
@@ -156,6 +157,21 @@ export class AuthService implements AuthServiceContract {
     };
   }
 
+  private buildTenantBranding(link: {
+    clientLogoUrl: string | null;
+    companyLogoUrl: string | null;
+    primaryColor: string | null;
+    privacyPolicyUrl: string | null;
+    privacyAlias: string | null;
+  }): TenantBranding {
+    return {
+      logoUrl: link.clientLogoUrl ?? link.companyLogoUrl,
+      primaryColor: link.primaryColor,
+      privacyPolicyUrl: link.privacyPolicyUrl,
+      privacyAlias: link.privacyAlias,
+    };
+  }
+
   async getAllContexts(userId: string): Promise<UserContext[]> {
     const db = this.database.db;
     const contexts: UserContext[] = [];
@@ -214,7 +230,8 @@ export class AuthService implements AuthServiceContract {
         role: clientUsers.role,
         clientName: clients.name,
         companyId: clients.companyId,
-        logoUrl: clients.logoUrl,
+        clientLogoUrl: clients.logoUrl,
+        companyLogoUrl: companies.logoUrl,
         primaryColor: clients.primaryColor,
         privacyPolicyUrl: clients.privacyPolicyUrl,
         privacyAlias: clients.privacyAlias,
@@ -222,6 +239,7 @@ export class AuthService implements AuthServiceContract {
       })
       .from(clientUsers)
       .innerJoin(clients, eq(clientUsers.clientId, clients.id))
+      .innerJoin(companies, eq(clients.companyId, companies.id))
       .where(
         and(eq(clientUsers.userId, userId), eq(clientUsers.isActive, true)),
       );
@@ -236,12 +254,7 @@ export class AuthService implements AuthServiceContract {
         clientName: link.clientName,
         companyId: link.companyId,
         role: link.role,
-        branding: {
-          logoUrl: link.logoUrl,
-          primaryColor: link.primaryColor,
-          privacyPolicyUrl: link.privacyPolicyUrl,
-          privacyAlias: link.privacyAlias,
-        },
+        branding: this.buildTenantBranding(link),
         label: `${link.clientName} (${link.role === 'client_admin' ? 'Admin' : 'Operador'})`,
       });
     }
@@ -252,7 +265,8 @@ export class AuthService implements AuthServiceContract {
         clientId: responsibles.clientId,
         responsibleName: responsibles.name,
         clientName: clients.name,
-        logoUrl: clients.logoUrl,
+        clientLogoUrl: clients.logoUrl,
+        companyLogoUrl: companies.logoUrl,
         primaryColor: clients.primaryColor,
         privacyPolicyUrl: clients.privacyPolicyUrl,
         privacyAlias: clients.privacyAlias,
@@ -260,6 +274,7 @@ export class AuthService implements AuthServiceContract {
       })
       .from(responsibles)
       .innerJoin(clients, eq(responsibles.clientId, clients.id))
+      .innerJoin(companies, eq(clients.companyId, companies.id))
       .where(
         and(eq(responsibles.userId, userId), eq(responsibles.isActive, true)),
       );
@@ -272,12 +287,7 @@ export class AuthService implements AuthServiceContract {
         responsibleId: link.responsibleId,
         clientId: link.clientId,
         clientName: link.clientName,
-        branding: {
-          logoUrl: link.logoUrl,
-          primaryColor: link.primaryColor,
-          privacyPolicyUrl: link.privacyPolicyUrl,
-          privacyAlias: link.privacyAlias,
-        },
+        branding: this.buildTenantBranding(link),
         label: `Responsável — ${link.clientName}`,
       });
     }
@@ -289,7 +299,8 @@ export class AuthService implements AuthServiceContract {
         memberName: clientMembers.name,
         roleName: clientRoles.name,
         clientName: clients.name,
-        logoUrl: clients.logoUrl,
+        clientLogoUrl: clients.logoUrl,
+        companyLogoUrl: companies.logoUrl,
         primaryColor: clients.primaryColor,
         privacyPolicyUrl: clients.privacyPolicyUrl,
         privacyAlias: clients.privacyAlias,
@@ -298,6 +309,7 @@ export class AuthService implements AuthServiceContract {
       .from(clientMembers)
       .innerJoin(clientRoles, eq(clientMembers.roleId, clientRoles.id))
       .innerJoin(clients, eq(clientMembers.clientId, clients.id))
+      .innerJoin(companies, eq(clients.companyId, companies.id))
       .where(
         and(eq(clientMembers.userId, userId), eq(clientMembers.isActive, true)),
       );
@@ -311,12 +323,7 @@ export class AuthService implements AuthServiceContract {
         clientId: link.clientId,
         clientName: link.clientName,
         roleName: link.roleName,
-        branding: {
-          logoUrl: link.logoUrl,
-          primaryColor: link.primaryColor,
-          privacyPolicyUrl: link.privacyPolicyUrl,
-          privacyAlias: link.privacyAlias,
-        },
+        branding: this.buildTenantBranding(link),
         label: `${link.roleName} — ${link.clientName}`,
       });
     }

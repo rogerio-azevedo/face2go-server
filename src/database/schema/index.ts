@@ -13,6 +13,7 @@ export * from './students';
 export * from './responsibles';
 export * from './members';
 export * from './pickup-authorizations';
+export * from './client-invites';
 export * from './responsible-invitations';
 export * from './vehicles';
 export * from './shifts';

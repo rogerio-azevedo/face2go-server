@@ -666,15 +666,31 @@ export class ResponsibleDashboardService {
     timezoneOffsetMinutes: number;
   }> {
     const { responsibleId, clientId } = this.assertResponsibleScope(user);
-    const timezoneOffsetMinutes =
-      await this.schoolTimezoneOffsetMinutes(clientId);
-
     const faceId = await responsiblesQueries.getResponsibleFaceId(
       this.database.db,
       responsibleId,
       clientId,
     );
-    if (faceId == null) {
+    return this.listAccessesForFaceUserId(clientId, faceId, page, limit);
+  }
+
+  /** Histórico facial paginado por `faceId` (reutilizado pelo portal do membro). */
+  async listAccessesForFaceUserId(
+    clientId: string,
+    faceUserId: number | null | undefined,
+    page: number,
+    limit: number,
+  ): Promise<{
+    items: ResponsibleAccessHistoryItemDto[];
+    page: number;
+    limit: number;
+    total: number;
+    timezoneOffsetMinutes: number;
+  }> {
+    const timezoneOffsetMinutes =
+      await this.schoolTimezoneOffsetMinutes(clientId);
+
+    if (faceUserId == null) {
       return {
         items: [],
         page,
@@ -686,7 +702,7 @@ export class ResponsibleDashboardService {
 
     const { items, total } = await this.paginateFacialAccessByUserId(
       clientId,
-      faceId,
+      faceUserId,
       page,
       limit,
     );
@@ -713,7 +729,14 @@ export class ResponsibleDashboardService {
     rawUrl: string,
   ): Promise<{ body: Buffer; contentType: string }> {
     const { clientId } = this.assertResponsibleScope(user);
+    return this.proxyAccessSnapshotForClient(clientId, rawUrl);
+  }
 
+  /** Proxy de snapshot por escola (reutilizado pelo portal do membro). */
+  async proxyAccessSnapshotForClient(
+    clientId: string,
+    rawUrl: string,
+  ): Promise<{ body: Buffer; contentType: string }> {
     const snapshotUrl = rawUrl?.trim() ?? '';
     if (
       !snapshotUrl.startsWith('http://') &&

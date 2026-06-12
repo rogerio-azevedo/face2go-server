@@ -10,9 +10,13 @@ import { DatabaseService } from '../database/database.service';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
+import * as visitorInviteQueries from '../database/queries/client-invites.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import {
   ACCESS_FACIAL_RECORDED,
   type AccessFacialRecordedPayload,
+  INVITE_GUEST_FACE_SUBMITTED,
+  type InviteGuestFaceSubmittedPayload,
   PICKUP_GUEST_FACE_SUBMITTED,
   type PickupGuestFaceSubmittedPayload,
   RESPONSIBLE_INVITATION_SUBMITTED,
@@ -68,6 +72,14 @@ export class NotificationsService {
         `Push pickup guest pós-acesso falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+
+    try {
+      await this.notifyMemberOfInviteGuestAccess(payload);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push invite guest pós-acesso falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   @OnEvent(PICKUP_GUEST_FACE_SUBMITTED, { async: true })
@@ -95,6 +107,35 @@ export class NotificationsService {
     } catch (err: unknown) {
       this.logger.warn(
         `Push pickup face falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  @OnEvent(INVITE_GUEST_FACE_SUBMITTED, { async: true })
+  async handleInviteGuestFaceSubmitted(
+    payload: InviteGuestFaceSubmittedPayload,
+  ): Promise<void> {
+    try {
+      const token = await membersQueries.getMemberPushToken(
+        this.database.db,
+        payload.requestedByMemberId,
+      );
+      if (!token) {
+        return;
+      }
+      await this.dispatchExpoPush(
+        [token],
+        'Cadastro de visitante pendente',
+        `${payload.guestName} enviou a foto. Abra o app para aprovar.`,
+        {
+          type: 'invite_guest_face_submitted',
+          inviteId: payload.inviteId,
+          clientId: payload.clientId,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push invite face falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -284,6 +325,43 @@ export class NotificationsService {
 
     await this.dispatchExpoPush(tokens, title, body, {
       type: 'pickup_guest_access',
+      accessId: payload.accessId,
+      faceId: String(payload.faceId),
+      clientId: payload.clientId,
+    });
+  }
+
+  private async notifyMemberOfInviteGuestAccess(
+    payload: AccessFacialRecordedPayload,
+  ): Promise<void> {
+    const inviteAuths = await visitorInviteQueries.inviteFindActiveByGuestFaceId(
+      this.database.db,
+      payload.clientId,
+      payload.faceId,
+    );
+    if (inviteAuths.length === 0) {
+      return;
+    }
+
+    const primary = inviteAuths[0];
+    const token = await membersQueries.getMemberPushToken(
+      this.database.db,
+      primary.requestedByMemberId,
+    );
+    if (!token) {
+      return;
+    }
+
+    const verb = this.accessVerb(payload.readerDirection);
+    const title = 'Acesso facial';
+    const displayName =
+      payload.personName?.trim() ||
+      primary.guestName?.trim() ||
+      'Visitante';
+    const body = `${displayName} ${verb} ${payload.readerName}.`;
+
+    await this.dispatchExpoPush([token], title, body, {
+      type: 'invite_guest_access',
       accessId: payload.accessId,
       faceId: String(payload.faceId),
       clientId: payload.clientId,

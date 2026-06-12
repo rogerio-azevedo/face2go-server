@@ -81,6 +81,15 @@ export class R2StorageService {
     return `${companyId}/${clientId}/pickup/${authorizationId}/face.${ext}`;
   }
 
+  buildInviteGuestFaceKey(
+    companyId: string,
+    clientId: string,
+    inviteId: string,
+    ext: string,
+  ): string {
+    return `${companyId}/${clientId}/invite/${inviteId}/face.${ext}`;
+  }
+
   buildResponsibleInvitationFaceKey(
     companyId: string,
     clientId: string,
