@@ -69,6 +69,10 @@ export class PublicResponsibleRegisterService {
       );
     return {
       clientName: client.name,
+      appBrand:
+        client.ienhFilialCode != null
+          ? ('ienh' as const)
+          : ('face2go' as const),
       inviterName,
       studentLinks: students.map((s) => ({
         studentName: s.studentName,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { normalizeCpf } from '../auth/utils/auth-identifiers';
 import {
   createResponsibleSchema,
   linkResponsibleStudentSchema,
@@ -69,10 +70,20 @@ export const createResponsibleInvitationSchema = z.object({
     .min(1, 'Informe ao menos um aluno.'),
 });
 
-export const publicResponsibleRegisterSubmitSchema =
-  createResponsibleSchema.extend({
+export const publicResponsibleRegisterSubmitSchema = createResponsibleSchema
+  .extend({
     faceImageKey: z.string().min(1),
     vehicle: optionalVehicleSchema,
+  })
+  .extend({
+    document: z
+      .string()
+      .trim()
+      .min(1, 'Informe o CPF.')
+      .transform((value) => normalizeCpf(value))
+      .refine((value) => value.length === 11, {
+        message: 'CPF inválido.',
+      }),
   });
 
 export type CreateManagedResponsibleInput = z.infer<
