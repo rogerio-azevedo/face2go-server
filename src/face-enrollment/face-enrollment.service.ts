@@ -628,7 +628,11 @@ export class FaceEnrollmentService {
       studentsQueries.countStudentsByClient(this.database.db, clientId, {
         search,
       }),
-      studentsQueries.listStudentsByClient(this.database.db, clientId, listOpts),
+      studentsQueries.listStudentsByClient(
+        this.database.db,
+        clientId,
+        listOpts,
+      ),
     ]);
     const data: MemberStudentSearchItemDto[] = await Promise.all(
       rows.map(async (row) => ({
