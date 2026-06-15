@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { z } from 'zod';
 
 import { normalizeCpf } from '../auth/utils/auth-identifiers';
+import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import { DatabaseService } from '../database/database.service';
@@ -70,6 +71,7 @@ export class PublicPickupRegisterService {
     );
     return {
       clientName: client.name,
+      appBrand: resolveClientAppBrand(client.ienhFilialCode),
       guestName: row.guestName ?? '',
       needsGuestData: !row.guestName,
       studentNames: students.map((s) => s.studentName),

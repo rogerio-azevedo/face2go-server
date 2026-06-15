@@ -8,6 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { z } from 'zod';
 
 import { normalizeCpf } from '../auth/utils/auth-identifiers';
+import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as inviteQueries from '../database/queries/client-invites.queries';
 import { DatabaseService } from '../database/database.service';
@@ -66,6 +67,7 @@ export class PublicInviteRegisterService {
     }
     return {
       clientName: client.name,
+      appBrand: resolveClientAppBrand(client.ienhFilialCode),
       guestName: row.guestName ?? '',
       needsGuestData: !row.guestName,
       validFrom: row.validFrom,

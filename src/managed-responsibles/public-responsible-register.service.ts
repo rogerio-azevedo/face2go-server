@@ -17,6 +17,7 @@ import { users } from '../database/schema';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { publicResponsibleRegisterSubmitSchema } from '../validation/managed-responsibles.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
+import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import { ManagedResponsiblesService } from './managed-responsibles.service';
 
 const uploadPhotoBodySchema = z.object({
@@ -69,10 +70,7 @@ export class PublicResponsibleRegisterService {
       );
     return {
       clientName: client.name,
-      appBrand:
-        client.ienhFilialCode != null
-          ? ('ienh' as const)
-          : ('face2go' as const),
+      appBrand: resolveClientAppBrand(client.ienhFilialCode),
       inviterName,
       studentLinks: students.map((s) => ({
         studentName: s.studentName,
