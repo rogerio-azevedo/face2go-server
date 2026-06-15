@@ -18,6 +18,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { ContextRequiredGuard } from './common/guards/context-required.guard';
 import { DatabaseModule } from './database/database.module';
+import { RepositoriesModule } from './database/repositories/repositories.module';
 import { LprPlateSyncModule } from './lpr-plate-sync/lpr-plate-sync.module';
 import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
@@ -59,6 +60,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
       inject: [ConfigService],
     }),
     DatabaseModule,
+    RepositoriesModule,
     StorageModule,
     PermissionsModule,
     LprPlateSyncModule,

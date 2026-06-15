@@ -1,0 +1,7323 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/clients/{clientId}/lpr-plates/{vehicleId}/sync": {
+      "post": {
+        "operationId": "CompanyLprPlateSyncController_syncOne",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "vehicleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar placa do veículo com as câmeras LPR Intelbras do cliente",
+        "tags": [
+          "company-lpr-plate-sync"
+        ]
+      }
+    },
+    "/clients/{clientId}/lpr-plates/sync-all/progress": {
+      "get": {
+        "operationId": "CompanyLprPlateSyncController_syncAllProgress",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — progresso da sincronização em lote de placas LPR (token na query aceito)",
+        "tags": [
+          "company-lpr-plate-sync"
+        ]
+      }
+    },
+    "/client/lpr-plates/{vehicleId}/sync": {
+      "post": {
+        "operationId": "ClientLprPlateSyncController_syncOne",
+        "parameters": [
+          {
+            "name": "vehicleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar placa com as câmeras LPR Intelbras do meu cliente",
+        "tags": [
+          "client-lpr-plate-sync"
+        ]
+      }
+    },
+    "/client/lpr-plates/sync-all/progress": {
+      "get": {
+        "operationId": "ClientLprPlateSyncController_syncAllProgress",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — progresso da sincronização em lote (token na query)",
+        "tags": [
+          "client-lpr-plate-sync"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Login com e-mail ou CPF e senha.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/select-context": {
+      "post": {
+        "operationId": "AuthController_selectContext",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectContextDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Seleciona contexto de acesso e emite JWT de sessão",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Cadastro via código de convite",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/join-context": {
+      "post": {
+        "operationId": "AuthController_joinContext",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinContextDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Usuário existente aceita convite e vincula novo contexto",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/request-password": {
+      "post": {
+        "operationId": "AuthController_requestPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Solicita e-mail para redefinir senha (e-mail ou CPF)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Redefine senha com token recebido por e-mail",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Perfil do usuário autenticado (JWT)",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/companies": {
+      "get": {
+        "operationId": "CompaniesController_list",
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar empresas",
+        "tags": [
+          "companies"
+        ]
+      },
+      "post": {
+        "operationId": "CompaniesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCompanyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar empresa",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
+    "/companies/{id}/users": {
+      "get": {
+        "operationId": "CompaniesController_companyUsers",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar vínculos da empresa (usuários)",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
+    "/companies/{id}": {
+      "get": {
+        "operationId": "CompaniesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe da empresa",
+        "tags": [
+          "companies"
+        ]
+      },
+      "patch": {
+        "operationId": "CompaniesController_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchCompanyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar empresa",
+        "tags": [
+          "companies"
+        ]
+      },
+      "delete": {
+        "operationId": "CompaniesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Inativar empresa (soft delete)",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
+    "/companies/{id}/invite-links": {
+      "post": {
+        "operationId": "CompaniesController_invite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateCompanyInviteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar link de convite",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
+    "/invite-links/{code}": {
+      "get": {
+        "operationId": "InviteLinksController_preview",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Pré-visualizar convite pelo código (público)",
+        "tags": [
+          "invite-links"
+        ]
+      }
+    },
+    "/clients": {
+      "get": {
+        "operationId": "ClientsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar clientes da empresa",
+        "tags": [
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "ClientsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar cliente (apenas admin da empresa)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/display-short-code": {
+      "get": {
+        "operationId": "ClientsController_ensureDisplayShortCode",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Garante e retorna o código curto da URL do display em TV",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/display-token": {
+      "get": {
+        "operationId": "ClientsController_ensureDisplayToken",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Garante e retorna o token do display em TV da escola (URL pública SSE)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/display-token/regenerate": {
+      "post": {
+        "operationId": "ClientsController_regenerateDisplayToken",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Regenerar token do display em TV (invalida URL antiga)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/display-devices": {
+      "get": {
+        "operationId": "ClientsController_getDisplayDevices",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar câmeras LPR e leitores faciais habilitados para o display TV",
+        "tags": [
+          "clients"
+        ]
+      },
+      "put": {
+        "operationId": "ClientsController_setDisplayDevices",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Configurar quais dispositivos alimentam o display TV",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/client-users": {
+      "get": {
+        "operationId": "ClientsController_listClientUsers",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar usuários do sistema vinculados ao cliente",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/invite-links": {
+      "get": {
+        "operationId": "ClientsController_listClientInviteLinks",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar convites ativos do cliente",
+        "tags": [
+          "clients"
+        ]
+      },
+      "post": {
+        "operationId": "ClientsController_generateClientInviteLink",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar convite para admin/operador do cliente",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/active": {
+      "patch": {
+        "operationId": "ClientsController_setActive",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/inativar cliente (apenas admin da empresa)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}": {
+      "get": {
+        "operationId": "ClientsController_getById",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obter cliente por ID",
+        "tags": [
+          "clients"
+        ]
+      },
+      "patch": {
+        "operationId": "ClientsController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar cliente (apenas admin da empresa)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/display/resolve/{shortCode}": {
+      "get": {
+        "operationId": "ClientDisplayResolveController_resolve",
+        "parameters": [
+          {
+            "name": "shortCode",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Resolver código curto do display TV (redireciona para clientId + token)",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/client-invite-links/{code}": {
+      "get": {
+        "operationId": "ClientInviteLinksController_preview",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Pré-visualizar convite de cliente (público)",
+        "tags": [
+          "client-invite-links"
+        ]
+      }
+    },
+    "/client/invite-links": {
+      "get": {
+        "operationId": "ClientInviteLinksController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar convites ativos do cliente atual",
+        "tags": [
+          "client-invite-links"
+        ]
+      },
+      "post": {
+        "operationId": "ClientInviteLinksController_generate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar convite para admin/operador do cliente",
+        "tags": [
+          "client-invite-links"
+        ]
+      }
+    },
+    "/client/client-users": {
+      "get": {
+        "operationId": "ClientInviteLinksController_listClientUsers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar usuários do sistema do cliente atual",
+        "tags": [
+          "client-invite-links"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users": {
+      "get": {
+        "operationId": "ReadersController_getDeviceUsers",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar usuários cadastrados no dispositivo (direto da memória)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/monitor/status": {
+      "get": {
+        "operationId": "ReadersController_monitorStatus",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status de monitoramento (conexão stream snapManager / leitores Intelbras)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers": {
+      "get": {
+        "operationId": "ReadersController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar leitores faciais da empresa",
+        "tags": [
+          "readers"
+        ]
+      },
+      "post": {
+        "operationId": "ReadersController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar leitor (apenas admin da empresa)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}": {
+      "patch": {
+        "operationId": "ReadersController_update",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar leitor (apenas admin da empresa)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/active": {
+      "patch": {
+        "operationId": "ReadersController_setActive",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/inativar leitor (apenas admin da empresa)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/{userId}": {
+      "delete": {
+        "operationId": "ReadersController_removeDeviceUser",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover um usuário da memória do dispositivo",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/{userId}/face": {
+      "get": {
+        "operationId": "ReadersController_getDeviceUserFace",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obter a foto do rosto do usuário (direto do leitor)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/accesses/{id}/photo": {
+      "get": {
+        "operationId": "AccessesController_photo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID do documento (Mongo ObjectId).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obter URL assinada (GET) da foto facial armazenada no R2 para um acesso",
+        "tags": [
+          "accesses"
+        ]
+      }
+    },
+    "/accesses": {
+      "get": {
+        "operationId": "AccessesController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar acessos faciais (MongoDB), por empresa",
+        "tags": [
+          "accesses"
+        ]
+      }
+    },
+    "/cameras/monitor/status": {
+      "get": {
+        "operationId": "CamerasController_monitorStatus",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status das câmeras LPR Intelbras — eventManager/snapManager (digest HTTP)",
+        "tags": [
+          "cameras"
+        ]
+      }
+    },
+    "/cameras/{cameraId}/device-plates": {
+      "get": {
+        "operationId": "CamerasController_getDevicePlates",
+        "parameters": [
+          {
+            "name": "cameraId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar placas cadastradas na câmera LPR Intelbras (TrafficRedList)",
+        "tags": [
+          "cameras"
+        ]
+      }
+    },
+    "/cameras/{cameraId}/device-plates/{recNo}": {
+      "delete": {
+        "operationId": "CamerasController_removeDevicePlate",
+        "parameters": [
+          {
+            "name": "cameraId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recNo",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "plate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover placa da lista de permissão na câmera LPR (TrafficRedList)",
+        "tags": [
+          "cameras"
+        ]
+      }
+    },
+    "/cameras": {
+      "get": {
+        "operationId": "CamerasController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar câmeras da empresa",
+        "tags": [
+          "cameras"
+        ]
+      },
+      "post": {
+        "operationId": "CamerasController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar câmera (apenas admin da empresa)",
+        "tags": [
+          "cameras"
+        ]
+      }
+    },
+    "/cameras/{cameraId}/active": {
+      "patch": {
+        "operationId": "CamerasController_setActive",
+        "parameters": [
+          {
+            "name": "cameraId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/desativar câmera (apenas admin da empresa)",
+        "tags": [
+          "cameras"
+        ]
+      }
+    },
+    "/cameras/{cameraId}": {
+      "patch": {
+        "operationId": "CamerasController_update",
+        "parameters": [
+          {
+            "name": "cameraId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar câmera (apenas admin da empresa)",
+        "tags": [
+          "cameras"
+        ]
+      }
+    },
+    "/lpr-accesses/{id}/photo": {
+      "get": {
+        "operationId": "LprAccessesController_photos",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID do documento (Mongo ObjectId).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obter URLs assinadas (GET) das fotos ANPR armazenadas no R2 para um acesso",
+        "tags": [
+          "lpr-accesses"
+        ]
+      }
+    },
+    "/lpr-accesses": {
+      "get": {
+        "operationId": "LprAccessesController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar acessos LPR ANPR (MongoDB), por empresa",
+        "tags": [
+          "lpr-accesses"
+        ]
+      }
+    },
+    "/client/registration-links": {
+      "post": {
+        "operationId": "ClientRegistrationLinksController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar link de cadastro de usuário do cliente (portal cliente)",
+        "tags": [
+          "client-registration-links"
+        ]
+      },
+      "get": {
+        "operationId": "ClientRegistrationLinksController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar links de cadastro do meu cliente",
+        "tags": [
+          "client-registration-links"
+        ]
+      }
+    },
+    "/client/registration-links/{linkId}": {
+      "patch": {
+        "operationId": "ClientRegistrationLinksController_setActive",
+        "parameters": [
+          {
+            "name": "linkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/desativar um link (ex.: isActive: false)",
+        "tags": [
+          "client-registration-links"
+        ]
+      }
+    },
+    "/clients/{clientId}/registration-links": {
+      "post": {
+        "operationId": "CompanyRegistrationLinksController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar link de cadastro para um cliente da empresa",
+        "tags": [
+          "registration-links"
+        ]
+      },
+      "get": {
+        "operationId": "CompanyRegistrationLinksController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar links de cadastro de um cliente",
+        "tags": [
+          "registration-links"
+        ]
+      }
+    },
+    "/clients/{clientId}/registration-links/{linkId}": {
+      "patch": {
+        "operationId": "CompanyRegistrationLinksController_setActive",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "linkId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/desativar um link de cadastro",
+        "tags": [
+          "registration-links"
+        ]
+      }
+    },
+    "/register/{code}": {
+      "get": {
+        "operationId": "PublicRegisterController_preview",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Dados públicos do cliente para o formulário de cadastro",
+        "tags": [
+          "public-registration"
+        ]
+      }
+    },
+    "/register/{code}/presign-photo": {
+      "post": {
+        "operationId": "PublicRegisterController_presign",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "URL assinada para upload da foto (R2)",
+        "tags": [
+          "public-registration"
+        ]
+      }
+    },
+    "/register/{code}/upload-photo": {
+      "post": {
+        "operationId": "PublicRegisterController_uploadPhoto",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Enviar foto (base64) pelo servidor para o R2 — preferir em vez do presign no browser",
+        "tags": [
+          "public-registration"
+        ]
+      }
+    },
+    "/register/{code}/submit": {
+      "post": {
+        "operationId": "PublicRegisterController_submit",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Enviar cadastro (aguarda aprovação)",
+        "tags": [
+          "public-registration"
+        ]
+      }
+    },
+    "/client/registrations": {
+      "get": {
+        "operationId": "ClientRegistrationsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar cadastros enviados do meu cliente",
+        "tags": [
+          "client-registrations"
+        ]
+      }
+    },
+    "/client/registrations/{registrationId}/face-url": {
+      "get": {
+        "operationId": "ClientRegistrationsController_faceUrl",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "URL temporária para visualizar a foto",
+        "tags": [
+          "client-registrations"
+        ]
+      }
+    },
+    "/client/registrations/{registrationId}/approve": {
+      "post": {
+        "operationId": "ClientRegistrationsController_approve",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aprovar cadastro (rascunho → aprovado)",
+        "tags": [
+          "client-registrations"
+        ]
+      }
+    },
+    "/client/registrations/{registrationId}/reject": {
+      "post": {
+        "operationId": "ClientRegistrationsController_reject",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rejeitar cadastro",
+        "tags": [
+          "client-registrations"
+        ]
+      }
+    },
+    "/clients/{clientId}/registrations": {
+      "get": {
+        "operationId": "CompanyRegistrationsController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar cadastros enviados de um cliente",
+        "tags": [
+          "company-registrations"
+        ]
+      }
+    },
+    "/clients/{clientId}/registrations/{registrationId}/face-url": {
+      "get": {
+        "operationId": "CompanyRegistrationsController_faceUrl",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "URL temporária para visualizar a foto",
+        "tags": [
+          "company-registrations"
+        ]
+      }
+    },
+    "/clients/{clientId}/registrations/{registrationId}/approve": {
+      "post": {
+        "operationId": "CompanyRegistrationsController_approve",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aprovar cadastro",
+        "tags": [
+          "company-registrations"
+        ]
+      }
+    },
+    "/clients/{clientId}/registrations/{registrationId}/reject": {
+      "post": {
+        "operationId": "CompanyRegistrationsController_reject",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rejeitar cadastro",
+        "tags": [
+          "company-registrations"
+        ]
+      }
+    },
+    "/clients/{clientId}/faces/{registrationId}/sync": {
+      "post": {
+        "operationId": "CompanyFaceSyncController_syncOne",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar face de um cadastro aprovado com os leitores do cliente",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/clients/{clientId}/faces/sync-all/progress": {
+      "get": {
+        "operationId": "CompanyFaceSyncController_syncAllProgress",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — progresso da sincronização em lote (token na query aceito)",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/client/faces/{registrationId}/sync": {
+      "post": {
+        "operationId": "ClientFaceSyncController_syncOne",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar face com os leitores do meu cliente",
+        "tags": [
+          "client-face-sync"
+        ]
+      }
+    },
+    "/client/faces/sync-all/progress": {
+      "get": {
+        "operationId": "ClientFaceSyncController_syncAllProgress",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — progresso da sincronização em lote (token na query)",
+        "tags": [
+          "client-face-sync"
+        ]
+      }
+    },
+    "/clients/{clientId}/roles": {
+      "get": {
+        "operationId": "MembersController_listRoles",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar funções (roles) do cliente",
+        "tags": [
+          "members"
+        ]
+      },
+      "post": {
+        "operationId": "MembersController_createRole",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar função (role) do cliente",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/clients/{clientId}/roles/{roleId}": {
+      "patch": {
+        "operationId": "MembersController_updateRole",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar função (role) do cliente",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/clients/{clientId}/members": {
+      "get": {
+        "operationId": "MembersController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roleId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar membros do cliente paginados (?page, ?pageSize, ?search, ?roleId)",
+        "tags": [
+          "members"
+        ]
+      },
+      "post": {
+        "operationId": "MembersController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar membro com login (usuário + senha)",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/clients/{clientId}/members/{memberId}": {
+      "get": {
+        "operationId": "MembersController_getOne",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe do membro",
+        "tags": [
+          "members"
+        ]
+      },
+      "patch": {
+        "operationId": "MembersController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar membro (opcional: nova senha)",
+        "tags": [
+          "members"
+        ]
+      },
+      "delete": {
+        "operationId": "MembersController_deleteMember",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir membro (remove face, veículos e vínculos)",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/clients/{clientId}/members/{memberId}/face/sync": {
+      "post": {
+        "operationId": "MembersController_syncFace",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar face do membro com os leitores Intelbras",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/company-users": {
+      "get": {
+        "operationId": "CompanyUsersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar usuários da empresa com mapa de permissões por operador",
+        "tags": [
+          "company-users"
+        ]
+      }
+    },
+    "/company-users/invite-links": {
+      "get": {
+        "operationId": "CompanyUsersController_listInviteLinks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar convites ativos da empresa",
+        "tags": [
+          "company-users"
+        ]
+      },
+      "post": {
+        "operationId": "CompanyUsersController_generateInviteLink",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateCompanyUserInviteLinkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar convite para novo membro da empresa",
+        "tags": [
+          "company-users"
+        ]
+      }
+    },
+    "/company-users/{companyUserId}/role": {
+      "patch": {
+        "operationId": "CompanyUsersController_updateRole",
+        "parameters": [
+          {
+            "name": "companyUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchCompanyUserRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Alterar papel do colaborador",
+        "tags": [
+          "company-users"
+        ]
+      }
+    },
+    "/company-users/{companyUserId}/active": {
+      "patch": {
+        "operationId": "CompanyUsersController_setActive",
+        "parameters": [
+          {
+            "name": "companyUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchCompanyUserActiveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/desativar colaborador",
+        "tags": [
+          "company-users"
+        ]
+      }
+    },
+    "/company-users/{companyUserId}/profile": {
+      "patch": {
+        "operationId": "CompanyUsersController_updateProfile",
+        "parameters": [
+          {
+            "name": "companyUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchCompanyUserProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar nome exibido e dados do vínculo",
+        "tags": [
+          "company-users"
+        ]
+      }
+    },
+    "/company-users/{companyUserId}/permissions": {
+      "patch": {
+        "operationId": "CompanyUsersController_updatePermissions",
+        "parameters": [
+          {
+            "name": "companyUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchCompanyUserPermissionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Permissões granulares por módulo (operadores)",
+        "tags": [
+          "company-users"
+        ]
+      }
+    },
+    "/clients/{clientId}/school-classes": {
+      "get": {
+        "operationId": "SchoolClassesController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar turmas da escola (cliente tipo school)",
+        "tags": [
+          "school-classes"
+        ]
+      },
+      "post": {
+        "operationId": "SchoolClassesController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar turma",
+        "tags": [
+          "school-classes"
+        ]
+      }
+    },
+    "/clients/{clientId}/school-classes/{classId}": {
+      "patch": {
+        "operationId": "SchoolClassesController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar turma",
+        "tags": [
+          "school-classes"
+        ]
+      }
+    },
+    "/clients/{clientId}/shifts": {
+      "get": {
+        "operationId": "ShiftsController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar horários de acesso do cliente",
+        "tags": [
+          "shifts"
+        ]
+      },
+      "post": {
+        "operationId": "ShiftsController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar horário",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/clients/{clientId}/shifts/{shiftId}": {
+      "get": {
+        "operationId": "ShiftsController_getOne",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shiftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe do horário",
+        "tags": [
+          "shifts"
+        ]
+      },
+      "patch": {
+        "operationId": "ShiftsController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shiftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar horário",
+        "tags": [
+          "shifts"
+        ]
+      },
+      "delete": {
+        "operationId": "ShiftsController_remove",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shiftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover horário",
+        "tags": [
+          "shifts"
+        ]
+      }
+    },
+    "/clients/{clientId}/students": {
+      "get": {
+        "operationId": "StudentsController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar alunos paginados (?page, ?pageSize, ?search, ?classId)",
+        "tags": [
+          "students"
+        ]
+      },
+      "post": {
+        "operationId": "StudentsController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar aluno",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/students/face/global-sync/progress": {
+      "get": {
+        "operationId": "StudentsController_globalSyncProgress",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — progresso da sincronização global de alunos (token na query)",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/students/{studentId}/classes": {
+      "post": {
+        "operationId": "StudentsController_linkClass",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vincular turma ao aluno",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/students/{studentId}/classes/{classId}": {
+      "delete": {
+        "operationId": "StudentsController_unlinkClass",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover vínculo aluno–turma",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/students/{studentId}/responsibles": {
+      "get": {
+        "operationId": "StudentsController_listLinkedResponsibles",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar responsáveis vinculados ao aluno",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/students/{studentId}/face/sync": {
+      "post": {
+        "operationId": "StudentsController_syncFace",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar face do aluno com os leitores Intelbras",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/students/{studentId}": {
+      "get": {
+        "operationId": "StudentsController_getOne",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe do aluno",
+        "tags": [
+          "students"
+        ]
+      },
+      "patch": {
+        "operationId": "StudentsController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar aluno",
+        "tags": [
+          "students"
+        ]
+      },
+      "delete": {
+        "operationId": "StudentsController_deleteStudent",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir aluno (remove face dos leitores e vínculos)",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles": {
+      "get": {
+        "operationId": "ResponsiblesController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar responsáveis da escola paginados (?page, ?pageSize, ?search)",
+        "tags": [
+          "responsibles"
+        ]
+      },
+      "post": {
+        "operationId": "ResponsiblesController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar responsável com login (usuário + senha)",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles/face/global-sync/progress": {
+      "get": {
+        "operationId": "ResponsiblesController_globalSyncProgress",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — progresso da sincronização global de responsáveis (token na query)",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles/{responsibleId}/students": {
+      "get": {
+        "operationId": "ResponsiblesController_listStudents",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar alunos vinculados ao responsável",
+        "tags": [
+          "responsibles"
+        ]
+      },
+      "post": {
+        "operationId": "ResponsiblesController_linkStudent",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vincular aluno ao responsável",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles/{responsibleId}/students/{studentId}": {
+      "delete": {
+        "operationId": "ResponsiblesController_unlinkStudent",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover vínculo aluno–responsável",
+        "tags": [
+          "responsibles"
+        ]
+      },
+      "patch": {
+        "operationId": "ResponsiblesController_updateLink",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar vínculo (parentesco / autorização de retirada)",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles/{responsibleId}/face/sync": {
+      "post": {
+        "operationId": "ResponsiblesController_syncFace",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar face do responsável com os leitores Intelbras",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles/{responsibleId}": {
+      "get": {
+        "operationId": "ResponsiblesController_getOne",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe do responsável",
+        "tags": [
+          "responsibles"
+        ]
+      },
+      "patch": {
+        "operationId": "ResponsiblesController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar responsável (opcional: nova senha)",
+        "tags": [
+          "responsibles"
+        ]
+      },
+      "delete": {
+        "operationId": "ResponsiblesController_deleteResponsible",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir responsável (remove face, placas, veículos e vínculos)",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/member/me": {
+      "get": {
+        "operationId": "MemberPortalController_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Perfil do membro autenticado (app)",
+        "tags": [
+          "member-portal"
+        ]
+      }
+    },
+    "/member/accesses": {
+      "get": {
+        "operationId": "MemberPortalController_listAccesses",
+        "parameters": [
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Histórico de acessos faciais do membro autenticado",
+        "tags": [
+          "member-portal"
+        ]
+      }
+    },
+    "/member/accesses/snapshot": {
+      "get": {
+        "operationId": "MemberPortalController_accessSnapshot",
+        "parameters": [
+          {
+            "name": "url",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Proxy da foto de captura do evento (URL deve ser de leitor Intelbras da escola)",
+        "tags": [
+          "member-portal"
+        ]
+      }
+    },
+    "/responsible/children": {
+      "get": {
+        "operationId": "ResponsibleDashboardController_listChildren",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar filhos vinculados ao responsável (app)",
+        "tags": [
+          "responsible-dashboard"
+        ]
+      }
+    },
+    "/responsible/accesses/snapshot": {
+      "get": {
+        "operationId": "ResponsibleDashboardController_accessSnapshot",
+        "parameters": [
+          {
+            "name": "url",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Proxy da foto de captura do evento (URL deve ser de leitor Intelbras da escola)",
+        "tags": [
+          "responsible-dashboard"
+        ]
+      }
+    },
+    "/responsible/accesses/all": {
+      "get": {
+        "operationId": "ResponsibleDashboardController_listAllHouseholdAccesses",
+        "parameters": [
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Histórico de acessos de todo o núcleo (responsáveis e alunos com face no household)",
+        "tags": [
+          "responsible-dashboard"
+        ]
+      }
+    },
+    "/responsible/accesses/peer/{responsibleId}": {
+      "get": {
+        "operationId": "ResponsibleDashboardController_listHouseholdPeerAccesses",
+        "parameters": [
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Histórico de acessos de um co-responsável do mesmo núcleo (mesmos alunos)",
+        "tags": [
+          "responsible-dashboard"
+        ]
+      }
+    },
+    "/responsible/me/accesses": {
+      "get": {
+        "operationId": "ResponsibleDashboardController_listOwnAccesses",
+        "parameters": [
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Histórico de acessos faciais do próprio responsável (face cadastrada na escola)",
+        "tags": [
+          "responsible-dashboard"
+        ]
+      }
+    },
+    "/responsible/other-responsibles": {
+      "get": {
+        "operationId": "ResponsibleDashboardController_listPeerResponsibles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar outros responsáveis da escola (para autorizar retirada por cadastrado)",
+        "tags": [
+          "responsible-dashboard"
+        ]
+      }
+    },
+    "/responsible/children/{studentId}/accesses": {
+      "get": {
+        "operationId": "ResponsibleDashboardController_listAccesses",
+        "parameters": [
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Histórico de acessos faciais do aluno vinculado",
+        "tags": [
+          "responsible-dashboard"
+        ]
+      }
+    },
+    "/clients/{clientId}/pickup-authorizations": {
+      "get": {
+        "operationId": "PickupAuthorizationsSchoolController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar autorizações temporárias de retirada (escola)",
+        "tags": [
+          "pickup-authorizations"
+        ]
+      }
+    },
+    "/clients/{clientId}/pickup-authorizations/{id}/mark-used": {
+      "patch": {
+        "operationId": "PickupAuthorizationsSchoolController_markUsed",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Marcar autorização como utilizada pela portaria",
+        "tags": [
+          "pickup-authorizations"
+        ]
+      }
+    },
+    "/clients/{clientId}/pickup-authorizations/{id}/cancel": {
+      "patch": {
+        "operationId": "PickupAuthorizationsSchoolController_cancel",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancelar autorização (escola)",
+        "tags": [
+          "pickup-authorizations"
+        ]
+      }
+    },
+    "/clients/{clientId}/pickup-authorizations/{id}": {
+      "delete": {
+        "operationId": "PickupAuthorizationsSchoolController_delete",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir autorização cancelada ou expirada (escola)",
+        "tags": [
+          "pickup-authorizations"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations": {
+      "get": {
+        "operationId": "PickupAuthorizationsResponsibleController_listMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar minhas autorizações temporárias de retirada",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      },
+      "post": {
+        "operationId": "PickupAuthorizationsResponsibleController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar autorização temporária de retirada",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/lookup-guest-responsible": {
+      "get": {
+        "operationId": "PickupAuthorizationsResponsibleController_lookupGuestResponsible",
+        "parameters": [
+          {
+            "name": "document",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Buscar responsável cadastrado pelo documento (CPF)",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations/{id}": {
+      "patch": {
+        "operationId": "PickupAuthorizationsResponsibleController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Editar ou renovar autorização temporária",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      },
+      "delete": {
+        "operationId": "PickupAuthorizationsResponsibleController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir autorização cancelada ou expirada",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations/{id}/guest-link": {
+      "post": {
+        "operationId": "PickupAuthorizationsResponsibleController_generateGuestLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar link de cadastro de face do convidado",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations/{id}/guest-face-url": {
+      "get": {
+        "operationId": "PickupAuthorizationsResponsibleController_guestFaceUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "URL assinada da foto enviada pelo convidado",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations/{id}/guest-face": {
+      "post": {
+        "operationId": "PickupAuthorizationsResponsibleController_submitGuestFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar face do convidado presencialmente e aprovar automaticamente",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations/{id}/approve-guest-face": {
+      "post": {
+        "operationId": "PickupAuthorizationsResponsibleController_approveGuestFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aprovar face do convidado e sincronizar leitores/LPR",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations/{id}/reject-guest-face": {
+      "post": {
+        "operationId": "PickupAuthorizationsResponsibleController_rejectGuestFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recusar face do convidado",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/responsible/pickup-authorizations/{id}/cancel": {
+      "patch": {
+        "operationId": "PickupAuthorizationsResponsibleController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancelar minha autorização ativa",
+        "tags": [
+          "pickup-authorizations-responsible"
+        ]
+      }
+    },
+    "/pickup-register/{code}": {
+      "get": {
+        "operationId": "PublicPickupRegisterController_preview",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Preview da autorização de retirada para cadastro de face",
+        "tags": [
+          "public-pickup-register"
+        ]
+      }
+    },
+    "/pickup-register/{code}/upload-photo": {
+      "post": {
+        "operationId": "PublicPickupRegisterController_uploadPhoto",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Enviar foto do convidado (base64 via servidor)",
+        "tags": [
+          "public-pickup-register"
+        ]
+      }
+    },
+    "/pickup-register/{code}/submit": {
+      "post": {
+        "operationId": "PublicPickupRegisterController_submit",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirmar envio da foto do convidado",
+        "tags": [
+          "public-pickup-register"
+        ]
+      }
+    },
+    "/clients/{clientId}/invites": {
+      "get": {
+        "operationId": "InvitesClientController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar convites de visitantes (painel web)",
+        "tags": [
+          "invites-client"
+        ]
+      }
+    },
+    "/clients/{clientId}/invites/{id}/mark-used": {
+      "patch": {
+        "operationId": "InvitesClientController_markUsed",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Marcar convite como utilizado",
+        "tags": [
+          "invites-client"
+        ]
+      }
+    },
+    "/clients/{clientId}/invites/{id}/cancel": {
+      "patch": {
+        "operationId": "InvitesClientController_cancel",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancelar convite (painel web)",
+        "tags": [
+          "invites-client"
+        ]
+      }
+    },
+    "/clients/{clientId}/invites/{id}": {
+      "delete": {
+        "operationId": "InvitesClientController_delete",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir convite cancelado, expirado ou utilizado",
+        "tags": [
+          "invites-client"
+        ]
+      }
+    },
+    "/member/invites": {
+      "get": {
+        "operationId": "InvitesMemberController_listMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar meus convites de visitantes",
+        "tags": [
+          "invites-member"
+        ]
+      },
+      "post": {
+        "operationId": "InvitesMemberController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar convite de visitante",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/member/invites/{id}": {
+      "patch": {
+        "operationId": "InvitesMemberController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Editar ou renovar convite de visitante",
+        "tags": [
+          "invites-member"
+        ]
+      },
+      "delete": {
+        "operationId": "InvitesMemberController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir convite cancelado, expirado ou utilizado",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/member/invites/{id}/guest-link": {
+      "post": {
+        "operationId": "InvitesMemberController_generateGuestLink",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar link de cadastro de face do visitante",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/member/invites/{id}/guest-face-url": {
+      "get": {
+        "operationId": "InvitesMemberController_guestFaceUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "URL assinada da foto enviada pelo visitante",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/member/invites/{id}/guest-face": {
+      "post": {
+        "operationId": "InvitesMemberController_submitGuestFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar face do visitante presencialmente e aprovar automaticamente",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/member/invites/{id}/approve-guest-face": {
+      "post": {
+        "operationId": "InvitesMemberController_approveGuestFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aprovar face do visitante e sincronizar leitores/LPR",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/member/invites/{id}/reject-guest-face": {
+      "post": {
+        "operationId": "InvitesMemberController_rejectGuestFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recusar face do visitante",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/member/invites/{id}/cancel": {
+      "patch": {
+        "operationId": "InvitesMemberController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancelar meu convite ativo",
+        "tags": [
+          "invites-member"
+        ]
+      }
+    },
+    "/invite-register/{code}": {
+      "get": {
+        "operationId": "PublicInviteRegisterController_preview",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Preview do convite de visitante para cadastro de face",
+        "tags": [
+          "public-invite-register"
+        ]
+      }
+    },
+    "/invite-register/{code}/upload-photo": {
+      "post": {
+        "operationId": "PublicInviteRegisterController_uploadPhoto",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Enviar foto do visitante (base64 via servidor)",
+        "tags": [
+          "public-invite-register"
+        ]
+      }
+    },
+    "/invite-register/{code}/submit": {
+      "post": {
+        "operationId": "PublicInviteRegisterController_submit",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirmar envio da foto do visitante",
+        "tags": [
+          "public-invite-register"
+        ]
+      }
+    },
+    "/responsible/managed-responsibles": {
+      "post": {
+        "operationId": "ManagedResponsiblesController_createManaged",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateManagedResponsibleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar responsável presencialmente (Fluxo 1)",
+        "tags": [
+          "managed-responsibles"
+        ]
+      },
+      "get": {
+        "operationId": "ManagedResponsiblesController_listManaged",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar responsáveis do núcleo familiar",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/managed-responsibles/{id}": {
+      "delete": {
+        "operationId": "ManagedResponsiblesController_deleteManaged",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir responsável do núcleo familiar (apenas pai/mãe)",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/responsible-invitations": {
+      "post": {
+        "operationId": "ManagedResponsiblesController_createInvitation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateManagedResponsibleInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar convite de cadastro de responsável (Fluxo 2)",
+        "tags": [
+          "managed-responsibles"
+        ]
+      },
+      "get": {
+        "operationId": "ManagedResponsiblesController_listInvitations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar convites de cadastro de responsável",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/responsible-invitations/{id}/face-url": {
+      "get": {
+        "operationId": "ManagedResponsiblesController_faceUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "URL assinada da foto enviada pelo convidado",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/responsible-invitations/{id}/approve-face": {
+      "post": {
+        "operationId": "ManagedResponsiblesController_approveFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aprovar face do convidado",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/responsible-invitations/{id}/reject-face": {
+      "post": {
+        "operationId": "ManagedResponsiblesController_rejectFace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recusar face do convidado",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/responsible-invitations/{id}/approve-plate": {
+      "post": {
+        "operationId": "ManagedResponsiblesController_approvePlate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aprovar placa do convidado",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/responsible-invitations/{id}/reject-plate": {
+      "post": {
+        "operationId": "ManagedResponsiblesController_rejectPlate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recusar placa do convidado",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible/responsible-invitations/{id}/cancel": {
+      "patch": {
+        "operationId": "ManagedResponsiblesController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancelar convite pendente",
+        "tags": [
+          "managed-responsibles"
+        ]
+      }
+    },
+    "/responsible-register/{code}": {
+      "get": {
+        "operationId": "PublicResponsibleRegisterController_preview",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Preview do convite de cadastro de responsável",
+        "tags": [
+          "public-responsible-register"
+        ]
+      }
+    },
+    "/responsible-register/{code}/upload-photo": {
+      "post": {
+        "operationId": "PublicResponsibleRegisterController_uploadPhoto",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Enviar foto do convidado (base64 via servidor)",
+        "tags": [
+          "public-responsible-register"
+        ]
+      }
+    },
+    "/responsible-register/{code}/submit": {
+      "post": {
+        "operationId": "PublicResponsibleRegisterController_submit",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirmar cadastro completo do convidado",
+        "tags": [
+          "public-responsible-register"
+        ]
+      }
+    },
+    "/clients/{clientId}/vehicles/driver-options": {
+      "get": {
+        "operationId": "ClientVehiclesController_driverOptions",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar responsáveis elegíveis como condutores (gestão escola / web)",
+        "tags": [
+          "vehicles-school"
+        ]
+      }
+    },
+    "/clients/{clientId}/vehicles": {
+      "get": {
+        "operationId": "ClientVehiclesController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar veículos da escola paginados (?page, ?pageSize, ?search)",
+        "tags": [
+          "vehicles-school"
+        ]
+      },
+      "post": {
+        "operationId": "ClientVehiclesController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar veículo",
+        "tags": [
+          "vehicles-school"
+        ]
+      }
+    },
+    "/clients/{clientId}/vehicles/{id}": {
+      "patch": {
+        "operationId": "ClientVehiclesController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar veículo",
+        "tags": [
+          "vehicles-school"
+        ]
+      },
+      "delete": {
+        "operationId": "ClientVehiclesController_remove",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover veículo",
+        "tags": [
+          "vehicles-school"
+        ]
+      }
+    },
+    "/responsible/vehicles/driver-options": {
+      "get": {
+        "operationId": "VehiclesResponsibleController_driverOptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar responsáveis que podem ser condutores (você e co-responsáveis pelos mesmos alunos)",
+        "tags": [
+          "vehicles-responsible"
+        ]
+      }
+    },
+    "/responsible/vehicles": {
+      "get": {
+        "operationId": "VehiclesResponsibleController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar veículos cadastrados pelo responsável",
+        "tags": [
+          "vehicles-responsible"
+        ]
+      },
+      "post": {
+        "operationId": "VehiclesResponsibleController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar veículo (LPR / escola)",
+        "tags": [
+          "vehicles-responsible"
+        ]
+      }
+    },
+    "/responsible/vehicles/{id}": {
+      "patch": {
+        "operationId": "VehiclesResponsibleController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar veículo (condutor, placa, marca, modelo, cor)",
+        "tags": [
+          "vehicles-responsible"
+        ]
+      },
+      "delete": {
+        "operationId": "VehiclesResponsibleController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover veículo cadastrado",
+        "tags": [
+          "vehicles-responsible"
+        ]
+      }
+    },
+    "/responsible/vehicles/{id}/sync": {
+      "post": {
+        "operationId": "VehiclesResponsibleController_sync",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar placa do veículo com as câmeras LPR Intelbras",
+        "tags": [
+          "vehicles-responsible"
+        ]
+      }
+    },
+    "/member/vehicles": {
+      "get": {
+        "operationId": "VehiclesMemberController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar veículos cadastrados pelo membro",
+        "tags": [
+          "vehicles-member"
+        ]
+      },
+      "post": {
+        "operationId": "VehiclesMemberController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cadastrar veículo (LPR)",
+        "tags": [
+          "vehicles-member"
+        ]
+      }
+    },
+    "/member/vehicles/{id}": {
+      "patch": {
+        "operationId": "VehiclesMemberController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar veículo (placa, marca, modelo, cor)",
+        "tags": [
+          "vehicles-member"
+        ]
+      },
+      "delete": {
+        "operationId": "VehiclesMemberController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover veículo cadastrado",
+        "tags": [
+          "vehicles-member"
+        ]
+      }
+    },
+    "/member/vehicles/{id}/sync": {
+      "post": {
+        "operationId": "VehiclesMemberController_sync",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar placa do veículo com as câmeras LPR Intelbras",
+        "tags": [
+          "vehicles-member"
+        ]
+      }
+    },
+    "/responsible/me/face": {
+      "get": {
+        "operationId": "FaceEnrollmentController_getMyFace",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status da face do responsável (foto cadastrada e sync com leitores)",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      },
+      "post": {
+        "operationId": "FaceEnrollmentController_uploadMyFace",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar/atualizar foto do responsável e sincronizar com os leitores",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      }
+    },
+    "/responsible/me/face/sync": {
+      "post": {
+        "operationId": "FaceEnrollmentController_resyncMyFace",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reenviar foto já armazenada para os leitores faciais (sem nova imagem)",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      }
+    },
+    "/responsible/children/{studentId}/face": {
+      "get": {
+        "operationId": "FaceEnrollmentController_getChildFace",
+        "parameters": [
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status da face de um aluno vinculado ao responsável",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      },
+      "post": {
+        "operationId": "FaceEnrollmentController_uploadChildFace",
+        "parameters": [
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar/atualizar foto de um aluno vinculado e sincronizar com os leitores",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      }
+    },
+    "/responsible/children/{studentId}/face/sync": {
+      "post": {
+        "operationId": "FaceEnrollmentController_resyncChildFace",
+        "parameters": [
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reenviar foto do aluno já armazenada para os leitores (sem nova imagem)",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      }
+    },
+    "/responsible/household/{responsibleId}/face": {
+      "get": {
+        "operationId": "FaceEnrollmentController_getHouseholdMemberFace",
+        "parameters": [
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status da face de um co-responsável do mesmo núcleo (compartilham alunos)",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      },
+      "post": {
+        "operationId": "FaceEnrollmentController_uploadHouseholdMemberFace",
+        "parameters": [
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar/atualizar foto de um co-responsável do núcleo e sincronizar com os leitores",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      }
+    },
+    "/responsible/household/{responsibleId}/face/sync": {
+      "post": {
+        "operationId": "FaceEnrollmentController_resyncHouseholdMemberFace",
+        "parameters": [
+          {
+            "name": "responsibleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reenviar foto do co-responsável já armazenada para os leitores (sem nova imagem)",
+        "tags": [
+          "responsible-face-enrollment"
+        ]
+      }
+    },
+    "/member/me/face": {
+      "get": {
+        "operationId": "MemberFaceEnrollmentController_getMyFace",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status da face do membro (foto cadastrada e sync com leitores)",
+        "tags": [
+          "member-face-enrollment"
+        ]
+      },
+      "post": {
+        "operationId": "MemberFaceEnrollmentController_uploadMyFace",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar/atualizar foto do membro e sincronizar com os leitores",
+        "tags": [
+          "member-face-enrollment"
+        ]
+      }
+    },
+    "/member/me/face/sync": {
+      "post": {
+        "operationId": "MemberFaceEnrollmentController_resyncMyFace",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reenviar foto já armazenada para os leitores faciais (sem nova imagem)",
+        "tags": [
+          "member-face-enrollment"
+        ]
+      }
+    },
+    "/me/navigation": {
+      "get": {
+        "operationId": "MeController_navigation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Paths permitidos na sidebar da área empresa",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/me/can-check": {
+      "get": {
+        "operationId": "MeController_canCheck",
+        "parameters": [
+          {
+            "name": "feature",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Checa permissão granular (empresa). Usado pelo middleware Next.js",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/me/permissions/{featureSlug}": {
+      "get": {
+        "operationId": "MeController_permissionsForFeature",
+        "parameters": [
+          {
+            "name": "featureSlug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ações efetivas para uma feature (equivalente a getPermissions no Next.js)",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/dashboard/stats": {
+      "get": {
+        "operationId": "DashboardController_getStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Contagens do painel (escopo empresa ou cliente conforme o papel)",
+        "tags": [
+          "dashboard"
+        ]
+      }
+    },
+    "/notifications/push-token": {
+      "patch": {
+        "operationId": "NotificationsController_registerPushToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePushTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registrar token Expo Push do app (responsável)",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_ping",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Health check",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/legal-documents/{type}/active": {
+      "get": {
+        "operationId": "LegalDocumentsController_getActive",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Documento legal ativo por tipo (público)",
+        "tags": [
+          "legal-documents"
+        ]
+      }
+    },
+    "/legal-documents/{type}/versions": {
+      "get": {
+        "operationId": "LegalDocumentsController_listVersions",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Versões de um documento legal (público, sem conteúdo)",
+        "tags": [
+          "legal-documents"
+        ]
+      }
+    },
+    "/legal-documents/{type}/{version}": {
+      "get": {
+        "operationId": "LegalDocumentsController_getByVersion",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Versão específica de um documento legal (público)",
+        "tags": [
+          "legal-documents"
+        ]
+      }
+    },
+    "/clients/{clientId}/arrivals/stream": {
+      "get": {
+        "operationId": "ArrivalsController_arrivalsStream",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Arrivals"
+        ]
+      }
+    },
+    "/simulate/people": {
+      "get": {
+        "operationId": "SimulateController_people",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "[Dev] Lista alunos, responsáveis e membros com indicador se possuem faceId (para simular acesso)",
+        "tags": [
+          "simulate"
+        ]
+      }
+    },
+    "/simulate/face-access": {
+      "post": {
+        "operationId": "SimulateController_faceAccess",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateFaceAccessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "[Dev] Simula uma detecção facial (persiste accesso + notificações + SSE)",
+        "tags": [
+          "simulate"
+        ]
+      }
+    },
+    "/ienh/filial-mappings": {
+      "get": {
+        "operationId": "IenhController_listFilialMappings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar mapeamento FILIAL IENH ↔ clientes Face2Go",
+        "tags": [
+          "ienh"
+        ]
+      },
+      "put": {
+        "operationId": "IenhController_setFilialMapping",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Associar filial IENH a um cliente",
+        "tags": [
+          "ienh"
+        ]
+      }
+    },
+    "/ienh/fetch": {
+      "post": {
+        "operationId": "IenhController_fetch",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Buscar dados na API TOTVS IENH e salvar snapshot JSON em disco",
+        "tags": [
+          "ienh"
+        ]
+      }
+    },
+    "/ienh/sync": {
+      "post": {
+        "operationId": "IenhController_sync",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sincronizar cadastros IENH (turmas, alunos, responsáveis) no Face2Go",
+        "tags": [
+          "ienh"
+        ]
+      }
+    },
+    "/ienh/snapshots": {
+      "get": {
+        "operationId": "IenhController_listSnapshots",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar snapshots IENH salvos em disco",
+        "tags": [
+          "ienh"
+        ]
+      }
+    },
+    "/ienh/sync/progress": {
+      "get": {
+        "operationId": "IenhController_syncProgress",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — progresso da sincronização IENH (token na query aceito)",
+        "tags": [
+          "ienh"
+        ]
+      }
+    },
+    "/ienh/sync/progress/from-snapshot": {
+      "get": {
+        "operationId": "IenhController_syncProgressFromSnapshot",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — re-sincronizar a partir de snapshot JSON (sem chamar TOTVS)",
+        "tags": [
+          "ienh"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Face2go API",
+    "description": "Backend NestJS da plataforma Face2go",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "identifier": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "SelectContextDto": {
+        "type": "object",
+        "properties": {
+          "contextType": {
+            "type": "string",
+            "enum": [
+              "super_admin",
+              "company",
+              "client",
+              "responsible",
+              "member",
+              "face_user"
+            ]
+          },
+          "contextId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "contextType"
+        ]
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 30
+          },
+          "jobTitle": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "invite": {
+            "type": "string",
+            "minLength": 4
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "name",
+          "invite"
+        ]
+      },
+      "JoinContextDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          },
+          "invite": {
+            "type": "string",
+            "minLength": 4
+          }
+        },
+        "required": [
+          "identifier",
+          "password",
+          "invite"
+        ]
+      },
+      "RequestPasswordDto": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "identifier"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ]
+      },
+      "CreateCompanyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "cnpj": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "logoUrl": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "isActive"
+        ]
+      },
+      "PatchCompanyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "cnpj": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "logoUrl": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GenerateCompanyInviteDto": {
+        "type": "object",
+        "properties": {
+          "companyId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "company_admin",
+              "company_operator"
+            ]
+          }
+        },
+        "required": [
+          "companyId",
+          "role"
+        ]
+      },
+      "GenerateCompanyUserInviteLinkDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "company_admin",
+              "company_operator"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "PatchCompanyUserRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "company_admin",
+              "company_operator"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "PatchCompanyUserActiveDto": {
+        "type": "object",
+        "properties": {
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "isActive"
+        ]
+      },
+      "PatchCompanyUserProfileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "jobTitle": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120,
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 30,
+            "nullable": true
+          }
+        }
+      },
+      "PatchCompanyUserPermissionsDto": {
+        "type": "object",
+        "properties": {
+          "featureSlug": {
+            "type": "string"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "can_read",
+                "can_create",
+                "can_update",
+                "can_delete"
+              ]
+            }
+          }
+        },
+        "required": [
+          "featureSlug",
+          "actions"
+        ]
+      },
+      "CreateManagedResponsibleDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 32,
+            "nullable": true
+          },
+          "document": {
+            "type": "string",
+            "maxLength": 32,
+            "nullable": true
+          },
+          "isActive": {
+            "default": true,
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "nullable": true
+          },
+          "linkedResponsibleId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "students": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "studentId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "relationshipType": {
+                  "type": "string",
+                  "enum": [
+                    "parent",
+                    "grandparent",
+                    "aunt_uncle",
+                    "sibling",
+                    "godparent",
+                    "guardian",
+                    "other"
+                  ]
+                },
+                "isAuthorizedPickup": {
+                  "default": true,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "studentId",
+                "relationshipType"
+              ]
+            }
+          },
+          "imageBase64": {
+            "type": "string",
+            "minLength": 64
+          },
+          "vehicle": {
+            "type": "object",
+            "properties": {
+              "plate": {
+                "type": "string"
+              },
+              "brand": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "color": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50
+              }
+            },
+            "required": [
+              "plate",
+              "brand",
+              "model",
+              "color"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "students"
+        ]
+      },
+      "CreateManagedResponsibleInvitationDto": {
+        "type": "object",
+        "properties": {
+          "students": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "studentId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "relationshipType": {
+                  "type": "string",
+                  "enum": [
+                    "parent",
+                    "grandparent",
+                    "aunt_uncle",
+                    "sibling",
+                    "godparent",
+                    "guardian",
+                    "other"
+                  ]
+                },
+                "isAuthorizedPickup": {
+                  "default": true,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "studentId",
+                "relationshipType"
+              ]
+            }
+          }
+        },
+        "required": [
+          "students"
+        ]
+      },
+      "UploadFaceDto": {
+        "type": "object",
+        "properties": {
+          "imageBase64": {
+            "type": "string",
+            "minLength": 64,
+            "description": "Imagem JPEG em base64 (opcional prefixo data:image/jpeg;base64,)"
+          }
+        },
+        "required": [
+          "imageBase64"
+        ]
+      },
+      "UpdatePushTokenDto": {
+        "type": "object",
+        "properties": {
+          "pushToken": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "pushToken"
+        ]
+      },
+      "SimulateFaceAccessDto": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "personId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "personType": {
+            "type": "string",
+            "enum": [
+              "student",
+              "responsible",
+              "member"
+            ]
+          },
+          "readerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "clientId",
+          "personId",
+          "personType"
+        ]
+      }
+    }
+  }
+}

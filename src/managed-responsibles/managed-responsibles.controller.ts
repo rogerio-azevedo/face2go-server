@@ -13,6 +13,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import {
+  CreateManagedResponsibleDto,
+  CreateManagedResponsibleInvitationDto,
+} from '../validation/dto/managed-responsibles.dto';
 import { ManagedResponsiblesService } from './managed-responsibles.service';
 
 @ApiTags('managed-responsibles')
@@ -24,7 +28,10 @@ export class ManagedResponsiblesController {
 
   @Post('managed-responsibles')
   @ApiOperation({ summary: 'Cadastrar responsável presencialmente (Fluxo 1)' })
-  createManaged(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+  createManaged(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: CreateManagedResponsibleDto,
+  ) {
     return this.svc.createManagedResponsible(user, body);
   }
 
@@ -49,7 +56,10 @@ export class ManagedResponsiblesController {
   @ApiOperation({
     summary: 'Criar convite de cadastro de responsável (Fluxo 2)',
   })
-  createInvitation(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+  createInvitation(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: CreateManagedResponsibleInvitationDto,
+  ) {
     return this.svc.createInvitation(user, body);
   }
 

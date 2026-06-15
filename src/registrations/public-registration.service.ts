@@ -49,20 +49,28 @@ function isLinkBundleUsable(
   return true;
 }
 
+function coerceTrimmedString(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim();
+  }
+  return '';
+}
+
 function normalizeAdditionalDataForClientType(
   clientType: string,
   raw: Record<string, unknown> | undefined,
 ): Record<string, unknown> | null {
   if (clientType === 'condominium') {
-    const block = String(raw?.block ?? '').trim();
-    const unit = String(raw?.unit ?? '').trim();
+    const block = coerceTrimmedString(raw?.block);
+    const unit = coerceTrimmedString(raw?.unit);
     if (!block || !unit) {
       throw new BadRequestException('Informe bloco e unidade.');
     }
     return { block, unit };
   }
   if (clientType === 'office' || clientType === 'clinic') {
-    const room = String(raw?.room ?? '').trim();
+    const room = coerceTrimmedString(raw?.room);
     if (!room) {
       throw new BadRequestException('Informe a sala.');
     }

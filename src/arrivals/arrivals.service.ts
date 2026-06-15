@@ -165,9 +165,7 @@ export class ArrivalsService {
         );
         return {
           name: link.studentName,
-          photoUrl: student
-            ? await this.presignPhoto(student.photoKey)
-            : null,
+          photoUrl: student ? await this.presignPhoto(student.photoKey) : null,
           className: null as string | null,
         };
       }),
@@ -390,52 +388,52 @@ export class ArrivalsService {
               payload.clientId,
             );
           } else {
-          const pickupAuths =
-            await pickupQueries.pickupAuthFindActiveByGuestFaceId(
-              this.database.db,
-              payload.clientId,
-              payload.faceId,
-            );
-          if (pickupAuths.length > 0) {
-            const primary = pickupAuths[0];
-            kind = 'responsible';
-            if (!personName) {
-              personName = primary.guestName ?? null;
-            }
-            personPhotoUrl = await this.presignPortraitPhoto(
-              primary.guestFaceImageKey,
-            );
-            students = await this.resolvePickupGuestArrivalStudents(
-              payload.clientId,
-              pickupAuths,
-            );
-            vehiclePlate = primary.guestVehiclePlate ?? null;
-          } else {
-            const inviteAuths =
-              await visitorInviteQueries.inviteFindActiveByGuestFaceId(
+            const pickupAuths =
+              await pickupQueries.pickupAuthFindActiveByGuestFaceId(
                 this.database.db,
                 payload.clientId,
                 payload.faceId,
               );
-            if (inviteAuths.length > 0) {
-              const primary = inviteAuths[0];
+            if (pickupAuths.length > 0) {
+              const primary = pickupAuths[0];
               kind = 'responsible';
               if (!personName) {
-                personName = primary.guestName ?? 'Visitante';
+                personName = primary.guestName ?? null;
               }
               personPhotoUrl = await this.presignPortraitPhoto(
                 primary.guestFaceImageKey,
               );
-              students = [];
+              students = await this.resolvePickupGuestArrivalStudents(
+                payload.clientId,
+                pickupAuths,
+              );
               vehiclePlate = primary.guestVehiclePlate ?? null;
             } else {
-            kind = 'student';
-            if (!personName) {
-              personName = payload.personName ?? 'Visitante';
+              const inviteAuths =
+                await visitorInviteQueries.inviteFindActiveByGuestFaceId(
+                  this.database.db,
+                  payload.clientId,
+                  payload.faceId,
+                );
+              if (inviteAuths.length > 0) {
+                const primary = inviteAuths[0];
+                kind = 'responsible';
+                if (!personName) {
+                  personName = primary.guestName ?? 'Visitante';
+                }
+                personPhotoUrl = await this.presignPortraitPhoto(
+                  primary.guestFaceImageKey,
+                );
+                students = [];
+                vehiclePlate = primary.guestVehiclePlate ?? null;
+              } else {
+                kind = 'student';
+                if (!personName) {
+                  personName = payload.personName ?? 'Visitante';
+                }
+                students = [];
+              }
             }
-            students = [];
-          }
-          }
           }
         }
       }
@@ -547,7 +545,7 @@ export class ArrivalsService {
           guestAuth.guestFaceImageKey,
         );
         let personName = guestAuth.guestName;
-        let responsibleId: string | null = guestAuth.linkedResponsibleId;
+        const responsibleId: string | null = guestAuth.linkedResponsibleId;
 
         if (guestAuth.linkedResponsibleId) {
           const linked = await responsiblesQueries.getResponsibleById(
@@ -583,11 +581,12 @@ export class ArrivalsService {
         return;
       }
 
-      const inviteGuest = await visitorInviteQueries.inviteFindActiveGuestByPlate(
-        this.database.db,
-        payload.clientId,
-        payload.plateNumber,
-      );
+      const inviteGuest =
+        await visitorInviteQueries.inviteFindActiveGuestByPlate(
+          this.database.db,
+          payload.clientId,
+          payload.plateNumber,
+        );
 
       if (!inviteGuest) {
         return;

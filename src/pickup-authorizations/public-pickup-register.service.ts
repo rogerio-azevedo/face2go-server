@@ -187,13 +187,17 @@ export class PublicPickupRegisterService {
           'Informe nome e documento antes de concluir.',
         );
       }
-      await pickupQueries.pickupAuthUpdateGuestProfile(this.database.db, row.id, {
-        guestName: gn,
-        guestDocument: normalizeCpf(gd) || gd,
-        guestPhone: parsed.data.guestPhone?.trim()
-          ? parsed.data.guestPhone.trim()
-          : null,
-      });
+      await pickupQueries.pickupAuthUpdateGuestProfile(
+        this.database.db,
+        row.id,
+        {
+          guestName: gn,
+          guestDocument: normalizeCpf(gd) || gd,
+          guestPhone: parsed.data.guestPhone?.trim()
+            ? parsed.data.guestPhone.trim()
+            : null,
+        },
+      );
     }
 
     const updated = await pickupQueries.pickupAuthUpdateGuestFaceSubmitted(

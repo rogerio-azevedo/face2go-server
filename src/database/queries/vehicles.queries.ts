@@ -110,10 +110,7 @@ export async function findVehiclePlateForMember(
     .select({ plate: vehicles.plate })
     .from(vehicles)
     .where(
-      and(
-        eq(vehicles.clientId, clientId),
-        eq(vehicles.memberId, memberId),
-      ),
+      and(eq(vehicles.clientId, clientId), eq(vehicles.memberId, memberId)),
     )
     .orderBy(desc(vehicles.createdAt))
     .limit(1);
@@ -251,9 +248,10 @@ const vehicleListSelect = {
   lprSyncStatus: vehicles.lprSyncStatus,
   lprSyncError: vehicles.lprSyncError,
   lprSyncedAt: vehicles.lprSyncedAt,
-  driverName: sql<string>`coalesce(${responsibles.name}, ${clientMembers.name}, 'Condutor')`.as(
-    'driver_name',
-  ),
+  driverName:
+    sql<string>`coalesce(${responsibles.name}, ${clientMembers.name}, 'Condutor')`.as(
+      'driver_name',
+    ),
 };
 
 export async function countVehiclesForClient(

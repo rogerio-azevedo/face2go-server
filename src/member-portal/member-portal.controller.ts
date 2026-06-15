@@ -21,7 +21,9 @@ export class MemberPortalController {
   }
 
   @Get('accesses')
-  @ApiOperation({ summary: 'Histórico de acessos faciais do membro autenticado' })
+  @ApiOperation({
+    summary: 'Histórico de acessos faciais do membro autenticado',
+  })
   listAccesses(
     @CurrentUser() user: JwtPayload,
     @Query('page') pageStr?: string,

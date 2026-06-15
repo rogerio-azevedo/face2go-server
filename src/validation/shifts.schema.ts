@@ -53,7 +53,7 @@ const shiftScheduleSchema = z
   .strict();
 
 export const createShiftSchema = z.object({
-  name: z.string().trim().min(1, 'Informe o nome do turno.').max(255),
+  name: z.string().trim().min(1, 'Informe o nome do horário.').max(255),
   schedule: shiftScheduleSchema.default({}),
   isActive: z.boolean().optional().default(true),
 });

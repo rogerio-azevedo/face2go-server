@@ -342,7 +342,8 @@ export class IenhSyncService {
     }
 
     for (const clientId of syncedClientIds) {
-      const enrollments = enrollmentsByClient.get(clientId) ?? new Set<string>();
+      const enrollments =
+        enrollmentsByClient.get(clientId) ?? new Set<string>();
       const deactivated = await studentsQueries.deactivateStudentsNotInList(
         this.database.db,
         clientId,
@@ -477,8 +478,7 @@ export class IenhSyncService {
           const existing = merged.get(key);
           if (
             !existing ||
-            perletMergePriority(perlet) <
-              perletMergePriority(existing.perlet)
+            perletMergePriority(perlet) < perletMergePriority(existing.perlet)
           ) {
             merged.set(key, { item, perlet });
           }
@@ -491,8 +491,9 @@ export class IenhSyncService {
         type: 'filial_fetched',
         filial,
         count: filialTotal,
-        mergedCount: [...merged.values()].filter((e) => e.item.filial === filial)
-          .length,
+        mergedCount: [...merged.values()].filter(
+          (e) => e.item.filial === filial,
+        ).length,
       });
     }
 

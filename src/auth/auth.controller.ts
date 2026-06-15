@@ -10,8 +10,15 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
 import { AllowIdentity } from '../common/decorators/allow-identity.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import {
+  JoinContextDto,
+  LoginDto,
+  RegisterDto,
+  RequestPasswordDto,
+  ResetPasswordDto,
+  SelectContextDto,
+} from '../validation/dto/auth.dto';
 import { AuthService } from './auth.service';
-import { LoginDto, SelectContextDto } from './dto/auth-login.dto';
 import type { LoginResult } from './interfaces/auth-types.interface';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
@@ -50,8 +57,8 @@ export class AuthController {
   @Public()
   @Post('register')
   @ApiOperation({ summary: 'Cadastro via código de convite' })
-  async register(@Body() body: Record<string, unknown>) {
-    return await this.authService.register(body);
+  async register(@Body() dto: RegisterDto) {
+    return await this.authService.register(dto);
   }
 
   @Public()
@@ -59,8 +66,8 @@ export class AuthController {
   @ApiOperation({
     summary: 'Usuário existente aceita convite e vincula novo contexto',
   })
-  async joinContext(@Body() body: Record<string, unknown>) {
-    return await this.authService.joinContext(body);
+  async joinContext(@Body() dto: JoinContextDto) {
+    return await this.authService.joinContext(dto);
   }
 
   @Public()
@@ -68,15 +75,15 @@ export class AuthController {
   @ApiOperation({
     summary: 'Solicita e-mail para redefinir senha (e-mail ou CPF)',
   })
-  async requestPassword(@Body() body: Record<string, unknown>) {
-    return await this.authService.requestPassword(body);
+  async requestPassword(@Body() dto: RequestPasswordDto) {
+    return await this.authService.requestPassword(dto);
   }
 
   @Public()
   @Post('reset-password')
   @ApiOperation({ summary: 'Redefine senha com token recebido por e-mail' })
-  async resetPassword(@Body() body: Record<string, unknown>) {
-    return await this.authService.resetPassword(body);
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return await this.authService.resetPassword(dto);
   }
 
   @AllowIdentity()

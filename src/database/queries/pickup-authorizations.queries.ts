@@ -364,9 +364,7 @@ export async function pickupAuthFindActiveByLinkedResponsible(
   db: AppDb,
   clientId: string,
   linkedResponsibleId: string,
-): Promise<
-  Array<{ id: string; requestedByResponsibleId: string }>
-> {
+): Promise<Array<{ id: string; requestedByResponsibleId: string }>> {
   const now = new Date();
   return db
     .select({
@@ -378,7 +376,10 @@ export async function pickupAuthFindActiveByLinkedResponsible(
     .where(
       and(
         eq(temporaryPickupAuthorizations.clientId, clientId),
-        eq(temporaryPickupAuthorizations.linkedResponsibleId, linkedResponsibleId),
+        eq(
+          temporaryPickupAuthorizations.linkedResponsibleId,
+          linkedResponsibleId,
+        ),
         eq(temporaryPickupAuthorizations.status, 'active'),
         eq(temporaryPickupAuthorizations.guestApprovalStatus, 'approved'),
         lte(temporaryPickupAuthorizations.validFrom, now),
@@ -401,7 +402,9 @@ export async function pickupAuthUpdateStatus(
       status,
       updatedAt: new Date(),
       ...(extras.usedAt !== undefined ? { usedAt: extras.usedAt } : {}),
-      ...(extras.guestFaceId !== undefined ? { guestFaceId: extras.guestFaceId } : {}),
+      ...(extras.guestFaceId !== undefined
+        ? { guestFaceId: extras.guestFaceId }
+        : {}),
     })
     .where(
       and(
@@ -463,7 +466,9 @@ export async function pickupAuthUpdateGuestProfile(
     .set({
       guestName: patch.guestName,
       guestDocument: patch.guestDocument,
-      ...(patch.guestPhone !== undefined ? { guestPhone: patch.guestPhone } : {}),
+      ...(patch.guestPhone !== undefined
+        ? { guestPhone: patch.guestPhone }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(temporaryPickupAuthorizations.id, id))

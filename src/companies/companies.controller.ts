@@ -10,15 +10,14 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsEnum } from 'class-validator';
 
 import { Roles } from '../common/decorators/roles.decorator';
+import {
+  CreateCompanyDto,
+  GenerateCompanyInviteDto,
+  PatchCompanyDto,
+} from '../validation/dto/companies.dto';
 import { CompaniesService } from './companies.service';
-
-class GenerateInviteBodyDto {
-  @IsEnum(['company_admin', 'company_operator'])
-  role!: 'company_admin' | 'company_operator';
-}
 
 @ApiTags('companies')
 @ApiBearerAuth()
@@ -36,7 +35,7 @@ export class CompaniesController {
 
   @Post()
   @ApiOperation({ summary: 'Criar empresa' })
-  async create(@Body() body: unknown) {
+  async create(@Body() body: CreateCompanyDto) {
     return this.companiesService.create(body);
   }
 
@@ -54,7 +53,10 @@ export class CompaniesController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Atualizar empresa' })
-  async patch(@Param('id', ParseUUIDPipe) id: string, @Body() body: unknown) {
+  async patch(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: PatchCompanyDto,
+  ) {
     return this.companiesService.update(id, body);
   }
 
@@ -68,7 +70,7 @@ export class CompaniesController {
   @ApiOperation({ summary: 'Gerar link de convite' })
   async invite(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: GenerateInviteBodyDto,
+    @Body() body: GenerateCompanyInviteDto,
   ) {
     return this.companiesService.generateInvite(id, body.role);
   }

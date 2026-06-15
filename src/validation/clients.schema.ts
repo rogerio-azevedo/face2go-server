@@ -21,7 +21,9 @@ export function normalizeClientTimezoneOffset(raw: unknown): number {
   const n =
     typeof raw === 'number'
       ? raw
-      : Number(String(raw).trim().replace(',', '.'));
+      : typeof raw === 'string'
+        ? Number(raw.trim().replace(',', '.'))
+        : Number.NaN;
   if (!Number.isFinite(n) || !Number.isInteger(n))
     throw new Error('INVALID_TZ_OFFSET');
   let m = n;

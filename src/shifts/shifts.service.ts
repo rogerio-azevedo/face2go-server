@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import type { FeatureSlug } from '../common/features.constants';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as shiftsQueries from '../database/queries/shifts.queries';
 import { DatabaseService } from '../database/database.service';
@@ -103,7 +102,7 @@ export class ShiftsService {
       clientId,
     );
     if (!row) {
-      throw new NotFoundException('Turno não encontrado.');
+      throw new NotFoundException('Horário não encontrado.');
     }
     return row;
   }
@@ -157,7 +156,7 @@ export class ShiftsService {
       },
     );
     if (!updated) {
-      throw new NotFoundException('Turno não encontrado.');
+      throw new NotFoundException('Horário não encontrado.');
     }
     if (d.schedule !== undefined || d.isActive !== undefined) {
       await this.accessTimeZone.ensureShiftZone(clientId, updated);
@@ -173,7 +172,7 @@ export class ShiftsService {
       clientId,
     );
     if (!deleted) {
-      throw new NotFoundException('Turno não encontrado.');
+      throw new NotFoundException('Horário não encontrado.');
     }
     return { ok: true };
   }

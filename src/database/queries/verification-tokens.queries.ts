@@ -26,7 +26,10 @@ export async function insertVerificationToken(
   });
 }
 
-export async function findValidVerificationToken(db: AppDb, token: string) {
+export async function findValidVerificationToken(
+  db: AppDb,
+  token: string,
+): Promise<typeof verificationTokens.$inferSelect | null> {
   const [row] = await db
     .select()
     .from(verificationTokens)

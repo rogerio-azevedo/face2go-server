@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { UploadFaceDto } from './dto/upload-face.dto';
+import { UploadFaceDto } from '../validation/dto/common.dto';
 import { FaceEnrollmentService } from './face-enrollment.service';
 
 @ApiTags('member-face-enrollment')
@@ -40,5 +40,38 @@ export class MemberFaceEnrollmentController {
   })
   resyncMyFace(@CurrentUser() user: JwtPayload) {
     return this.faceEnrollmentService.resyncMemberMyFaceFromR2(user);
+  }
+
+  @Get('students')
+  @ApiOperation({
+    summary: 'Buscar alunos para cadastro facial (funcionário autorizado)',
+  })
+  listStudents(
+    @CurrentUser() user: JwtPayload,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.faceEnrollmentService.listStudentsForMemberEnrollment(user, {
+      search,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
+  }
+
+  @Post('students/:studentId/face')
+  @ApiOperation({
+    summary: 'Enviar/atualizar foto de aluno e sincronizar com os leitores',
+  })
+  uploadStudentFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('studentId') studentId: string,
+    @Body() dto: UploadFaceDto,
+  ) {
+    return this.faceEnrollmentService.uploadAndSyncStudentFaceByMember(
+      user,
+      studentId,
+      dto.imageBase64,
+    );
   }
 }

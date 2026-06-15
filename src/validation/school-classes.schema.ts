@@ -11,7 +11,7 @@ export const classShiftSchema = z.enum([
 export const createSchoolClassSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome da turma.').max(255),
   /** FK para entidade `shifts` do mesmo cliente. */
-  shiftId: z.string().uuid('Selecione um turno cadastrado.'),
+  shiftId: z.string().uuid('Selecione um horário cadastrado.'),
   year: z.number().int().min(2000).max(2100),
   isActive: z.boolean().optional().default(true),
 });

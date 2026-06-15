@@ -20,7 +20,6 @@ import {
   buildPaginatedResult,
   parseListPaginationParams,
   type ListPaginationParams,
-  type PaginatedResult,
 } from '../common/pagination';
 import {
   createStudentSchema,

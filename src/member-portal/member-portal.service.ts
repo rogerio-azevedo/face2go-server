@@ -71,6 +71,7 @@ export class MemberPortalService {
       deviceSyncError: row.deviceSyncError,
       additionalData: row.additionalData,
       isActive: row.isActive,
+      canEnrollStudentFace: row.canEnrollStudentFace,
     };
   }
 
@@ -92,10 +93,7 @@ export class MemberPortalService {
       limit,
       row.faceId != null
         ? new Map([
-            [
-              row.faceId,
-              { name: row.name, photoKey: row.photoKey ?? null },
-            ],
+            [row.faceId, { name: row.name, photoKey: row.photoKey ?? null }],
           ])
         : undefined,
     );

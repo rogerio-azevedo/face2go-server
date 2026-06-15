@@ -187,12 +187,13 @@ export class AccessesService {
 
     let personName: string | null = null;
     try {
-      personName =
-        await responsiblesQueries.findResponsibleByFaceIdAndClientId(
+      personName = await responsiblesQueries
+        .findResponsibleByFaceIdAndClientId(
           this.database.db,
           faceIdNum,
           ctx.clientId,
-        ).then((r) => r?.name ?? null);
+        )
+        .then((r) => r?.name ?? null);
     } catch (err: unknown) {
       this.logger.warn(
         `Lookup responsible personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
@@ -201,11 +202,13 @@ export class AccessesService {
 
     if (!personName) {
       try {
-        personName = await studentsQueries.findStudentByFaceIdAndClientId(
-          this.database.db,
-          faceIdNum,
-          ctx.clientId,
-        ).then((s) => s?.name ?? null);
+        personName = await studentsQueries
+          .findStudentByFaceIdAndClientId(
+            this.database.db,
+            faceIdNum,
+            ctx.clientId,
+          )
+          .then((s) => s?.name ?? null);
       } catch (err: unknown) {
         this.logger.warn(
           `Lookup student personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
@@ -263,11 +266,12 @@ export class AccessesService {
 
     if (!personName) {
       try {
-        const inviteAuths = await visitorInviteQueries.inviteFindActiveByGuestFaceId(
-          this.database.db,
-          ctx.clientId,
-          faceIdNum,
-        );
+        const inviteAuths =
+          await visitorInviteQueries.inviteFindActiveByGuestFaceId(
+            this.database.db,
+            ctx.clientId,
+            faceIdNum,
+          );
         const guestName = inviteAuths[0]?.guestName?.trim();
         if (guestName) {
           personName = guestName;

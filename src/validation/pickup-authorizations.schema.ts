@@ -27,7 +27,13 @@ const BR_PLATE_RE = /^([A-Z]{3}[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})$/;
  */
 export function parseWallClockDate(val: unknown): Date | undefined {
   if (val === undefined || val === null || val === '') return undefined;
-  const raw = String(val).trim();
+  const raw =
+    typeof val === 'string'
+      ? val.trim()
+      : typeof val === 'number' || typeof val === 'boolean'
+        ? String(val).trim()
+        : '';
+  if (!raw) return undefined;
   if (/[zZ]$/.test(raw) || /[+-]\d{2}:\d{2}$/.test(raw)) {
     const d = new Date(raw);
     return Number.isNaN(d.getTime()) ? undefined : d;
@@ -44,7 +50,10 @@ export function parseWallClockDate(val: unknown): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-const optionalValidDate = z.preprocess((val) => parseWallClockDate(val), z.date().optional());
+const optionalValidDate = z.preprocess(
+  (val) => parseWallClockDate(val),
+  z.date().optional(),
+);
 
 const pickupVehicleSchema = z
   .object({
@@ -118,7 +127,8 @@ export const createPickupAuthorizationSchema = z
     if (hasName !== hasDoc) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Informe nome e documento do convidado, ou omita ambos para cadastro por link.',
+        message:
+          'Informe nome e documento do convidado, ou omita ambos para cadastro por link.',
         path: ['guestName'],
       });
     }
@@ -130,8 +140,14 @@ export const updatePickupAuthorizationSchema = z
     guestName: z.string().trim().min(1).max(255).optional(),
     guestDocument: z.string().trim().min(1).max(64).optional(),
     guestPhone: z.string().trim().max(32).nullable().optional(),
-    validFrom: z.preprocess((val) => parseWallClockDate(val), z.date().optional()),
-    validUntil: z.preprocess((val) => parseWallClockDate(val), z.date().optional()),
+    validFrom: z.preprocess(
+      (val) => parseWallClockDate(val),
+      z.date().optional(),
+    ),
+    validUntil: z.preprocess(
+      (val) => parseWallClockDate(val),
+      z.date().optional(),
+    ),
     notes: z.string().trim().max(2000).nullable().optional(),
     vehicle: pickupVehicleSchema.nullable().optional(),
     linkedResponsibleId: z.uuid().nullable().optional(),

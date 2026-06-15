@@ -61,6 +61,7 @@ export const updateMemberSchema = z.object({
     .max(128)
     .optional(),
   isActive: z.boolean().optional(),
+  canEnrollStudentFace: z.boolean().optional(),
 });
 
 export const createMemberVehicleSchema = z.object({

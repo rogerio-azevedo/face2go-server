@@ -69,6 +69,10 @@ export const clientMembers = pgTable(
       room?: string;
     } | null>(),
     isActive: boolean('is_active').default(true).notNull(),
+    /** Permite cadastrar foto facial de alunos pelo app do funcionário. */
+    canEnrollStudentFace: boolean('can_enroll_student_face')
+      .default(false)
+      .notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

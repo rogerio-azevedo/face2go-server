@@ -8,7 +8,6 @@ import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import type { FeatureSlug } from '../common/features.constants';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { DatabaseService } from '../database/database.service';

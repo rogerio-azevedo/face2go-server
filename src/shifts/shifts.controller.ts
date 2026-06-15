@@ -23,7 +23,7 @@ export class ShiftsController {
   constructor(private readonly shiftsService: ShiftsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar turnos de acesso do cliente' })
+  @ApiOperation({ summary: 'Listar horários de acesso do cliente' })
   list(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
@@ -32,7 +32,7 @@ export class ShiftsController {
   }
 
   @Get(':shiftId')
-  @ApiOperation({ summary: 'Detalhe do turno' })
+  @ApiOperation({ summary: 'Detalhe do horário' })
   getOne(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
@@ -42,7 +42,7 @@ export class ShiftsController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Criar turno' })
+  @ApiOperation({ summary: 'Criar horário' })
   create(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
@@ -52,7 +52,7 @@ export class ShiftsController {
   }
 
   @Patch(':shiftId')
-  @ApiOperation({ summary: 'Atualizar turno' })
+  @ApiOperation({ summary: 'Atualizar horário' })
   update(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
@@ -63,7 +63,7 @@ export class ShiftsController {
   }
 
   @Delete(':shiftId')
-  @ApiOperation({ summary: 'Remover turno' })
+  @ApiOperation({ summary: 'Remover horário' })
   remove(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,

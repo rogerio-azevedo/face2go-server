@@ -12,6 +12,13 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import {
+  GenerateCompanyUserInviteLinkDto,
+  PatchCompanyUserActiveDto,
+  PatchCompanyUserPermissionsDto,
+  PatchCompanyUserProfileDto,
+  PatchCompanyUserRoleDto,
+} from '../validation/dto/company-users.dto';
 import { CompanyUsersService } from './company-users.service';
 
 @ApiTags('company-users')
@@ -37,7 +44,10 @@ export class CompanyUsersController {
 
   @Post('invite-links')
   @ApiOperation({ summary: 'Gerar convite para novo membro da empresa' })
-  generateInviteLink(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+  generateInviteLink(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: GenerateCompanyUserInviteLinkDto,
+  ) {
     return this.companyUsersService.generateInviteLink(user, body);
   }
 
@@ -46,7 +56,7 @@ export class CompanyUsersController {
   updateRole(
     @CurrentUser() user: JwtPayload,
     @Param('companyUserId', ParseUUIDPipe) companyUserId: string,
-    @Body() body: unknown,
+    @Body() body: PatchCompanyUserRoleDto,
   ) {
     return this.companyUsersService.updateRole(user, companyUserId, body);
   }
@@ -56,7 +66,7 @@ export class CompanyUsersController {
   setActive(
     @CurrentUser() user: JwtPayload,
     @Param('companyUserId', ParseUUIDPipe) companyUserId: string,
-    @Body() body: unknown,
+    @Body() body: PatchCompanyUserActiveDto,
   ) {
     return this.companyUsersService.setActive(user, companyUserId, body);
   }
@@ -66,7 +76,7 @@ export class CompanyUsersController {
   updateProfile(
     @CurrentUser() user: JwtPayload,
     @Param('companyUserId', ParseUUIDPipe) companyUserId: string,
-    @Body() body: unknown,
+    @Body() body: PatchCompanyUserProfileDto,
   ) {
     return this.companyUsersService.updateProfile(user, companyUserId, body);
   }
@@ -76,7 +86,7 @@ export class CompanyUsersController {
   updatePermissions(
     @CurrentUser() user: JwtPayload,
     @Param('companyUserId', ParseUUIDPipe) companyUserId: string,
-    @Body() body: unknown,
+    @Body() body: PatchCompanyUserPermissionsDto,
   ) {
     return this.companyUsersService.updatePermissions(
       user,

@@ -9,7 +9,6 @@ import { ConfigService } from '@nestjs/config';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
-import type { FeatureSlug } from '../common/features.constants';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';

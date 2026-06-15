@@ -9,6 +9,7 @@ import {
   PickupAuthorizationsResponsibleController,
   PickupAuthorizationsSchoolController,
 } from './pickup-authorizations.controller';
+import { PickupAuthorizationCommandsService } from './pickup-authorization-commands.service';
 import { PickupAuthorizationsService } from './pickup-authorizations.service';
 import { PublicPickupRegisterController } from './public-pickup-register.controller';
 import { PublicPickupRegisterService } from './public-pickup-register.service';
@@ -26,7 +27,11 @@ import { PublicPickupRegisterService } from './public-pickup-register.service';
     PickupAuthorizationsResponsibleController,
     PublicPickupRegisterController,
   ],
-  providers: [PickupAuthorizationsService, PublicPickupRegisterService],
-  exports: [PickupAuthorizationsService],
+  providers: [
+    PickupAuthorizationsService,
+    PickupAuthorizationCommandsService,
+    PublicPickupRegisterService,
+  ],
+  exports: [PickupAuthorizationsService, PickupAuthorizationCommandsService],
 })
 export class PickupAuthorizationsModule {}

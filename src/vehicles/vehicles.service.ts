@@ -353,7 +353,10 @@ export class VehiclesService {
       id,
       user.clientId,
     );
-    if (!existing?.responsibleId || !household.includes(existing.responsibleId)) {
+    if (
+      !existing?.responsibleId ||
+      !household.includes(existing.responsibleId)
+    ) {
       throw new NotFoundException('Veículo não encontrado.');
     }
 

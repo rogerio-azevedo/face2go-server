@@ -1,12 +1,4 @@
-import {
-  and,
-  asc,
-  count,
-  eq,
-  ilike,
-  isNotNull,
-  type SQL,
-} from 'drizzle-orm';
+import { and, asc, count, eq, ilike, isNotNull, type SQL } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { clientMembers, clientRoles, users } from '../schema';
@@ -362,6 +354,7 @@ export async function updateMember(
       | 'deviceSyncError'
       | 'additionalData'
       | 'isActive'
+      | 'canEnrollStudentFace'
       | 'userId'
     >
   >,

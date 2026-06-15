@@ -23,7 +23,7 @@ import * as studentsQueries from '../database/queries/students.queries';
 import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
 
-import type { SimulateFaceAccessDto } from './simulate.dto';
+import type { SimulateFaceAccessDto } from '../validation/dto/common.dto';
 
 export type SimulatePersonDto = {
   id: string;

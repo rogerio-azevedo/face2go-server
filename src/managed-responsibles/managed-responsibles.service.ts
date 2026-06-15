@@ -297,7 +297,9 @@ export class ManagedResponsiblesService {
         row.clientId,
       ))
     ) {
-      throw new ConflictException('Este usuário já está vinculado a esta escola.');
+      throw new ConflictException(
+        'Este usuário já está vinculado a esta escola.',
+      );
     }
 
     const studentLinks =
@@ -542,11 +544,7 @@ export class ManagedResponsiblesService {
           logContext: `managed-responsible=${responsible.id}`,
         });
       }
-    } else if (
-      !d.linkedResponsibleId &&
-      responsible.userId &&
-      !d.imageBase64
-    ) {
+    } else if (!d.linkedResponsibleId && responsible.userId && !d.imageBase64) {
       await this.copyFaceFromExistingResponsibleIfAvailable({
         userId: responsible.userId,
         clientId: user.clientId,
@@ -734,29 +732,32 @@ export class ManagedResponsiblesService {
     }
 
     await this.database.db.transaction(async (tx) => {
-      await responsiblesQueries.deleteAllResponsibleStudentLinks(
-        tx,
-        target.id,
-      );
+      await responsiblesQueries.deleteAllResponsibleStudentLinks(tx, target.id);
       await vehicleQueries.vehicleDeleteAllForResponsible(
         tx,
         target.id,
         user.clientId,
       );
-      await responsiblesQueries.updateResponsible(tx, target.id, user.clientId, {
-        isActive: false,
-        pushToken: null,
-        faceId: null,
-        photoKey: null,
-        deviceSyncStatus: null,
-        deviceSyncedAt: null,
-        deviceSyncError: null,
-      });
+      await responsiblesQueries.updateResponsible(
+        tx,
+        target.id,
+        user.clientId,
+        {
+          isActive: false,
+          pushToken: null,
+          faceId: null,
+          photoKey: null,
+          deviceSyncStatus: null,
+          deviceSyncedAt: null,
+          deviceSyncError: null,
+        },
+      );
       if (target.userId) {
-        const remaining = await responsiblesQueries.countActiveResponsiblesByUserId(
-          tx,
-          target.userId,
-        );
+        const remaining =
+          await responsiblesQueries.countActiveResponsiblesByUserId(
+            tx,
+            target.userId,
+          );
         if (remaining === 0) {
           await tx
             .update(users)
@@ -814,8 +815,7 @@ export class ManagedResponsiblesService {
       params.clientId,
       {
         deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
         deviceSyncError: sync.deviceSyncError,
       },
     );

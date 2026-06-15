@@ -52,6 +52,13 @@ function pickStr(o: Record<string, unknown>, ...keys: string[]): string | null {
   for (const k of keys) {
     const raw = o[k];
     if (raw === undefined || raw === null) continue;
+    if (
+      typeof raw !== 'string' &&
+      typeof raw !== 'number' &&
+      typeof raw !== 'boolean'
+    ) {
+      continue;
+    }
     const s = String(raw).trim();
     if (s !== '') return s;
   }
@@ -65,7 +72,12 @@ function pickOptionalNum(
   for (const k of keys) {
     const raw = o[k];
     if (raw === undefined || raw === null) continue;
-    const n = typeof raw === 'number' ? raw : Number(String(raw));
+    const n =
+      typeof raw === 'number'
+        ? raw
+        : typeof raw === 'string'
+          ? Number(raw.trim())
+          : Number.NaN;
     if (Number.isFinite(n)) return n;
   }
   return null;
@@ -80,7 +92,8 @@ function pickOptionalBool(
     if (raw === undefined || raw === null) continue;
     if (typeof raw === 'boolean') return raw;
     if (typeof raw === 'number') return raw !== 0;
-    const s = String(raw).toLowerCase().trim();
+    if (typeof raw !== 'string') continue;
+    const s = raw.toLowerCase().trim();
     if (s === 'true' || s === '1') return true;
     if (s === 'false' || s === '0') return false;
   }
@@ -257,8 +270,7 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
 
   // Correlação: EventID e DefendCode são iguais nos dois streams para o mesmo evento
   const correlationEventId = normalizeCorrelationEventId(
-    pickStr(o, 'EventID', 'eventId') ??
-      (o.EventID != null ? String(o.EventID) : null),
+    pickStr(o, 'EventID', 'eventId'),
   );
   const defendCode =
     trafficCar != null ? pickStr(trafficCar, 'DefendCode', 'defendCode') : null;
@@ -283,8 +295,9 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
 
   const deviceIdReported =
     pickStr(o, 'DeviceID', 'device_id', 'DeviceId') ??
-    (plate?.DeviceID != null ? String(plate.DeviceID) : null) ??
-    null;
+    (plate != null
+      ? pickStr(plate, 'DeviceID', 'device_id', 'DeviceId')
+      : null);
 
   let confidence =
     plate != null
@@ -316,12 +329,18 @@ function extractFromJsonData(data: unknown): LprStreamReadingPayload {
   let direction =
     vehicle != null ? pickStr(vehicle, 'Direction', 'direction') : null;
   if (direction == null && trafficCar != null) {
-    const drivingDir = trafficCar['DrivingDirection'];
-    if (Array.isArray(drivingDir)) {
+    const drivingDirUnknown = trafficCar['DrivingDirection'];
+    if (Array.isArray(drivingDirUnknown)) {
+      const drivingDir = drivingDirUnknown as unknown[];
       const first = drivingDir.find(
-        (v) => v != null && String(v).trim() !== '',
+        (v: unknown) =>
+          (typeof v === 'string' || typeof v === 'number') &&
+          String(v).trim() !== '',
       );
-      direction = first != null ? String(first).trim() : null;
+      direction =
+        typeof first === 'string' || typeof first === 'number'
+          ? String(first).trim()
+          : null;
     }
     if (direction == null) {
       direction = pickStr(trafficCar, 'Direction', 'direction');

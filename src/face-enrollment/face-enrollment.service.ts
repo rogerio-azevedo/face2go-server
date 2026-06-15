@@ -13,6 +13,11 @@ import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
+import {
+  buildPaginatedResult,
+  parseListPaginationParams,
+  type ListPaginationParams,
+} from '../common/pagination';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
 
@@ -27,6 +32,14 @@ export type FaceEnrollmentStatusDto = {
 export type ChildFaceEnrollmentStatusDto = FaceEnrollmentStatusDto & {
   studentId: string;
   name: string;
+};
+
+export type MemberStudentSearchItemDto = {
+  id: string;
+  name: string;
+  photoUrl: string | null;
+  faceId: number | null;
+  deviceSyncStatus: FaceEnrollmentStatusDto['deviceSyncStatus'];
 };
 
 function stripDataUrlBase64(imageBase64: string): string {
@@ -289,6 +302,18 @@ export class FaceEnrollmentService {
     if (!allowed.includes(studentId)) {
       throw new NotFoundException('Aluno não encontrado ou sem vínculo.');
     }
+    return this.uploadAndSyncStudentFaceInternal(
+      clientId,
+      studentId,
+      imageBase64,
+    );
+  }
+
+  private async uploadAndSyncStudentFaceInternal(
+    clientId: string,
+    studentId: string,
+    imageBase64: string,
+  ): Promise<ChildFaceEnrollmentStatusDto> {
     const student = await studentsQueries.getStudentById(
       this.database.db,
       studentId,
@@ -569,6 +594,67 @@ export class FaceEnrollmentService {
     return { memberId: user.memberId, clientId: user.clientId };
   }
 
+  private async assertMemberCanEnrollStudentFace(user: JwtPayload): Promise<{
+    memberId: string;
+    clientId: string;
+  }> {
+    const { memberId, clientId } = this.assertMemberScope(user);
+    const member = await membersQueries.getMemberById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!member) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    if (!member.canEnrollStudentFace) {
+      throw new ForbiddenException('Sem permissão para fotografar alunos.');
+    }
+    return { memberId, clientId };
+  }
+
+  async listStudentsForMemberEnrollment(
+    user: JwtPayload,
+    query: ListPaginationParams = {},
+  ) {
+    const { clientId } = await this.assertMemberCanEnrollStudentFace(user);
+    const { page, pageSize, search, offset } = parseListPaginationParams(
+      query.page !== undefined ? String(query.page) : undefined,
+      query.pageSize !== undefined ? String(query.pageSize) : undefined,
+      query.search,
+    );
+    const listOpts = { search, offset, limit: pageSize };
+    const [total, rows] = await Promise.all([
+      studentsQueries.countStudentsByClient(this.database.db, clientId, {
+        search,
+      }),
+      studentsQueries.listStudentsByClient(this.database.db, clientId, listOpts),
+    ]);
+    const data: MemberStudentSearchItemDto[] = await Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        name: row.name,
+        photoUrl: await this.optionalPhotoUrl(row.photoKey),
+        faceId: row.faceId ?? null,
+        deviceSyncStatus: row.deviceSyncStatus ?? null,
+      })),
+    );
+    return buildPaginatedResult(data, total, page, pageSize);
+  }
+
+  async uploadAndSyncStudentFaceByMember(
+    user: JwtPayload,
+    studentId: string,
+    imageBase64: string,
+  ): Promise<ChildFaceEnrollmentStatusDto> {
+    const { clientId } = await this.assertMemberCanEnrollStudentFace(user);
+    return this.uploadAndSyncStudentFaceInternal(
+      clientId,
+      studentId,
+      imageBase64,
+    );
+  }
+
   private async memberFaceStatusDto(
     memberId: string,
     clientId: string,
@@ -592,7 +678,9 @@ export class FaceEnrollmentService {
     };
   }
 
-  async getMemberMyFaceStatus(user: JwtPayload): Promise<FaceEnrollmentStatusDto> {
+  async getMemberMyFaceStatus(
+    user: JwtPayload,
+  ): Promise<FaceEnrollmentStatusDto> {
     const { memberId, clientId } = this.assertMemberScope(user);
     return this.memberFaceStatusDto(memberId, clientId);
   }
@@ -632,13 +720,18 @@ export class FaceEnrollmentService {
       );
     }
 
-    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
-      photoKey,
-      faceId,
-      deviceSyncStatus: 'pending_sync',
-      deviceSyncedAt: null,
-      deviceSyncError: null,
-    });
+    await membersQueries.updateMemberFace(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        photoKey,
+        faceId,
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
 
     const sync = await this.faceSync.syncPersonOnReaders({
       clientId,
@@ -648,11 +741,16 @@ export class FaceEnrollmentService {
       logContext: `member=${memberId}`,
     });
 
-    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-      deviceSyncError: sync.deviceSyncError,
-    });
+    await membersQueries.updateMemberFace(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+    );
 
     return {
       photoUrl: await this.optionalPhotoUrl(photoKey),
@@ -685,11 +783,16 @@ export class FaceEnrollmentService {
       );
     }
 
-    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
-      deviceSyncStatus: 'pending_sync',
-      deviceSyncedAt: null,
-      deviceSyncError: null,
-    });
+    await membersQueries.updateMemberFace(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
 
     const sync = await this.faceSync.syncPersonOnReaders({
       clientId,
@@ -699,11 +802,16 @@ export class FaceEnrollmentService {
       logContext: `member-resync=${memberId}`,
     });
 
-    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-      deviceSyncError: sync.deviceSyncError,
-    });
+    await membersQueries.updateMemberFace(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+    );
 
     return this.memberFaceStatusDto(memberId, clientId);
   }

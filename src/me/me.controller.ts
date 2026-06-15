@@ -30,6 +30,15 @@ export class MeController {
     return this.permissionsService.getSidebarNavAccess(user);
   }
 
+  /** Alias legado usado pelo face2go-web (`getSidebarNavAccess`). */
+  @Get('sidebar-nav-access')
+  @ApiOperation({
+    summary: 'Alias de /me/navigation (sidebar empresa)',
+  })
+  sidebarNavAccess(@CurrentUser() user: JwtPayload) {
+    return this.permissionsService.getSidebarNavAccess(user);
+  }
+
   @Get('can-check')
   @ApiOperation({
     summary:

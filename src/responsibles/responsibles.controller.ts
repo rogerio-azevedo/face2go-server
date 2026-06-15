@@ -202,8 +202,7 @@ export class ResponsiblesController {
   @Delete(':responsibleId')
   @Roles('company_admin')
   @ApiOperation({
-    summary:
-      'Excluir responsável (remove face, placas, veículos e vínculos)',
+    summary: 'Excluir responsável (remove face, placas, veículos e vínculos)',
   })
   deleteResponsible(
     @CurrentUser() user: JwtPayload,

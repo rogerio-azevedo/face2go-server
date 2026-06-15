@@ -56,6 +56,7 @@ export type UserContext =
       clientId: string;
       clientName: string;
       roleName: string;
+      canEnrollStudentFace: boolean;
       branding: TenantBranding;
       label: string;
     }

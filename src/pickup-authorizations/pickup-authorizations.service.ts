@@ -245,7 +245,7 @@ export class PickupAuthorizationsService {
         user.clientId,
         normalized,
       );
-    if (!responsible || !responsible.isActive) {
+    if (!responsible) {
       return null;
     }
     if (responsible.id === user.responsibleId) {
@@ -291,7 +291,7 @@ export class PickupAuthorizationsService {
       linkedResponsibleId,
       clientId,
     );
-    if (!linked || !linked.isActive) {
+    if (!linked) {
       throw new BadRequestException('Responsável vinculado não encontrado.');
     }
     return linked;
@@ -580,11 +580,7 @@ export class PickupAuthorizationsService {
       user.clientId,
       user.responsibleId,
     );
-    await this.removeGuestFaceFromReadersBeforeDelete(
-      row,
-      user.clientId,
-      id,
-    );
+    await this.removeGuestFaceFromReadersBeforeDelete(row, user.clientId, id);
     const deleted = await pickupQueries.pickupAuthDelete(
       this.database.db,
       id,
@@ -784,7 +780,9 @@ export class PickupAuthorizationsService {
 
   async submitGuestFaceDirect(user: JwtPayload, id: string, body: unknown) {
     this.assertResponsibleJwt(user);
-    const parsed = z.object({ imageBase64: z.string().min(64) }).safeParse(body);
+    const parsed = z
+      .object({ imageBase64: z.string().min(64) })
+      .safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
@@ -838,7 +836,8 @@ export class PickupAuthorizationsService {
     }
 
     const ext = this.r2.extForImageMime(mime);
-    const contentType = mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const contentType =
+      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
     const key = this.r2.buildPickupGuestFaceKey(
       client.companyId,
       user.clientId,

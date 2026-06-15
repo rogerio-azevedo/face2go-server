@@ -216,7 +216,9 @@ export class NotificationsService {
     });
   }
 
-  private accessVerb(readerDirection: AccessFacialRecordedPayload['readerDirection']): string {
+  private accessVerb(
+    readerDirection: AccessFacialRecordedPayload['readerDirection'],
+  ): string {
     if (readerDirection === 'in') {
       return 'ENTROU em';
     }
@@ -295,7 +297,9 @@ export class NotificationsService {
     }
 
     const primary = pickupAuths[0];
-    let responsibleIds = pickupAuths.map((auth) => auth.requestedByResponsibleId);
+    let responsibleIds = pickupAuths.map(
+      (auth) => auth.requestedByResponsibleId,
+    );
 
     const guestDocument = primary.guestDocument?.trim();
     if (guestDocument) {
@@ -318,9 +322,7 @@ export class NotificationsService {
     }
 
     const displayName =
-      payload.personName?.trim() ||
-      primary.guestName?.trim() ||
-      'Convidado';
+      payload.personName?.trim() || primary.guestName?.trim() || 'Convidado';
     const body = `${displayName} ${verb} ${payload.readerName}.`;
 
     await this.dispatchExpoPush(tokens, title, body, {
@@ -334,11 +336,12 @@ export class NotificationsService {
   private async notifyMemberOfInviteGuestAccess(
     payload: AccessFacialRecordedPayload,
   ): Promise<void> {
-    const inviteAuths = await visitorInviteQueries.inviteFindActiveByGuestFaceId(
-      this.database.db,
-      payload.clientId,
-      payload.faceId,
-    );
+    const inviteAuths =
+      await visitorInviteQueries.inviteFindActiveByGuestFaceId(
+        this.database.db,
+        payload.clientId,
+        payload.faceId,
+      );
     if (inviteAuths.length === 0) {
       return;
     }
@@ -355,9 +358,7 @@ export class NotificationsService {
     const verb = this.accessVerb(payload.readerDirection);
     const title = 'Acesso facial';
     const displayName =
-      payload.personName?.trim() ||
-      primary.guestName?.trim() ||
-      'Visitante';
+      payload.personName?.trim() || primary.guestName?.trim() || 'Visitante';
     const body = `${displayName} ${verb} ${payload.readerName}.`;
 
     await this.dispatchExpoPush([token], title, body, {

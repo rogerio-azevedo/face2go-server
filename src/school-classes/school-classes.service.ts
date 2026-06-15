@@ -43,7 +43,7 @@ export class SchoolClassesService {
       clientId,
     );
     if (!shift) {
-      throw new BadRequestException('Turno inválido para esta escola.');
+      throw new BadRequestException('Horário inválido para esta escola.');
     }
     return schoolClassQueries.insertSchoolClass(this.database.db, {
       clientId,
@@ -82,7 +82,7 @@ export class SchoolClassesService {
         clientId,
       );
       if (!shift) {
-        throw new BadRequestException('Turno inválido para esta escola.');
+        throw new BadRequestException('Horário inválido para esta escola.');
       }
     }
     const updated = await schoolClassQueries.updateSchoolClass(

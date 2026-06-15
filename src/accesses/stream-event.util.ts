@@ -45,7 +45,10 @@ export function accessControlDataFromRecord(
 
   return {
     CardName: data.CardName as string | undefined,
-    CardNo: data.CardNo != null ? String(data.CardNo) : undefined,
+    CardNo:
+      typeof data.CardNo === 'string' || typeof data.CardNo === 'number'
+        ? String(data.CardNo)
+        : undefined,
     CardType: data.CardType as number | undefined,
     CreateTime:
       (data.CreateTime as number | undefined) ??

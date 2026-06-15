@@ -6,13 +6,12 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { and, eq, sql } from 'drizzle-orm';
-import { randomBytes } from 'node:crypto';
+import { AuthPasswordService } from './auth-password.service';
 
 import { DatabaseService } from '../database/database.service';
 import * as invitesQueries from '../database/queries/invites.queries';
 import * as clientInviteLinksQueries from '../database/queries/client-invite-links.queries';
 import * as clientUsersQueries from '../database/queries/client-users.queries';
-import * as verificationTokensQueries from '../database/queries/verification-tokens.queries';
 import {
   clients,
   clientMembers,
@@ -38,14 +37,10 @@ import type {
 } from './interfaces/user-context.interface';
 import type { AuthServiceContract } from './interfaces/auth-service.interface';
 import { normalizeLoginIdentifier } from './utils/auth-identifiers';
-import {
-  registerSchema,
-  type RegisterInput,
-} from '../validation/register.schema';
-import { joinContextSchema } from '../validation/join-context.schema';
-import { requestPasswordSchema } from '../validation/request-password.schema';
-import { resetPasswordSchema } from '../validation/reset-password.schema';
-import { zodFirstMessage } from '../validation/zod-utils';
+import type { JoinContextInput } from '../validation/join-context.schema';
+import type { RegisterInput } from '../validation/register.schema';
+import type { RequestPasswordInput } from '../validation/request-password.schema';
+import type { ResetPasswordInput } from '../validation/reset-password.schema';
 import { EmailService } from '../email/email.service';
 
 export type {
@@ -57,7 +52,6 @@ export type {
 } from './interfaces/auth-types.interface';
 
 const IDENTITY_TOKEN_EXPIRES_IN = '5m';
-const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService implements AuthServiceContract {
@@ -65,6 +59,7 @@ export class AuthService implements AuthServiceContract {
     private readonly database: DatabaseService,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
+    private readonly authPasswordService: AuthPasswordService,
   ) {}
 
   private toIdentityPayload(user: IdentityUser): JwtPayload {
@@ -298,6 +293,7 @@ export class AuthService implements AuthServiceContract {
         clientId: clientMembers.clientId,
         memberName: clientMembers.name,
         roleName: clientRoles.name,
+        canEnrollStudentFace: clientMembers.canEnrollStudentFace,
         clientName: clients.name,
         clientLogoUrl: clients.logoUrl,
         companyLogoUrl: companies.logoUrl,
@@ -323,6 +319,7 @@ export class AuthService implements AuthServiceContract {
         clientId: link.clientId,
         clientName: link.clientName,
         roleName: link.roleName,
+        canEnrollStudentFace: link.canEnrollStudentFace,
         branding: this.buildTenantBranding(link),
         label: `${link.roleName} — ${link.clientName}`,
       });
@@ -403,6 +400,7 @@ export class AuthService implements AuthServiceContract {
           contextType: 'member',
           clientId: context.clientId,
           memberId: context.memberId,
+          canEnrollStudentFace: context.canEnrollStudentFace,
         };
       case 'face_user':
         return {
@@ -470,15 +468,10 @@ export class AuthService implements AuthServiceContract {
     };
   }
 
-  async joinContext(input: unknown): Promise<JoinContextResult> {
-    const parsed = joinContextSchema.safeParse(input);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-
+  async joinContext(input: JoinContextInput): Promise<JoinContextResult> {
     const user = await this.validateCredentials(
-      parsed.data.identifier,
-      parsed.data.password,
+      input.identifier,
+      input.password,
     );
     if (!user) {
       throw new UnauthorizedException('Credenciais inválidas.');
@@ -494,10 +487,10 @@ export class AuthService implements AuthServiceContract {
       throw new UnauthorizedException('Usuário não encontrado.');
     }
 
-    const trimmedCode = parsed.data.invite.trim();
+    const trimmedCode = input.invite.trim();
     const linkData: RegisterInput = {
       email: user.email,
-      password: parsed.data.password,
+      password: input.password,
       name: user.name ?? '',
       invite: trimmedCode,
     };
@@ -582,20 +575,15 @@ export class AuthService implements AuthServiceContract {
     await this.linkExistingUserToClient(existing, data, invite, client.id);
   }
 
-  async register(input: unknown): Promise<{ success: true }> {
-    const parsed = registerSchema.safeParse(input);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-
-    const trimmedCode = parsed.data.invite.trim();
+  async register(input: RegisterInput): Promise<{ success: true }> {
+    const trimmedCode = input.invite.trim();
     const companyBundle = await invitesQueries.getInviteByCode(
       this.database.db,
       trimmedCode,
     );
 
     if (companyBundle?.invite?.isActive) {
-      return this.registerWithCompanyInvite(parsed.data, companyBundle);
+      return this.registerWithCompanyInvite(input, companyBundle);
     }
 
     const clientBundle = await clientInviteLinksQueries.getClientInviteByCode(
@@ -604,7 +592,7 @@ export class AuthService implements AuthServiceContract {
     );
 
     if (clientBundle?.invite?.isActive) {
-      return this.registerWithClientInvite(parsed.data, clientBundle);
+      return this.registerWithClientInvite(input, clientBundle);
     }
 
     throw new BadRequestException('Convite inválido ou inativo.');
@@ -832,61 +820,12 @@ export class AuthService implements AuthServiceContract {
     return { success: true };
   }
 
-  async requestPassword(input: unknown): Promise<{ ok: true }> {
-    const parsed = requestPasswordSchema.safeParse(input);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-
-    const userRow = await this.findUserByIdentifier(parsed.data.identifier);
-    if (userRow?.isActive && userRow.email) {
-      const token = randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
-
-      await verificationTokensQueries.insertVerificationToken(
-        this.database.db,
-        userRow.email,
-        token,
-        expiresAt,
-      );
-
-      await this.emailService.sendPasswordResetEmail(
-        userRow.email,
-        userRow.name,
-        token,
-      );
-    }
-
-    return { ok: true };
+  async requestPassword(input: RequestPasswordInput): Promise<{ ok: true }> {
+    return this.authPasswordService.requestPassword(input);
   }
 
-  async resetPassword(input: unknown): Promise<{ ok: true }> {
-    const parsed = resetPasswordSchema.safeParse(input);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-
-    const row = await verificationTokensQueries.findValidVerificationToken(
-      this.database.db,
-      parsed.data.token,
-    );
-    if (!row) {
-      throw new BadRequestException('Link inválido ou expirado.');
-    }
-
-    const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-    await this.database.db
-      .update(users)
-      .set({ password: passwordHash })
-      .where(eq(users.email, row.identifier));
-
-    await verificationTokensQueries.deleteVerificationToken(
-      this.database.db,
-      row.identifier,
-      row.token,
-    );
-
-    return { ok: true };
+  async resetPassword(input: ResetPasswordInput): Promise<{ ok: true }> {
+    return this.authPasswordService.resetPassword(input);
   }
 
   profileFromPayload(payload: JwtPayload): AuthenticatedUser {

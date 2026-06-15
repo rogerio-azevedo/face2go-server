@@ -370,11 +370,12 @@ export class ResponsibleDashboardService {
     }
 
     for (const doc of documentsToExpand) {
-      const crossAuths = await pickupQueries.pickupAuthListGuestFaceIdsByDocument(
-        this.database.db,
-        clientId,
-        doc,
-      );
+      const crossAuths =
+        await pickupQueries.pickupAuthListGuestFaceIdsByDocument(
+          this.database.db,
+          clientId,
+          doc,
+        );
       for (const entry of crossAuths) {
         if (entry.guestFaceId == null || map.has(entry.guestFaceId)) {
           continue;

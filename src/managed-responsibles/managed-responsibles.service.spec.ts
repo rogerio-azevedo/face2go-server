@@ -22,7 +22,9 @@ jest.mock('../storage/portrait-image.utils', () => ({
 describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
   const user: JwtPayload = {
     sub: 'user-1',
+    email: 'inviter@example.com',
     role: 'responsible',
+    contextType: 'responsible',
     clientId: 'client-1',
     responsibleId: 'inviter-1',
   };
@@ -53,7 +55,10 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
   let lprPlateSync: { removePlateFromAllLprCameras: jest.Mock };
   let accessTimeZone: { resolveResponsibleTimeSections: jest.Mock };
   let r2: { getObjectBytes: jest.Mock };
-  let transaction: jest.Mock;
+  let transaction: jest.Mock<
+    Promise<unknown>,
+    [(tx: { update: jest.Mock }) => unknown]
+  >;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -72,14 +77,16 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
       resolveResponsibleTimeSections: jest.fn().mockResolvedValue([1]),
     };
     r2 = {
-      getObjectBytes: jest.fn().mockResolvedValue({ buffer: Buffer.alloc(512) }),
+      getObjectBytes: jest
+        .fn()
+        .mockResolvedValue({ buffer: Buffer.alloc(512) }),
     };
     const txUpdate = jest.fn().mockReturnValue({
       set: jest.fn().mockReturnValue({
         where: jest.fn().mockResolvedValue(undefined),
       }),
     });
-    transaction = jest.fn(async (cb) => cb({ update: txUpdate }));
+    transaction = jest.fn((cb) => Promise.resolve(cb({ update: txUpdate })));
 
     service = new ManagedResponsiblesService(
       { db: { transaction } } as never,
@@ -93,11 +100,15 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
 
     jest
       .spyOn(responsiblesQueries, 'responsibleHasParentRelationship')
-      .mockImplementation(async (_, responsibleId) => responsibleId === 'inviter-1');
+      .mockImplementation((_, responsibleId) =>
+        Promise.resolve(responsibleId === 'inviter-1'),
+      );
     jest
       .spyOn(responsiblesQueries, 'listHouseholdResponsibleIds')
       .mockResolvedValue(['inviter-1', 'target-1']);
-    jest.spyOn(responsiblesQueries, 'getResponsibleById').mockResolvedValue(target);
+    jest
+      .spyOn(responsiblesQueries, 'getResponsibleById')
+      .mockResolvedValue(target);
     jest
       .spyOn(responsiblesQueries, 'shouldPartialUnlinkManagedResponsible')
       .mockResolvedValue(false);
@@ -110,7 +121,9 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
     jest
       .spyOn(vehicleQueries, 'vehicleDeleteAllForResponsible')
       .mockResolvedValue([]);
-    jest.spyOn(responsiblesQueries, 'updateResponsible').mockResolvedValue(target);
+    jest
+      .spyOn(responsiblesQueries, 'updateResponsible')
+      .mockResolvedValue(target);
     jest
       .spyOn(responsiblesQueries, 'countActiveResponsiblesByUserId')
       .mockResolvedValue(0);
@@ -120,14 +133,18 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
     jest
       .spyOn(responsiblesQueries, 'deleteResponsibleStudentLinksForStudents')
       .mockResolvedValue([{ id: 'link-1' }]);
-    jest.spyOn(responsiblesQueries, 'getResponsibleWithFaceStatus').mockResolvedValue({
-      photoKey: target.photoKey,
-      faceId: target.faceId,
-      deviceSyncStatus: 'synced',
-      deviceSyncedAt: new Date(),
-      deviceSyncError: null,
-    });
-    jest.spyOn(responsiblesQueries, 'updateResponsibleFace').mockResolvedValue(undefined);
+    jest
+      .spyOn(responsiblesQueries, 'getResponsibleWithFaceStatus')
+      .mockResolvedValue({
+        photoKey: target.photoKey,
+        faceId: target.faceId,
+        deviceSyncStatus: 'synced',
+        deviceSyncedAt: new Date(),
+        deviceSyncError: null,
+      });
+    jest
+      .spyOn(responsiblesQueries, 'updateResponsibleFace')
+      .mockResolvedValue(target);
   });
 
   it('bloqueia exclusão da própria conta', async () => {
@@ -158,7 +175,9 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
       expect.objectContaining({ faceId: 42, requireAll: true }),
     );
     expect(lprPlateSync.removePlateFromAllLprCameras).toHaveBeenCalled();
-    expect(responsiblesQueries.deleteAllResponsibleStudentLinks).toHaveBeenCalled();
+    expect(
+      responsiblesQueries.deleteAllResponsibleStudentLinks,
+    ).toHaveBeenCalled();
     expect(vehicleQueries.vehicleDeleteAllForResponsible).toHaveBeenCalled();
     expect(responsiblesQueries.updateResponsible).toHaveBeenCalledWith(
       expect.anything(),
@@ -207,14 +226,16 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
 
   it('não desativa users quando ainda restam responsáveis ativos', async () => {
     const txUpdate = jest.fn();
-    transaction.mockImplementation(async (cb) =>
-      cb({
-        update: txUpdate.mockReturnValue({
-          set: jest.fn().mockReturnValue({
-            where: jest.fn().mockResolvedValue(undefined),
+    transaction.mockImplementation((cb) =>
+      Promise.resolve(
+        cb({
+          update: txUpdate.mockReturnValue({
+            set: jest.fn().mockReturnValue({
+              where: jest.fn().mockResolvedValue(undefined),
+            }),
           }),
         }),
-      }),
+      ),
     );
     jest
       .spyOn(responsiblesQueries, 'countActiveResponsiblesByUserId')

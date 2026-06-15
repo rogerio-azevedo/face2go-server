@@ -492,7 +492,9 @@ export class InvitesService {
 
   async submitGuestFaceDirect(user: JwtPayload, id: string, body: unknown) {
     this.assertMemberJwt(user);
-    const parsed = z.object({ imageBase64: z.string().min(64) }).safeParse(body);
+    const parsed = z
+      .object({ imageBase64: z.string().min(64) })
+      .safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
@@ -537,7 +539,8 @@ export class InvitesService {
     }
 
     const ext = this.r2.extForImageMime(mime);
-    const contentType = mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const contentType =
+      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
     const key = this.r2.buildInviteGuestFaceKey(
       client.companyId,
       user.clientId,

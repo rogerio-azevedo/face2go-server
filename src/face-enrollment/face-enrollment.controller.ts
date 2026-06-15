@@ -11,7 +11,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { UploadFaceDto } from './dto/upload-face.dto';
+import { UploadFaceDto } from '../validation/dto/common.dto';
 import { FaceEnrollmentService } from './face-enrollment.service';
 
 @ApiTags('responsible-face-enrollment')

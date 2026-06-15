@@ -13,7 +13,10 @@ describe('HealthController', () => {
     controller = moduleRef.get(HealthController);
   });
 
-  it('retorna ok', () => {
-    expect(controller.ping()).toEqual({ ok: true });
+  it('retorna payload de health', () => {
+    const payload = controller.ping();
+    expect(payload.ok).toBe(true);
+    expect(payload.message).toContain('API online');
+    expect(payload.build).toBeDefined();
   });
 });

@@ -105,8 +105,14 @@ export const updateVisitorInviteSchema = z
     guestName: z.string().trim().min(1).max(255).optional(),
     guestDocument: z.string().trim().min(1).max(64).optional(),
     guestPhone: z.string().trim().max(32).nullable().optional(),
-    validFrom: z.preprocess((val) => parseWallClockDate(val), z.date().optional()),
-    validUntil: z.preprocess((val) => parseWallClockDate(val), z.date().optional()),
+    validFrom: z.preprocess(
+      (val) => parseWallClockDate(val),
+      z.date().optional(),
+    ),
+    validUntil: z.preprocess(
+      (val) => parseWallClockDate(val),
+      z.date().optional(),
+    ),
     notes: z.string().trim().max(2000).nullable().optional(),
     vehicle: inviteVehicleSchema.nullable().optional(),
   })

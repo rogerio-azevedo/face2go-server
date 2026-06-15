@@ -10,7 +10,6 @@ import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import type { FeatureSlug } from '../common/features.constants';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
@@ -59,6 +58,7 @@ function mapMemberRow(
     deviceSyncError: row.deviceSyncError,
     additionalData: row.additionalData,
     isActive: row.isActive,
+    canEnrollStudentFace: row.canEnrollStudentFace,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -120,7 +120,7 @@ export class MembersService {
     const ok = await this.permissionsService.evaluateCompanyFeatureAction(
       user.role,
       user.companyUserId,
-      'clients' as FeatureSlug,
+      'clients',
       'can_read',
     );
     if (!ok) {
@@ -395,7 +395,8 @@ export class MembersService {
       d.birthDate === undefined &&
       d.password === undefined &&
       d.isActive === undefined &&
-      d.roleId === undefined
+      d.roleId === undefined &&
+      d.canEnrollStudentFace === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
     }
@@ -489,6 +490,9 @@ export class MembersService {
       ...(d.document !== undefined ? { document: d.document } : {}),
       ...(d.birthDate !== undefined ? { birthDate: d.birthDate } : {}),
       ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+      ...(d.canEnrollStudentFace !== undefined
+        ? { canEnrollStudentFace: d.canEnrollStudentFace }
+        : {}),
     });
 
     return this.getById(user, clientId, memberId);
@@ -530,11 +534,16 @@ export class MembersService {
       );
     }
 
-    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
-      deviceSyncStatus: 'pending_sync',
-      deviceSyncedAt: null,
-      deviceSyncError: null,
-    });
+    await membersQueries.updateMemberFace(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
 
     const sync = await this.faceSync.syncPersonOnReaders({
       clientId,
@@ -544,11 +553,16 @@ export class MembersService {
       logContext: `member-sync=${memberId}`,
     });
 
-    await membersQueries.updateMemberFace(this.database.db, memberId, clientId, {
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-      deviceSyncError: sync.deviceSyncError,
-    });
+    await membersQueries.updateMemberFace(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+    );
 
     return {
       deviceSyncStatus: sync.deviceSyncStatus,
@@ -596,7 +610,11 @@ export class MembersService {
 
     for (const v of memberVehicles) {
       try {
-        await vehicleQueries.vehicleDeleteById(this.database.db, v.id, clientId);
+        await vehicleQueries.vehicleDeleteById(
+          this.database.db,
+          v.id,
+          clientId,
+        );
       } catch (e: unknown) {
         this.log.warn(
           `${logContext} remove vehicle ${v.id}: ${e instanceof Error ? e.message : String(e)}`,

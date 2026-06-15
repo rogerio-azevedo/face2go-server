@@ -595,10 +595,7 @@ export class ResponsiblesService {
     }
 
     await this.database.db.transaction(async (tx) => {
-      await responsiblesQueries.deleteAllResponsibleStudentLinks(
-        tx,
-        target.id,
-      );
+      await responsiblesQueries.deleteAllResponsibleStudentLinks(tx, target.id);
       await vehicleQueries.vehicleDeleteAllForResponsible(
         tx,
         target.id,

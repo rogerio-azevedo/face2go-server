@@ -7,7 +7,6 @@ import {
 import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import type { FeatureSlug } from '../common/features.constants';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as clientDisplayDevicesQueries from '../database/queries/client-display-devices.queries';
@@ -45,7 +44,9 @@ export class ClientsService {
   private omitDisplayToken<
     T extends { displayToken?: unknown; displayShortCode?: unknown },
   >(row: T): Omit<T, 'displayToken' | 'displayShortCode'> {
-    const { displayToken: _omit, displayShortCode: _omitCode, ...rest } = row;
+    const { displayToken, displayShortCode, ...rest } = row;
+    void displayToken;
+    void displayShortCode;
     return rest;
   }
 

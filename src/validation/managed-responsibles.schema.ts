@@ -5,7 +5,7 @@ import {
   linkResponsibleStudentSchema,
   responsibleRelationshipSchema,
 } from './responsibles.schema';
-import { createVehicleSchema, normalizeVehiclePlate } from './vehicles.schema';
+import { normalizeVehiclePlate } from './vehicles.schema';
 
 const optionalVehicleSchema = z
   .object({

@@ -9,7 +9,6 @@ import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
-import type { FeatureSlug } from '../common/features.constants';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
 import * as readersQueries from '../database/queries/readers.queries';
@@ -334,11 +333,9 @@ export class ReadersService {
         );
       }
       return await intelbrasGetDeviceUsers(plainReader, limit, offset);
-    } catch (e: any) {
-      throw new BadRequestException(
-        'Falha ao comunicar com o leitor: ' +
-          (e.message || 'Erro desconhecido'),
-      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      throw new BadRequestException('Falha ao comunicar com o leitor: ' + msg);
     }
   }
 
@@ -399,11 +396,9 @@ export class ReadersService {
     try {
       await intelbrasRemoveUserFromReader(plainReader, userId);
       return { success: true };
-    } catch (e: any) {
-      throw new BadRequestException(
-        'Falha ao comunicar com o leitor: ' +
-          (e.message || 'Erro desconhecido'),
-      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      throw new BadRequestException('Falha ao comunicar com o leitor: ' + msg);
     }
   }
 
@@ -463,11 +458,9 @@ export class ReadersService {
 
     try {
       return await intelbrasGetFaceImage(plainReader, userId);
-    } catch (e: any) {
-      throw new BadRequestException(
-        'Falha ao comunicar com o leitor: ' +
-          (e.message || 'Erro desconhecido'),
-      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erro desconhecido';
+      throw new BadRequestException('Falha ao comunicar com o leitor: ' + msg);
     }
   }
 }

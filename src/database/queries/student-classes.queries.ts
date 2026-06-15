@@ -1,13 +1,7 @@
 import { and, asc, eq, inArray, isNotNull, notInArray } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import {
-  responsibles,
-  responsibleStudents,
-  schoolClasses,
-  shifts,
-  studentClasses,
-} from '../schema';
+import { schoolClasses, shifts, studentClasses } from '../schema';
 
 export type StudentClassLinkRow = {
   id: string;

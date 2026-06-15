@@ -12,7 +12,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 
-import { SimulateFaceAccessDto } from './simulate.dto';
+import { SimulateFaceAccessDto } from '../validation/dto/common.dto';
 import { SimulateService } from './simulate.service';
 
 @ApiTags('simulate')

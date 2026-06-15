@@ -1,10 +1,7 @@
 import { and, desc, eq, gte, inArray, lte, type SQL } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import {
-  clientInvites,
-  temporaryPickupAuthorizations,
-} from '../schema';
+import { clientInvites, temporaryPickupAuthorizations } from '../schema';
 
 export type ClientInviteRow = typeof clientInvites.$inferSelect;
 
@@ -20,11 +17,7 @@ export async function inviteInsert(
   return rows[0];
 }
 
-export async function inviteGetById(
-  db: AppDb,
-  id: string,
-  clientId: string,
-) {
+export async function inviteGetById(db: AppDb, id: string, clientId: string) {
   const rows = await db
     .select()
     .from(clientInvites)
@@ -226,7 +219,9 @@ export async function inviteUpdateStatus(
       status,
       updatedAt: new Date(),
       ...(extras.usedAt !== undefined ? { usedAt: extras.usedAt } : {}),
-      ...(extras.guestFaceId !== undefined ? { guestFaceId: extras.guestFaceId } : {}),
+      ...(extras.guestFaceId !== undefined
+        ? { guestFaceId: extras.guestFaceId }
+        : {}),
     })
     .where(and(eq(clientInvites.id, id), eq(clientInvites.clientId, clientId)))
     .returning();
@@ -278,7 +273,9 @@ export async function inviteUpdateGuestProfile(
     .set({
       guestName: patch.guestName,
       guestDocument: patch.guestDocument,
-      ...(patch.guestPhone !== undefined ? { guestPhone: patch.guestPhone } : {}),
+      ...(patch.guestPhone !== undefined
+        ? { guestPhone: patch.guestPhone }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(clientInvites.id, id))
