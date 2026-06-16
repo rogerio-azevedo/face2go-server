@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, isNotNull, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, isNotNull, or, type SQL } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { clientMembers, clientRoles, users } from '../schema';
@@ -38,6 +38,13 @@ export const GENERIC_DEFAULT_ROLES = [
 function memberSearchCondition(search?: string): SQL | undefined {
   const term = search?.trim();
   if (!term) return undefined;
+  const digits = term.replace(/\D/g, '');
+  if (digits.length >= 3) {
+    return or(
+      ilike(clientMembers.name, `%${term}%`),
+      ilike(clientMembers.document, `%${digits}%`),
+    );
+  }
   return ilike(clientMembers.name, `%${term}%`);
 }
 

@@ -25,16 +25,23 @@ export type ResponsibleListQueryOptions = {
   limit?: number;
 };
 
-function responsibleNameSearchCondition(search?: string): SQL | undefined {
+function responsibleSearchCondition(search?: string): SQL | undefined {
   const term = search?.trim();
   if (!term) return undefined;
+  const digits = term.replace(/\D/g, '');
+  if (digits.length >= 3) {
+    return or(
+      ilike(responsibles.name, `%${term}%`),
+      ilike(responsibles.document, `%${digits}%`),
+    );
+  }
   return ilike(responsibles.name, `%${term}%`);
 }
 
 function responsibleClientWhere(clientId: string, search?: string) {
-  const nameCond = responsibleNameSearchCondition(search);
-  return nameCond
-    ? and(eq(responsibles.clientId, clientId), nameCond)
+  const searchCond = responsibleSearchCondition(search);
+  return searchCond
+    ? and(eq(responsibles.clientId, clientId), searchCond)
     : eq(responsibles.clientId, clientId);
 }
 

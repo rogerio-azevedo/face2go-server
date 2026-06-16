@@ -24,16 +24,19 @@ export type StudentListQueryOptions = {
   limit?: number;
 };
 
-function studentNameSearchCondition(search?: string): SQL | undefined {
+function studentSearchCondition(search?: string): SQL | undefined {
   const term = search?.trim();
   if (!term) return undefined;
-  return ilike(students.name, `%${term}%`);
+  return or(
+    ilike(students.name, `%${term}%`),
+    ilike(students.enrollment, `%${term}%`),
+  );
 }
 
 function studentClientWhere(clientId: string, search?: string) {
-  const nameCond = studentNameSearchCondition(search);
-  return nameCond
-    ? and(eq(students.clientId, clientId), nameCond)
+  const searchCond = studentSearchCondition(search);
+  return searchCond
+    ? and(eq(students.clientId, clientId), searchCond)
     : eq(students.clientId, clientId);
 }
 
@@ -75,7 +78,7 @@ export async function countStudentsByClass(
   classId: string,
   options: Pick<StudentListQueryOptions, 'search'> = {},
 ) {
-  const nameCond = studentNameSearchCondition(options.search);
+  const searchCond = studentSearchCondition(options.search);
   const [row] = await db
     .select({ total: count() })
     .from(students)
@@ -88,8 +91,8 @@ export async function countStudentsByClass(
       ),
     )
     .where(
-      nameCond
-        ? and(eq(students.clientId, clientId), nameCond)
+      searchCond
+        ? and(eq(students.clientId, clientId), searchCond)
         : eq(students.clientId, clientId),
     );
   return Number(row?.total ?? 0);
@@ -101,7 +104,7 @@ export async function listStudentsByClass(
   classId: string,
   options: StudentListQueryOptions = {},
 ) {
-  const nameCond = studentNameSearchCondition(options.search);
+  const searchCond = studentSearchCondition(options.search);
   const q = db
     .select({
       id: students.id,
@@ -131,8 +134,8 @@ export async function listStudentsByClass(
       ),
     )
     .where(
-      nameCond
-        ? and(eq(students.clientId, clientId), nameCond)
+      searchCond
+        ? and(eq(students.clientId, clientId), searchCond)
         : eq(students.clientId, clientId),
     )
     .orderBy(asc(students.name));
