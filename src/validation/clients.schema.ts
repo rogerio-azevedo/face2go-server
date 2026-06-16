@@ -82,6 +82,12 @@ const baseClientShape = {
   privacyAlias: optionalTrimmed.pipe(
     z.string().max(100, 'Alias muito longo (máx. 100 caracteres)').optional(),
   ),
+  supportEmail: optionalTrimmed.refine(
+    (val) => val === undefined || z.email().safeParse(val).success,
+    { message: 'E-mail de suporte inválido' },
+  ),
+  supportPhone: optionalTrimmed,
+  supportWhatsapp: optionalTrimmed,
   isActive: z.boolean(),
 };
 

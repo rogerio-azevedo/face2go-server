@@ -344,6 +344,13 @@
       "when": 1779170000000,
       "tag": "0048_member_can_enroll_student_face",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1779180000000,
+      "tag": "0049_client_support_fields",
+      "breakpoints": true
     }
   ]
 }

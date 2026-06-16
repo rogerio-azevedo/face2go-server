@@ -43,6 +43,9 @@ export type ClientListRow = {
   primaryColor: string | null;
   privacyPolicyUrl: string | null;
   privacyAlias: string | null;
+  supportEmail: string | null;
+  supportPhone: string | null;
+  supportWhatsapp: string | null;
   timezoneOffsetMinutes: number;
   ienhFilialCode: number | null;
   isActive: boolean;
@@ -127,6 +130,9 @@ export async function listClients(
       primaryColor: clients.primaryColor,
       privacyPolicyUrl: clients.privacyPolicyUrl,
       privacyAlias: clients.privacyAlias,
+      supportEmail: clients.supportEmail,
+      supportPhone: clients.supportPhone,
+      supportWhatsapp: clients.supportWhatsapp,
       timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
       ienhFilialCode: clients.ienhFilialCode,
       isActive: clients.isActive,
@@ -177,6 +183,9 @@ export type ClientCreateInput = {
   primaryColor?: string | null;
   privacyPolicyUrl?: string | null;
   privacyAlias?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
+  supportWhatsapp?: string | null;
   timezoneOffsetMinutes?: number;
   isActive?: boolean;
 };
@@ -199,6 +208,9 @@ export async function createClient(db: AppDb, input: ClientCreateInput) {
       primaryColor: input.primaryColor ?? null,
       privacyPolicyUrl: input.privacyPolicyUrl ?? null,
       privacyAlias: input.privacyAlias ?? null,
+      supportEmail: input.supportEmail ?? null,
+      supportPhone: input.supportPhone ?? null,
+      supportWhatsapp: input.supportWhatsapp ?? null,
       timezoneOffsetMinutes: input.timezoneOffsetMinutes ?? 0,
       isActive: input.isActive ?? true,
       updatedAt: now,
@@ -218,6 +230,9 @@ export type ClientUpdateInput = Partial<{
   primaryColor: string | null;
   privacyPolicyUrl: string | null;
   privacyAlias: string | null;
+  supportEmail: string | null;
+  supportPhone: string | null;
+  supportWhatsapp: string | null;
   timezoneOffsetMinutes: number;
   ienhFilialCode: number | null;
   isActive: boolean;
@@ -260,6 +275,12 @@ export async function updateClient(
     setPayload.privacyPolicyUrl = input.privacyPolicyUrl;
   if (input.privacyAlias !== undefined)
     setPayload.privacyAlias = input.privacyAlias;
+  if (input.supportEmail !== undefined)
+    setPayload.supportEmail = input.supportEmail;
+  if (input.supportPhone !== undefined)
+    setPayload.supportPhone = input.supportPhone;
+  if (input.supportWhatsapp !== undefined)
+    setPayload.supportWhatsapp = input.supportWhatsapp;
   if (input.timezoneOffsetMinutes !== undefined) {
     setPayload.timezoneOffsetMinutes = input.timezoneOffsetMinutes;
   }

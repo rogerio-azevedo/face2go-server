@@ -266,6 +266,9 @@ export class ClientsService {
       primaryColor: parsed.data.primaryColor,
       privacyPolicyUrl: parsed.data.privacyPolicyUrl,
       privacyAlias: parsed.data.privacyAlias,
+      supportEmail: parsed.data.supportEmail,
+      supportPhone: parsed.data.supportPhone,
+      supportWhatsapp: parsed.data.supportWhatsapp,
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
     });
@@ -297,6 +300,9 @@ export class ClientsService {
       d.primaryColor === undefined &&
       d.privacyPolicyUrl === undefined &&
       d.privacyAlias === undefined &&
+      d.supportEmail === undefined &&
+      d.supportPhone === undefined &&
+      d.supportWhatsapp === undefined &&
       d.timezoneOffsetMinutes === undefined &&
       d.isActive === undefined &&
       d.ienhFilialCode === undefined
@@ -330,6 +336,15 @@ export class ClientsService {
           : {}),
         ...(d.privacyAlias !== undefined
           ? { privacyAlias: d.privacyAlias }
+          : {}),
+        ...(d.supportEmail !== undefined
+          ? { supportEmail: d.supportEmail }
+          : {}),
+        ...(d.supportPhone !== undefined
+          ? { supportPhone: d.supportPhone }
+          : {}),
+        ...(d.supportWhatsapp !== undefined
+          ? { supportWhatsapp: d.supportWhatsapp }
           : {}),
         ...(d.timezoneOffsetMinutes !== undefined
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }

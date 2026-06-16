@@ -158,12 +158,18 @@ export class AuthService implements AuthServiceContract {
     primaryColor: string | null;
     privacyPolicyUrl: string | null;
     privacyAlias: string | null;
+    supportEmail: string | null;
+    supportPhone: string | null;
+    supportWhatsapp: string | null;
   }): TenantBranding {
     return {
       logoUrl: link.clientLogoUrl ?? link.companyLogoUrl,
       primaryColor: link.primaryColor,
       privacyPolicyUrl: link.privacyPolicyUrl,
       privacyAlias: link.privacyAlias,
+      supportEmail: link.supportEmail,
+      supportPhone: link.supportPhone,
+      supportWhatsapp: link.supportWhatsapp,
     };
   }
 
@@ -230,6 +236,9 @@ export class AuthService implements AuthServiceContract {
         primaryColor: clients.primaryColor,
         privacyPolicyUrl: clients.privacyPolicyUrl,
         privacyAlias: clients.privacyAlias,
+        supportEmail: clients.supportEmail,
+        supportPhone: clients.supportPhone,
+        supportWhatsapp: clients.supportWhatsapp,
         clientActive: clients.isActive,
       })
       .from(clientUsers)
@@ -265,6 +274,9 @@ export class AuthService implements AuthServiceContract {
         primaryColor: clients.primaryColor,
         privacyPolicyUrl: clients.privacyPolicyUrl,
         privacyAlias: clients.privacyAlias,
+        supportEmail: clients.supportEmail,
+        supportPhone: clients.supportPhone,
+        supportWhatsapp: clients.supportWhatsapp,
         clientActive: clients.isActive,
       })
       .from(responsibles)
@@ -300,6 +312,9 @@ export class AuthService implements AuthServiceContract {
         primaryColor: clients.primaryColor,
         privacyPolicyUrl: clients.privacyPolicyUrl,
         privacyAlias: clients.privacyAlias,
+        supportEmail: clients.supportEmail,
+        supportPhone: clients.supportPhone,
+        supportWhatsapp: clients.supportWhatsapp,
         clientActive: clients.isActive,
       })
       .from(clientMembers)
