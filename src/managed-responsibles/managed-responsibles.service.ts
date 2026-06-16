@@ -275,20 +275,25 @@ export class ManagedResponsiblesService {
   private async createResponsibleFromInvitation(
     row: ResponsibleInvitationRow,
   ): Promise<string> {
-    if (
-      !row.submittedEmail ||
-      !row.submittedPasswordHash ||
-      !row.submittedName
-    ) {
+    if (!row.submittedName) {
       throw new BadRequestException('Dados do convidado incompletos.');
     }
     if (!row.faceImageKey) {
       throw new BadRequestException('Foto do convidado não encontrada.');
     }
 
-    const existingUser = await this.database.db.query.users.findFirst({
-      where: eq(users.email, row.submittedEmail),
-    });
+    const userEmail =
+      row.submittedEmail ??
+      `nologin-${crypto.randomUUID()}@sem-acesso.face2go`;
+    const passwordHash =
+      row.submittedPasswordHash ??
+      (await bcrypt.hash(crypto.randomUUID(), 10));
+
+    const existingUser = row.submittedEmail
+      ? await this.database.db.query.users.findFirst({
+          where: eq(users.email, row.submittedEmail),
+        })
+      : null;
     if (
       existingUser &&
       (await responsiblesQueries.getResponsibleByUserIdAndClient(
@@ -313,8 +318,8 @@ export class ManagedResponsiblesService {
       if (!existingUser) {
         await tx.insert(users).values({
           id: userId,
-          email: row.submittedEmail!,
-          password: row.submittedPasswordHash!,
+          email: userEmail,
+          password: passwordHash,
           name: row.submittedName!,
           role: 'member',
           isActive: true,

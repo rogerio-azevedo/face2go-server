@@ -49,3 +49,41 @@ export type ResponsibleInvitationSubmittedPayload = {
   inviterResponsibleId: string;
   guestName: string;
 };
+
+export const PICKUP_GUEST_FACE_APPROVED = 'pickup.guest.face.approved';
+
+export type PickupGuestFaceApprovedPayload = {
+  authorizationId: string;
+  clientId: string;
+  requestedByResponsibleId: string;
+  guestName: string;
+};
+
+export const PICKUP_GUEST_FACE_SYNCED = 'pickup.guest.face.synced';
+
+export type PickupGuestFaceSyncedPayload = {
+  authorizationId: string;
+  clientId: string;
+  requestedByResponsibleId: string;
+  guestName: string;
+  syncStatus: 'synced' | 'sync_failed';
+};
+
+export const INVITE_GUEST_FACE_APPROVED = 'invite.guest.face.approved';
+
+export type InviteGuestFaceApprovedPayload = {
+  inviteId: string;
+  clientId: string;
+  requestedByMemberId: string;
+  guestName: string;
+};
+
+export const INVITE_GUEST_FACE_SYNCED = 'invite.guest.face.synced';
+
+export type InviteGuestFaceSyncedPayload = {
+  inviteId: string;
+  clientId: string;
+  requestedByMemberId: string;
+  guestName: string;
+  syncStatus: 'synced' | 'sync_failed';
+};

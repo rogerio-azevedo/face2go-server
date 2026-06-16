@@ -3,8 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { z } from 'zod';
 import { ConfigService } from '@nestjs/config';
 
@@ -29,6 +31,12 @@ import {
   createPickupAuthorizationSchema,
   updatePickupAuthorizationSchema,
 } from '../validation/pickup-authorizations.schema';
+import {
+  PICKUP_GUEST_FACE_APPROVED,
+  PICKUP_GUEST_FACE_SYNCED,
+  type PickupGuestFaceApprovedPayload,
+  type PickupGuestFaceSyncedPayload,
+} from '../notifications/notifications.events';
 import { zodFirstMessage } from '../validation/zod-utils';
 
 export type PickupAuthorizationStudentDto = {
@@ -61,6 +69,8 @@ type LinkedResponsibleRow = NonNullable<
 
 @Injectable()
 export class PickupAuthorizationsService {
+  private readonly logger = new Logger(PickupAuthorizationsService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly schoolAccess: SchoolAccessService,
@@ -68,6 +78,7 @@ export class PickupAuthorizationsService {
     private readonly r2: R2StorageService,
     private readonly faceSync: FaceSyncService,
     private readonly lprPlateSync: LprPlateSyncService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private assertResponsibleJwt(user: JwtPayload): asserts user is JwtPayload & {
@@ -686,10 +697,11 @@ export class PickupAuthorizationsService {
     return { url };
   }
 
-  private async executeGuestFaceApproval(
+  private async performGuestFaceSync(
     row: PickupAuthRow,
     id: string,
     clientId: string,
+    faceId: number,
   ) {
     if (!row.guestFaceImageKey) {
       throw new BadRequestException('Foto do convidado não encontrada.');
@@ -708,10 +720,6 @@ export class PickupAuthorizationsService {
     }
 
     const { buffer } = await this.r2.getObjectBytes(row.guestFaceImageKey);
-    const faceId = await registrationsQueries.bumpClientFaceCounter(
-      this.database.db,
-      clientId,
-    );
 
     const sync = await this.faceSync.syncPersonOnReaders({
       clientId,
@@ -749,8 +757,6 @@ export class PickupAuthorizationsService {
       id,
       clientId,
       {
-        guestApprovalStatus: 'approved',
-        guestFaceId: faceId,
         guestFaceSyncStatus: sync.deviceSyncStatus,
         guestFaceSyncedAt:
           sync.deviceSyncStatus === 'synced' ? new Date() : null,
@@ -768,14 +774,107 @@ export class PickupAuthorizationsService {
     if (!updated) {
       throw new NotFoundException('Autorização não encontrada.');
     }
+
+    return {
+      syncStatus: sync.deviceSyncStatus as 'synced' | 'sync_failed',
+      row: updated,
+    };
+  }
+
+  private async executeGuestFaceApproval(
+    row: PickupAuthRow,
+    id: string,
+    clientId: string,
+  ) {
+    const faceId = await registrationsQueries.bumpClientFaceCounter(
+      this.database.db,
+      clientId,
+    );
+
+    const approved = await pickupQueries.pickupAuthUpdateGuestApproval(
+      this.database.db,
+      id,
+      clientId,
+      {
+        guestApprovalStatus: 'approved',
+        guestFaceId: faceId,
+        guestFaceSyncStatus: 'pending_sync',
+        guestFaceSyncedAt: null,
+        guestFaceSyncError: null,
+      },
+    );
+    if (!approved) {
+      throw new NotFoundException('Autorização não encontrada.');
+    }
+
+    const { row: syncedRow } = await this.performGuestFaceSync(
+      { ...approved, guestFaceImageKey: row.guestFaceImageKey },
+      id,
+      clientId,
+      faceId,
+    );
+
     const students = await pickupQueries.pickupAuthListStudentsForAuth(
       this.database.db,
       id,
     );
     return this.toResponseWithPhoto(
-      updated,
+      syncedRow,
       students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
     );
+  }
+
+  @OnEvent(PICKUP_GUEST_FACE_APPROVED, { async: true })
+  async handleGuestFaceApproved(
+    payload: PickupGuestFaceApprovedPayload,
+  ): Promise<void> {
+    try {
+      const row = await pickupQueries.pickupAuthGetById(
+        this.database.db,
+        payload.authorizationId,
+        payload.clientId,
+      );
+      if (!row || row.guestApprovalStatus !== 'approved') {
+        return;
+      }
+      if (row.guestFaceId == null) {
+        return;
+      }
+
+      const { syncStatus } = await this.performGuestFaceSync(
+        row,
+        payload.authorizationId,
+        payload.clientId,
+        row.guestFaceId,
+      );
+
+      const syncedPayload: PickupGuestFaceSyncedPayload = {
+        ...payload,
+        syncStatus,
+      };
+      this.eventEmitter.emit(PICKUP_GUEST_FACE_SYNCED, syncedPayload);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Sync pickup guest face falhou (${payload.authorizationId}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      await pickupQueries.pickupAuthUpdateGuestApproval(
+        this.database.db,
+        payload.authorizationId,
+        payload.clientId,
+        {
+          guestFaceSyncStatus: 'sync_failed',
+          guestFaceSyncError:
+            err instanceof Error ? err.message : 'Falha na sincronização.',
+        },
+      );
+      const syncedPayload: PickupGuestFaceSyncedPayload = {
+        ...payload,
+        syncStatus: 'sync_failed',
+      };
+      this.eventEmitter.emit(PICKUP_GUEST_FACE_SYNCED, syncedPayload);
+    }
   }
 
   async submitGuestFaceDirect(user: JwtPayload, id: string, body: unknown) {
@@ -870,7 +969,48 @@ export class PickupAuthorizationsService {
         'Só é possível aprovar após o convidado enviar a foto.',
       );
     }
-    return this.executeGuestFaceApproval(row, id, user.clientId);
+    if (!row.guestFaceImageKey) {
+      throw new BadRequestException('Foto do convidado não encontrada.');
+    }
+
+    const faceId = await registrationsQueries.bumpClientFaceCounter(
+      this.database.db,
+      user.clientId,
+    );
+
+    const updated = await pickupQueries.pickupAuthUpdateGuestApproval(
+      this.database.db,
+      id,
+      user.clientId,
+      {
+        guestApprovalStatus: 'approved',
+        guestFaceId: faceId,
+        guestFaceSyncStatus: 'pending_sync',
+        guestFaceSyncedAt: null,
+        guestFaceSyncError: null,
+      },
+    );
+    if (!updated) {
+      throw new NotFoundException('Autorização não encontrada.');
+    }
+
+    const students = await pickupQueries.pickupAuthListStudentsForAuth(
+      this.database.db,
+      id,
+    );
+    const response = await this.toResponseWithPhoto(
+      updated,
+      students.map((s) => ({ studentId: s.studentId, name: s.studentName })),
+    );
+
+    this.eventEmitter.emit(PICKUP_GUEST_FACE_APPROVED, {
+      authorizationId: id,
+      clientId: user.clientId,
+      requestedByResponsibleId: user.responsibleId,
+      guestName: row.guestName?.trim() ?? '',
+    } satisfies PickupGuestFaceApprovedPayload);
+
+    return response;
   }
 
   async rejectGuestFace(user: JwtPayload, id: string) {

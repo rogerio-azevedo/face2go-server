@@ -485,3 +485,16 @@ export async function getMemberPushToken(
     .limit(1);
   return row?.pushToken ?? null;
 }
+
+export async function updateMemberPushTokenById(
+  db: AppDb,
+  memberId: string,
+  pushToken: string,
+) {
+  const [row] = await db
+    .update(clientMembers)
+    .set({ pushToken, updatedAt: new Date() })
+    .where(eq(clientMembers.id, memberId))
+    .returning({ id: clientMembers.id });
+  return row;
+}

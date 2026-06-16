@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import { normalizeCpf } from '../auth/utils/auth-identifiers';
 import {
-  createResponsibleSchema,
   linkResponsibleStudentSchema,
   responsibleRelationshipSchema,
 } from './responsibles.schema';
@@ -70,21 +69,27 @@ export const createResponsibleInvitationSchema = z.object({
     .min(1, 'Informe ao menos um aluno.'),
 });
 
-export const publicResponsibleRegisterSubmitSchema = createResponsibleSchema
-  .extend({
-    faceImageKey: z.string().min(1),
-    vehicle: optionalVehicleSchema,
-  })
-  .extend({
-    document: z
-      .string()
-      .trim()
-      .min(1, 'Informe o CPF.')
-      .transform((value) => normalizeCpf(value))
-      .refine((value) => value.length === 11, {
-        message: 'CPF inválido.',
-      }),
-  });
+export const publicResponsibleRegisterSubmitSchema = z.object({
+  name: z.string().trim().min(1, 'Informe o nome.').max(255),
+  email: z.email('E-mail inválido.').nullable().optional(),
+  password: z
+    .string()
+    .min(8, 'Senha deve ter pelo menos 8 caracteres.')
+    .max(128)
+    .nullable()
+    .optional(),
+  phone: z.string().trim().max(32).nullable().optional(),
+  faceImageKey: z.string().min(1),
+  vehicle: optionalVehicleSchema,
+  document: z
+    .string()
+    .trim()
+    .min(1, 'Informe o CPF.')
+    .transform((value) => normalizeCpf(value))
+    .refine((value) => value.length === 11, {
+      message: 'CPF inválido.',
+    }),
+});
 
 export type CreateManagedResponsibleInput = z.infer<
   typeof createManagedResponsibleSchema

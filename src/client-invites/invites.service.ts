@@ -3,8 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { z } from 'zod';
 import { ConfigService } from '@nestjs/config';
 
@@ -28,6 +30,12 @@ import {
   updateVisitorInviteSchema,
 } from '../validation/visitor-invites.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
+import {
+  INVITE_GUEST_FACE_APPROVED,
+  INVITE_GUEST_FACE_SYNCED,
+  type InviteGuestFaceApprovedPayload,
+  type InviteGuestFaceSyncedPayload,
+} from '../notifications/notifications.events';
 
 export type InviteVehicleDto = {
   plate: string;
@@ -49,6 +57,8 @@ export type InviteResponse = ClientInviteRow & {
 
 @Injectable()
 export class InvitesService {
+  private readonly logger = new Logger(InvitesService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly schoolAccess: SchoolAccessService,
@@ -56,6 +66,7 @@ export class InvitesService {
     private readonly r2: R2StorageService,
     private readonly faceSync: FaceSyncService,
     private readonly lprPlateSync: LprPlateSyncService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private assertMemberJwt(user: JwtPayload): asserts user is JwtPayload & {
@@ -405,10 +416,11 @@ export class InvitesService {
     return { url };
   }
 
-  private async executeGuestFaceApproval(
+  private async performGuestFaceSync(
     row: ClientInviteRow,
     id: string,
     clientId: string,
+    faceId: number,
   ) {
     if (!row.guestFaceImageKey) {
       throw new BadRequestException('Foto do visitante não encontrada.');
@@ -427,10 +439,6 @@ export class InvitesService {
     }
 
     const { buffer } = await this.r2.getObjectBytes(row.guestFaceImageKey);
-    const faceId = await registrationsQueries.bumpClientFaceCounter(
-      this.database.db,
-      clientId,
-    );
 
     const sync = await this.faceSync.syncPersonOnReaders({
       clientId,
@@ -468,8 +476,6 @@ export class InvitesService {
       id,
       clientId,
       {
-        guestApprovalStatus: 'approved',
-        guestFaceId: faceId,
         guestFaceSyncStatus: sync.deviceSyncStatus,
         guestFaceSyncedAt:
           sync.deviceSyncStatus === 'synced' ? new Date() : null,
@@ -487,7 +493,100 @@ export class InvitesService {
     if (!updated) {
       throw new NotFoundException('Convite não encontrado.');
     }
-    return this.toResponse(updated);
+
+    return {
+      syncStatus: sync.deviceSyncStatus as 'synced' | 'sync_failed',
+      row: updated,
+    };
+  }
+
+  private async executeGuestFaceApproval(
+    row: ClientInviteRow,
+    id: string,
+    clientId: string,
+  ) {
+    const faceId = await registrationsQueries.bumpClientFaceCounter(
+      this.database.db,
+      clientId,
+    );
+
+    const approved = await inviteQueries.inviteUpdateGuestApproval(
+      this.database.db,
+      id,
+      clientId,
+      {
+        guestApprovalStatus: 'approved',
+        guestFaceId: faceId,
+        guestFaceSyncStatus: 'pending_sync',
+        guestFaceSyncedAt: null,
+        guestFaceSyncError: null,
+      },
+    );
+    if (!approved) {
+      throw new NotFoundException('Convite não encontrado.');
+    }
+
+    const { row: syncedRow } = await this.performGuestFaceSync(
+      { ...approved, guestFaceImageKey: row.guestFaceImageKey },
+      id,
+      clientId,
+      faceId,
+    );
+
+    return this.toResponse(syncedRow);
+  }
+
+  @OnEvent(INVITE_GUEST_FACE_APPROVED, { async: true })
+  async handleGuestFaceApproved(
+    payload: InviteGuestFaceApprovedPayload,
+  ): Promise<void> {
+    try {
+      const row = await inviteQueries.inviteGetById(
+        this.database.db,
+        payload.inviteId,
+        payload.clientId,
+      );
+      if (!row || row.guestApprovalStatus !== 'approved') {
+        return;
+      }
+      if (row.guestFaceId == null) {
+        return;
+      }
+
+      const { syncStatus } = await this.performGuestFaceSync(
+        row,
+        payload.inviteId,
+        payload.clientId,
+        row.guestFaceId,
+      );
+
+      const syncedPayload: InviteGuestFaceSyncedPayload = {
+        ...payload,
+        syncStatus,
+      };
+      this.eventEmitter.emit(INVITE_GUEST_FACE_SYNCED, syncedPayload);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Sync invite guest face falhou (${payload.inviteId}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      await inviteQueries.inviteUpdateGuestApproval(
+        this.database.db,
+        payload.inviteId,
+        payload.clientId,
+        {
+          guestFaceSyncStatus: 'sync_failed',
+          guestFaceSyncError:
+            err instanceof Error ? err.message : 'Falha na sincronização.',
+        },
+      );
+      const syncedPayload: InviteGuestFaceSyncedPayload = {
+        ...payload,
+        syncStatus: 'sync_failed',
+      };
+      this.eventEmitter.emit(INVITE_GUEST_FACE_SYNCED, syncedPayload);
+    }
   }
 
   async submitGuestFaceDirect(user: JwtPayload, id: string, body: unknown) {
@@ -569,7 +668,41 @@ export class InvitesService {
         'Só é possível aprovar após o visitante enviar a foto.',
       );
     }
-    return this.executeGuestFaceApproval(row, id, user.clientId);
+    if (!row.guestFaceImageKey) {
+      throw new BadRequestException('Foto do visitante não encontrada.');
+    }
+
+    const faceId = await registrationsQueries.bumpClientFaceCounter(
+      this.database.db,
+      user.clientId,
+    );
+
+    const updated = await inviteQueries.inviteUpdateGuestApproval(
+      this.database.db,
+      id,
+      user.clientId,
+      {
+        guestApprovalStatus: 'approved',
+        guestFaceId: faceId,
+        guestFaceSyncStatus: 'pending_sync',
+        guestFaceSyncedAt: null,
+        guestFaceSyncError: null,
+      },
+    );
+    if (!updated) {
+      throw new NotFoundException('Convite não encontrado.');
+    }
+
+    const response = await this.toResponse(updated);
+
+    this.eventEmitter.emit(INVITE_GUEST_FACE_APPROVED, {
+      inviteId: id,
+      clientId: user.clientId,
+      requestedByMemberId: user.memberId,
+      guestName: row.guestName?.trim() ?? '',
+    } satisfies InviteGuestFaceApprovedPayload);
+
+    return response;
   }
 
   async rejectGuestFace(user: JwtPayload, id: string) {

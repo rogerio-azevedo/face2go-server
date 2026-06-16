@@ -9,22 +9,37 @@ import { NotificationsService } from './notifications.service';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
-@Roles('responsible')
+@Roles('responsible', 'member')
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Patch('push-token')
-  @ApiOperation({ summary: 'Registrar token Expo Push do app (responsável)' })
+  @ApiOperation({
+    summary: 'Registrar token Expo Push do app (responsável ou membro)',
+  })
   async registerPushToken(
     @CurrentUser() user: JwtPayload,
     @Body() body: UpdatePushTokenDto,
   ) {
-    const rid = user.responsibleId;
-    if (!rid) {
-      throw new ForbiddenException('Usuário não possui perfil de responsável.');
+    if (user.role === 'responsible') {
+      const rid = user.responsibleId;
+      if (!rid) {
+        throw new ForbiddenException('Usuário não possui perfil de responsável.');
+      }
+      await this.notifications.updatePushToken(rid, body.pushToken);
+      return { ok: true };
     }
-    await this.notifications.updatePushToken(rid, body.pushToken);
-    return { ok: true };
+
+    if (user.role === 'member') {
+      const mid = user.memberId;
+      if (!mid) {
+        throw new ForbiddenException('Usuário não possui perfil de membro.');
+      }
+      await this.notifications.updateMemberPushToken(mid, body.pushToken);
+      return { ok: true };
+    }
+
+    throw new ForbiddenException('Perfil não autorizado a registrar push token.');
   }
 }

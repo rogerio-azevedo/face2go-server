@@ -158,30 +158,37 @@ export class PublicResponsibleRegisterService {
       throw new NotFoundException('Cliente não encontrado.');
     }
 
-    const existing = await this.database.db.query.users.findFirst({
-      where: eq(users.email, parsed.data.email),
-    });
-    if (existing) {
-      if (!existing.password) {
-        throw new ConflictException('E-mail já cadastrado.');
-      }
-      const passwordOk = await bcrypt.compare(
-        parsed.data.password,
-        existing.password,
-      );
-      if (!passwordOk) {
-        throw new UnauthorizedException(
-          'Este e-mail já possui conta. Informe a senha correta para vincular à nova escola.',
-        );
-      }
-      const alreadyInSchool =
-        await responsiblesQueries.getResponsibleByUserIdAndClient(
-          this.database.db,
-          existing.id,
-          row.clientId,
-        );
-      if (alreadyInSchool) {
-        throw new ConflictException('Você já está vinculado a esta escola.');
+    const email = parsed.data.email?.trim() || undefined;
+    const password = parsed.data.password || undefined;
+
+    if (email) {
+      const existing = await this.database.db.query.users.findFirst({
+        where: eq(users.email, email),
+      });
+      if (existing) {
+        if (!password) {
+          throw new BadRequestException(
+            'Informe a senha para vincular à conta existente.',
+          );
+        }
+        if (!existing.password) {
+          throw new ConflictException('E-mail já cadastrado.');
+        }
+        const passwordOk = await bcrypt.compare(password, existing.password);
+        if (!passwordOk) {
+          throw new UnauthorizedException(
+            'Este e-mail já possui conta. Informe a senha correta para vincular à nova escola.',
+          );
+        }
+        const alreadyInSchool =
+          await responsiblesQueries.getResponsibleByUserIdAndClient(
+            this.database.db,
+            existing.id,
+            row.clientId,
+          );
+        if (alreadyInSchool) {
+          throw new ConflictException('Você já está vinculado a esta escola.');
+        }
       }
     }
 
@@ -199,7 +206,7 @@ export class PublicResponsibleRegisterService {
       throw new ConflictException('O cadastro deste convite já foi enviado.');
     }
 
-    const hashed = await bcrypt.hash(parsed.data.password, 10);
+    const hashed = password ? await bcrypt.hash(password, 10) : null;
     const hasVehicle = !!parsed.data.vehicle?.plate?.trim();
 
     const updated = await invitationQueries.invitationUpdate(
@@ -211,7 +218,7 @@ export class PublicResponsibleRegisterService {
         faceApprovalStatus: 'submitted',
         plateApprovalStatus: hasVehicle ? 'submitted' : 'approved',
         submittedName: parsed.data.name,
-        submittedEmail: parsed.data.email,
+        submittedEmail: email ?? null,
         submittedPhone: parsed.data.phone ?? null,
         submittedDocument: parsed.data.document ?? null,
         submittedPasswordHash: hashed,

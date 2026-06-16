@@ -16,9 +16,13 @@ import {
   ACCESS_FACIAL_RECORDED,
   type AccessFacialRecordedPayload,
   INVITE_GUEST_FACE_SUBMITTED,
+  INVITE_GUEST_FACE_SYNCED,
   type InviteGuestFaceSubmittedPayload,
+  type InviteGuestFaceSyncedPayload,
   PICKUP_GUEST_FACE_SUBMITTED,
+  PICKUP_GUEST_FACE_SYNCED,
   type PickupGuestFaceSubmittedPayload,
+  type PickupGuestFaceSyncedPayload,
   RESPONSIBLE_INVITATION_SUBMITTED,
   type ResponsibleInvitationSubmittedPayload,
 } from './notifications.events';
@@ -50,6 +54,25 @@ export class NotificationsService {
     );
     if (!row) {
       throw new NotFoundException('Responsável não encontrado.');
+    }
+  }
+
+  async updateMemberPushToken(
+    memberId: string,
+    pushToken: string,
+  ): Promise<void> {
+    const token = pushToken.trim();
+    if (!token) {
+      throw new BadRequestException('Token de push inválido.');
+    }
+
+    const row = await membersQueries.updateMemberPushTokenById(
+      this.database.db,
+      memberId,
+      token,
+    );
+    if (!row) {
+      throw new NotFoundException('Membro não encontrado.');
     }
   }
 
@@ -136,6 +159,72 @@ export class NotificationsService {
     } catch (err: unknown) {
       this.logger.warn(
         `Push invite face falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  @OnEvent(PICKUP_GUEST_FACE_SYNCED, { async: true })
+  async handlePickupGuestFaceSynced(
+    payload: PickupGuestFaceSyncedPayload,
+  ): Promise<void> {
+    if (payload.syncStatus !== 'synced') {
+      return;
+    }
+    try {
+      const token = await responsiblesQueries.getResponsiblePushToken(
+        this.database.db,
+        payload.requestedByResponsibleId,
+      );
+      if (!token) {
+        return;
+      }
+      const guestLabel = payload.guestName.trim() || 'Convidado';
+      await this.dispatchExpoPush(
+        [token],
+        'Face sincronizada',
+        `A autorização "${guestLabel}" teve a face sincronizada nos leitores.`,
+        {
+          type: 'pickup_guest_face_synced',
+          authorizationId: payload.authorizationId,
+          clientId: payload.clientId,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push pickup face synced falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  @OnEvent(INVITE_GUEST_FACE_SYNCED, { async: true })
+  async handleInviteGuestFaceSynced(
+    payload: InviteGuestFaceSyncedPayload,
+  ): Promise<void> {
+    if (payload.syncStatus !== 'synced') {
+      return;
+    }
+    try {
+      const token = await membersQueries.getMemberPushToken(
+        this.database.db,
+        payload.requestedByMemberId,
+      );
+      if (!token) {
+        return;
+      }
+      const guestLabel = payload.guestName.trim() || 'Visitante';
+      await this.dispatchExpoPush(
+        [token],
+        'Face sincronizada',
+        `A autorização "${guestLabel}" teve a face sincronizada nos leitores.`,
+        {
+          type: 'invite_guest_face_synced',
+          inviteId: payload.inviteId,
+          clientId: payload.clientId,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push invite face synced falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
