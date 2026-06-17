@@ -3,7 +3,6 @@ import {
   asc,
   count,
   eq,
-  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -17,6 +16,7 @@ import type { AppDb } from '../database.types';
 import { responsibleStudents, studentClasses, students } from '../schema';
 
 import * as studentClassesQueries from './student-classes.queries';
+import { unaccentIlike } from './search-utils';
 
 export type StudentListQueryOptions = {
   search?: string;
@@ -28,8 +28,8 @@ function studentSearchCondition(search?: string): SQL | undefined {
   const term = search?.trim();
   if (!term) return undefined;
   return or(
-    ilike(students.name, `%${term}%`),
-    ilike(students.enrollment, `%${term}%`),
+    unaccentIlike(students.name, term),
+    unaccentIlike(students.enrollment, term),
   );
 }
 

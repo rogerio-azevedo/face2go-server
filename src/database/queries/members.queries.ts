@@ -3,6 +3,8 @@ import { and, asc, count, eq, ilike, isNotNull, or, type SQL } from 'drizzle-orm
 import type { AppDb } from '../database.types';
 import { clientMembers, clientRoles, users } from '../schema';
 
+import { unaccentIlike } from './search-utils';
+
 export type MemberListQueryOptions = {
   search?: string;
   roleId?: string;
@@ -41,11 +43,11 @@ function memberSearchCondition(search?: string): SQL | undefined {
   const digits = term.replace(/\D/g, '');
   if (digits.length >= 3) {
     return or(
-      ilike(clientMembers.name, `%${term}%`),
+      unaccentIlike(clientMembers.name, term),
       ilike(clientMembers.document, `%${digits}%`),
     );
   }
-  return ilike(clientMembers.name, `%${term}%`);
+  return unaccentIlike(clientMembers.name, term);
 }
 
 function memberClientWhere(

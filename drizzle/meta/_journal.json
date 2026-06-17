@@ -351,6 +351,13 @@
       "when": 1779180000000,
       "tag": "0049_client_support_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1779190000000,
+      "tag": "0050_add_unaccent",
+      "breakpoints": true
     }
   ]
 }

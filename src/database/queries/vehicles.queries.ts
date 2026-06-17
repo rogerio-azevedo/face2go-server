@@ -3,7 +3,6 @@ import {
   count,
   desc,
   eq,
-  ilike,
   inArray,
   or,
   type SQL,
@@ -11,6 +10,7 @@ import {
 
 import type { AppDb } from '../database.types';
 import { listHouseholdResponsibleIds } from './responsibles.queries';
+import { unaccentIlike } from './search-utils';
 import { clientMembers, responsibles, vehicles } from '../schema';
 import { sql } from 'drizzle-orm';
 
@@ -219,11 +219,10 @@ export type VehicleListQueryOptions = {
 function vehicleSearchCondition(search?: string): SQL | undefined {
   const term = search?.trim();
   if (!term) return undefined;
-  const pattern = `%${term}%`;
   return or(
-    ilike(vehicles.plate, pattern),
-    ilike(vehicles.brand, pattern),
-    ilike(vehicles.model, pattern),
+    unaccentIlike(vehicles.plate, term),
+    unaccentIlike(vehicles.brand, term),
+    unaccentIlike(vehicles.model, term),
   );
 }
 

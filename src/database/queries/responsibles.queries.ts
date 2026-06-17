@@ -18,6 +18,7 @@ import { responsibleStudents, responsibles, students, users } from '../schema';
 
 import * as studentClassesQueries from './student-classes.queries';
 import * as studentsQueries from './students.queries';
+import { unaccentIlike } from './search-utils';
 
 export type ResponsibleListQueryOptions = {
   search?: string;
@@ -31,11 +32,11 @@ function responsibleSearchCondition(search?: string): SQL | undefined {
   const digits = term.replace(/\D/g, '');
   if (digits.length >= 3) {
     return or(
-      ilike(responsibles.name, `%${term}%`),
+      unaccentIlike(responsibles.name, term),
       ilike(responsibles.document, `%${digits}%`),
     );
   }
-  return ilike(responsibles.name, `%${term}%`);
+  return unaccentIlike(responsibles.name, term);
 }
 
 function responsibleClientWhere(clientId: string, search?: string) {
