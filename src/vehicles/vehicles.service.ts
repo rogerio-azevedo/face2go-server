@@ -32,13 +32,31 @@ import {
 import { zodFirstMessage } from '../validation/zod-utils';
 
 export type { VehicleWithDriverRow };
+
+const DUPLICATE_PLATE_MESSAGE =
+  'Essa placa já está cadastrada no sistema, por favor procure o suporte.';
+
+function getPostgresErrorCode(err: unknown): string | undefined {
+  let cur: unknown = err;
+  for (let depth = 0; depth < 4 && cur; depth++) {
+    if (
+      typeof cur === 'object' &&
+      cur !== null &&
+      'code' in cur &&
+      typeof (cur as { code?: unknown }).code === 'string'
+    ) {
+      return (cur as { code: string }).code;
+    }
+    cur =
+      typeof cur === 'object' && cur !== null && 'cause' in cur
+        ? (cur as { cause?: unknown }).cause
+        : undefined;
+  }
+  return undefined;
+}
+
 function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code?: string }).code === '23505'
-  );
+  return getPostgresErrorCode(err) === '23505';
 }
 
 function normalizeVehiclePlateCmp(plate: string): string {
@@ -229,9 +247,7 @@ export class VehiclesService {
       );
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new BadRequestException(
-          'Já existe um veículo com esta placa cadastrado nesta escola.',
-        );
+        throw new BadRequestException(DUPLICATE_PLATE_MESSAGE);
       }
       throw err;
     }
@@ -313,9 +329,7 @@ export class VehiclesService {
         throw err;
       }
       if (isUniqueViolation(err)) {
-        throw new BadRequestException(
-          'Já existe um veículo com esta placa cadastrado nesta escola.',
-        );
+        throw new BadRequestException(DUPLICATE_PLATE_MESSAGE);
       }
       throw err;
     }
@@ -466,9 +480,7 @@ export class VehiclesService {
       );
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new BadRequestException(
-          'Já existe um veículo com esta placa cadastrado nesta escola.',
-        );
+        throw new BadRequestException(DUPLICATE_PLATE_MESSAGE);
       }
       throw err;
     }
@@ -549,9 +561,7 @@ export class VehiclesService {
         throw err;
       }
       if (isUniqueViolation(err)) {
-        throw new BadRequestException(
-          'Já existe um veículo com esta placa cadastrado nesta escola.',
-        );
+        throw new BadRequestException(DUPLICATE_PLATE_MESSAGE);
       }
       throw err;
     }
@@ -654,9 +664,7 @@ export class VehiclesService {
       );
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new BadRequestException(
-          'Já existe um veículo com esta placa cadastrado neste cliente.',
-        );
+        throw new BadRequestException(DUPLICATE_PLATE_MESSAGE);
       }
       throw err;
     }
@@ -700,37 +708,47 @@ export class VehiclesService {
       throw new NotFoundException('Membro não encontrado.');
     }
 
-    const updated = await vehicleQueries.vehicleUpdateForMember(
-      this.database.db,
-      id,
-      user.clientId,
-      user.memberId,
-      {
-        plate: d.plate ?? prev.plate,
-        brand: d.brand ?? prev.brand,
-        model: d.model ?? prev.model,
-        color: d.color ?? prev.color,
-      },
-    );
-    if (!updated) {
-      throw new NotFoundException('Veículo não encontrado.');
-    }
-
-    const plateChanged =
-      normalizeVehiclePlateCmp(updated.plate) !==
-      normalizeVehiclePlateCmp(prev.plate);
-
-    if (plateChanged) {
-      return this.syncLprAfterPlateChange(
-        { ...updated, driverName: member.name },
+    try {
+      const updated = await vehicleQueries.vehicleUpdateForMember(
+        this.database.db,
+        id,
         user.clientId,
-        prev.plate,
-        member.name,
-        `update member vehicle=${id}`,
+        user.memberId,
+        {
+          plate: d.plate ?? prev.plate,
+          brand: d.brand ?? prev.brand,
+          model: d.model ?? prev.model,
+          color: d.color ?? prev.color,
+        },
       );
-    }
+      if (!updated) {
+        throw new NotFoundException('Veículo não encontrado.');
+      }
 
-    return { ...updated, driverName: member.name };
+      const plateChanged =
+        normalizeVehiclePlateCmp(updated.plate) !==
+        normalizeVehiclePlateCmp(prev.plate);
+
+      if (plateChanged) {
+        return this.syncLprAfterPlateChange(
+          { ...updated, driverName: member.name },
+          user.clientId,
+          prev.plate,
+          member.name,
+          `update member vehicle=${id}`,
+        );
+      }
+
+      return { ...updated, driverName: member.name };
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        throw err;
+      }
+      if (isUniqueViolation(err)) {
+        throw new BadRequestException(DUPLICATE_PLATE_MESSAGE);
+      }
+      throw err;
+    }
   }
 
   async syncForMember(
