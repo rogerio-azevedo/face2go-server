@@ -12,6 +12,7 @@ import { ClientsModule } from './clients/clients.module';
 import { ClientAddressesModule } from './client-addresses/client-addresses.module';
 import { ClientInviteLinksModule } from './client-invite-links/client-invite-links.module';
 import { CompaniesModule } from './companies/companies.module';
+import { CompanyFeaturesModule } from './company-features/company-features.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
 import { validateEnv, type EnvVars } from './config/env.validation';
@@ -70,6 +71,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     LprPlateSyncModule,
     AuthModule,
     CompaniesModule,
+    CompanyFeaturesModule,
     ClientsModule,
     ClientAddressesModule,
     ClientInviteLinksModule,

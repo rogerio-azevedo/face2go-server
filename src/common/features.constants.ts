@@ -7,6 +7,11 @@ export type FeatureSlug =
   | 'clients'
   | 'monitoring';
 
+/** Recursos premium contratados por empresa (gerenciados pelo super admin). */
+export type PremiumFeatureSlug = 'monitoring';
+
+export const PREMIUM_FEATURE_SLUGS: PremiumFeatureSlug[] = ['monitoring'];
+
 export type PermissionAction =
   | 'can_read'
   | 'can_create'
@@ -18,6 +23,7 @@ export interface FeatureDefinition {
   name: string;
   description: string;
   category: string;
+  isPremium?: boolean;
 }
 
 export const ALL_FEATURES: FeatureDefinition[] = [
@@ -59,8 +65,16 @@ export const ALL_FEATURES: FeatureDefinition[] = [
   },
   {
     slug: 'monitoring',
-    name: 'Monitoramento',
-    description: 'Central de monitoramento e pedidos de socorro',
-    category: 'Operações',
+    name: 'Pedido de Socorro & Monitoramento',
+    description:
+      'Botão "Me Ajuda" no app + central de monitoramento (premium)',
+    category: 'Premium',
+    isPremium: true,
   },
 ];
+
+export function isPremiumFeatureSlug(
+  slug: string,
+): slug is PremiumFeatureSlug {
+  return (PREMIUM_FEATURE_SLUGS as string[]).includes(slug);
+}

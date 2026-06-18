@@ -13,7 +13,9 @@ import * as clientPanicConfigQueries from '../database/queries/client-panic-conf
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as membersQueries from '../database/queries/members.queries';
 import { DatabaseService } from '../database/database.service';
+import * as companyFeaturesQueries from '../database/queries/company-features.queries';
 import { PermissionsService } from '../permissions/permissions.service';
+import { CompanyFeaturesService } from '../company-features/company-features.service';
 import {
   PanicEvent,
   type PanicEventDocument,
@@ -71,6 +73,7 @@ export class PanicEventsService {
     private readonly panicEventModel: Model<PanicEventDocument>,
     private readonly database: DatabaseService,
     private readonly permissionsService: PermissionsService,
+    private readonly companyFeaturesService: CompanyFeaturesService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -84,6 +87,15 @@ export class PanicEventsService {
 
   private async assertMonitoringRead(user: JwtPayload): Promise<string> {
     const companyId = this.ensureCompany(user);
+
+    const companyEnabled = await this.companyFeaturesService.isEnabled(
+      companyId,
+      'monitoring',
+    );
+    if (!companyEnabled) {
+      throw new ForbiddenException('Sem permissão.');
+    }
+
     if (user.role === 'company_admin') return companyId;
     if (user.role === 'company_operator') {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
@@ -91,6 +103,7 @@ export class PanicEventsService {
         user.companyUserId,
         'monitoring',
         'can_read',
+        companyId,
       );
       if (!ok) throw new ForbiddenException('Sem permissão.');
       return companyId;
@@ -123,6 +136,14 @@ export class PanicEventsService {
     );
     if (!client) {
       throw new NotFoundException('Cliente não encontrado.');
+    }
+
+    const companyEnabled = await this.companyFeaturesService.isEnabled(
+      client.companyId,
+      'monitoring',
+    );
+    if (!companyEnabled) {
+      throw new ForbiddenException('Pedido de socorro não disponível.');
     }
 
     const permission = await clientPanicConfigQueries.isRoleAllowedForPanic(
@@ -167,6 +188,28 @@ export class PanicEventsService {
       this.database.db,
       clientId,
     );
+
+    const companyId = await companyFeaturesQueries.getCompanyIdByClientId(
+      this.database.db,
+      clientId,
+    );
+    if (!companyId) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+
+    const companyEnabled = await this.companyFeaturesService.isEnabled(
+      companyId,
+      'monitoring',
+    );
+    if (!companyEnabled) {
+      return {
+        clientId: config.clientId,
+        enabled: false,
+        allowedRoles: [],
+        cooldownSeconds: 0,
+      };
+    }
+
     return {
       clientId: config.clientId,
       enabled: config.enabled,

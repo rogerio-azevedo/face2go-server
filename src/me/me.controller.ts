@@ -15,12 +15,16 @@ import {
 } from '../common/features.constants';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PermissionsService } from '../permissions/permissions.service';
+import { CompanyFeaturesService } from '../company-features/company-features.service';
 
 @ApiTags('me')
 @ApiBearerAuth()
 @Controller('me')
 export class MeController {
-  constructor(private readonly permissionsService: PermissionsService) {}
+  constructor(
+    private readonly permissionsService: PermissionsService,
+    private readonly companyFeaturesService: CompanyFeaturesService,
+  ) {}
 
   @Get('navigation')
   @ApiOperation({
@@ -37,6 +41,17 @@ export class MeController {
   })
   sidebarNavAccess(@CurrentUser() user: JwtPayload) {
     return this.permissionsService.getSidebarNavAccess(user);
+  }
+
+  @Get('company-features')
+  @ApiOperation({
+    summary: 'Recursos premium habilitados para a empresa do contexto atual',
+  })
+  async companyFeatures(@CurrentUser() user: JwtPayload) {
+    if (!user.companyId) {
+      return {};
+    }
+    return this.companyFeaturesService.getFeatureFlags(user.companyId);
   }
 
   @Get('can-check')
@@ -68,6 +83,7 @@ export class MeController {
       user.companyUserId,
       feature as FeatureSlug,
       action as PermissionAction,
+      user.companyId,
     );
 
     return { allowed };

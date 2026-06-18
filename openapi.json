@@ -1,6 +1,82 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/companies/{id}/features": {
+      "get": {
+        "operationId": "CompanyFeaturesController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar recursos premium da empresa",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
+    "/companies/{id}/features/{slug}": {
+      "patch": {
+        "operationId": "CompanyFeaturesController_toggle",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleCompanyFeatureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Habilitar/desabilitar recurso premium da empresa",
+        "tags": [
+          "companies"
+        ]
+      }
+    },
     "/clients/{clientId}/lpr-plates/{vehicleId}/sync": {
       "post": {
         "operationId": "CompanyLprPlateSyncController_syncOne",
@@ -571,6 +647,26 @@
         ]
       }
     },
+    "/clients/map-points": {
+      "get": {
+        "operationId": "ClientsController_listMapPoints",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar clientes ativos com endereço geocodificado para o mapa",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
     "/clients/{clientId}/display-short-code": {
       "get": {
         "operationId": "ClientsController_ensureDisplayShortCode",
@@ -905,6 +1001,226 @@
         "summary": "Resolver código curto do display TV (redireciona para clientId + token)",
         "tags": [
           "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/addresses": {
+      "get": {
+        "operationId": "ClientAddressesController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar endereços do cliente",
+        "tags": [
+          "client-addresses"
+        ]
+      },
+      "post": {
+        "operationId": "ClientAddressesController_create",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClientAddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar endereço do cliente",
+        "tags": [
+          "client-addresses"
+        ]
+      }
+    },
+    "/clients/{clientId}/addresses/{addressId}": {
+      "get": {
+        "operationId": "ClientAddressesController_getById",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "addressId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe de um endereço do cliente",
+        "tags": [
+          "client-addresses"
+        ]
+      },
+      "patch": {
+        "operationId": "ClientAddressesController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "addressId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientAddressDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar endereço do cliente",
+        "tags": [
+          "client-addresses"
+        ]
+      },
+      "delete": {
+        "operationId": "ClientAddressesController_remove",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "addressId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir endereço do cliente",
+        "tags": [
+          "client-addresses"
+        ]
+      }
+    },
+    "/clients/{clientId}/addresses/{addressId}/set-primary": {
+      "post": {
+        "operationId": "ClientAddressesController_setPrimary",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "addressId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Marcar endereço como principal",
+        "tags": [
+          "client-addresses"
         ]
       }
     },
@@ -6341,6 +6657,90 @@
         ]
       }
     },
+    "/member/students": {
+      "get": {
+        "operationId": "MemberFaceEnrollmentController_listStudents",
+        "parameters": [
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Buscar alunos para cadastro facial (funcionário autorizado)",
+        "tags": [
+          "member-face-enrollment"
+        ]
+      }
+    },
+    "/member/students/{studentId}/face": {
+      "post": {
+        "operationId": "MemberFaceEnrollmentController_uploadStudentFace",
+        "parameters": [
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar/atualizar foto de aluno e sincronizar com os leitores",
+        "tags": [
+          "member-face-enrollment"
+        ]
+      }
+    },
     "/me/navigation": {
       "get": {
         "operationId": "MeController_navigation",
@@ -6356,6 +6756,46 @@
           }
         ],
         "summary": "Paths permitidos na sidebar da área empresa",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/me/sidebar-nav-access": {
+      "get": {
+        "operationId": "MeController_sidebarNavAccess",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Alias de /me/navigation (sidebar empresa)",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/me/company-features": {
+      "get": {
+        "operationId": "MeController_companyFeatures",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recursos premium habilitados para a empresa do contexto atual",
         "tags": [
           "me"
         ]
@@ -6471,7 +6911,7 @@
             "bearer": []
           }
         ],
-        "summary": "Registrar token Expo Push do app (responsável)",
+        "summary": "Registrar token Expo Push do app (responsável ou membro)",
         "tags": [
           "notifications"
         ]
@@ -6791,6 +7231,370 @@
           "ienh"
         ]
       }
+    },
+    "/geocoding/autocomplete": {
+      "get": {
+        "operationId": "GeocodingController_autocomplete",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "at",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Autocomplete de endereço via HERE (proxy)",
+        "tags": [
+          "geocoding"
+        ]
+      }
+    },
+    "/geocoding/geocode": {
+      "get": {
+        "operationId": "GeocodingController_geocode",
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Geocodificar endereço via HERE (proxy)",
+        "tags": [
+          "geocoding"
+        ]
+      }
+    },
+    "/geocoding/reverse": {
+      "get": {
+        "operationId": "GeocodingController_reverse",
+        "parameters": [
+          {
+            "name": "at",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reverse geocoding via HERE (proxy)",
+        "tags": [
+          "geocoding"
+        ]
+      }
+    },
+    "/geocoding/lookup": {
+      "get": {
+        "operationId": "GeocodingController_lookup",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lookup de local HERE por id (proxy)",
+        "tags": [
+          "geocoding"
+        ]
+      }
+    },
+    "/clients/{clientId}/panic-config": {
+      "get": {
+        "operationId": "PanicEventsController_getPanicConfig",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Configuração de pedido de socorro do cliente",
+        "tags": [
+          "panic-events"
+        ]
+      },
+      "patch": {
+        "operationId": "PanicEventsController_updatePanicConfig",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClientPanicConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar configuração de pedido de socorro",
+        "tags": [
+          "panic-events"
+        ]
+      }
+    },
+    "/panic-events": {
+      "post": {
+        "operationId": "PanicEventsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePanicEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar pedido de socorro (app)",
+        "tags": [
+          "panic-events"
+        ]
+      },
+      "get": {
+        "operationId": "PanicEventsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar eventos de socorro (monitoramento)",
+        "tags": [
+          "panic-events"
+        ]
+      }
+    },
+    "/panic-events/{eventId}": {
+      "get": {
+        "operationId": "PanicEventsController_getById",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe de evento de socorro",
+        "tags": [
+          "panic-events"
+        ]
+      }
+    },
+    "/panic-events/{eventId}/claim": {
+      "post": {
+        "operationId": "PanicEventsController_claim",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pegar evento para tratativa",
+        "tags": [
+          "panic-events"
+        ]
+      }
+    },
+    "/panic-events/{eventId}/release": {
+      "post": {
+        "operationId": "PanicEventsController_release",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Soltar evento em tratativa",
+        "tags": [
+          "panic-events"
+        ]
+      }
+    },
+    "/panic-events/{eventId}/close": {
+      "post": {
+        "operationId": "PanicEventsController_close",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClosePanicEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Fechar evento de socorro",
+        "tags": [
+          "panic-events"
+        ]
+      }
     }
   },
   "info": {
@@ -6810,6 +7614,17 @@
       }
     },
     "schemas": {
+      "ToggleCompanyFeatureDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
       "LoginDto": {
         "type": "object",
         "properties": {
@@ -7017,6 +7832,196 @@
           "companyId",
           "role"
         ]
+      },
+      "CreateClientAddressDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "default": "Principal",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "cep": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{5}-?\\d{3}$"
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ]
+          },
+          "street": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "complement": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "neighborhood": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "city": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ]
+          },
+          "country": {
+            "default": "BR",
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "geocodingProvider": {
+            "default": "manual",
+            "type": "string",
+            "enum": [
+              "here",
+              "manual"
+            ]
+          },
+          "geocodingPrecision": {
+            "type": "string",
+            "enum": [
+              "rooftop",
+              "street",
+              "approximate"
+            ]
+          },
+          "hereLocationId": {
+            "type": "string",
+            "maxLength": 255
+          }
+        }
+      },
+      "PatchClientAddressDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "default": "Principal",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "cep": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{5}-?\\d{3}$"
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ]
+          },
+          "street": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "complement": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "neighborhood": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "city": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ]
+          },
+          "country": {
+            "default": "BR",
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "geocodingProvider": {
+            "default": "manual",
+            "type": "string",
+            "enum": [
+              "here",
+              "manual"
+            ]
+          },
+          "geocodingPrecision": {
+            "type": "string",
+            "enum": [
+              "rooftop",
+              "street",
+              "approximate"
+            ]
+          },
+          "hereLocationId": {
+            "type": "string",
+            "maxLength": 255
+          }
+        }
       },
       "GenerateCompanyUserInviteLinkDto": {
         "type": "object",
@@ -7316,6 +8321,88 @@
           "clientId",
           "personId",
           "personType"
+        ]
+      },
+      "UpdateClientPanicConfigDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "allowedRoles": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "cooldownSeconds": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 3600
+          }
+        }
+      },
+      "CreatePanicEventDto": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "accuracy": {
+            "type": "number",
+            "minimum": 0
+          },
+          "deviceInfo": {
+            "type": "object",
+            "properties": {
+              "os": {
+                "type": "string",
+                "maxLength": 50
+              },
+              "appVersion": {
+                "type": "string",
+                "maxLength": 20
+              },
+              "brand": {
+                "type": "string",
+                "maxLength": 50
+              }
+            }
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ]
+      },
+      "ClosePanicEventDto": {
+        "type": "object",
+        "properties": {
+          "closingNotes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "closingReason": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "false_alarm",
+              "duplicate",
+              "other"
+            ]
+          }
+        },
+        "required": [
+          "closingReason"
         ]
       }
     }

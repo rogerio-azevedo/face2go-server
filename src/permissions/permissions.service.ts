@@ -3,24 +3,48 @@ import { and, eq } from 'drizzle-orm';
 
 import {
   ALL_FEATURES,
+  isPremiumFeatureSlug,
   type FeatureSlug,
   type PermissionAction,
 } from '../common/features.constants';
 import { ROUTE_PERMISSIONS } from '../common/route-permissions.constants';
+import { CompanyFeaturesService } from '../company-features/company-features.service';
 import { DatabaseService } from '../database/database.service';
+import * as companyFeaturesQueries from '../database/queries/company-features.queries';
 import { companyUserPermissions } from '../database/schema';
 
 @Injectable()
 export class PermissionsService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly companyFeaturesService: CompanyFeaturesService,
+  ) {}
 
   async evaluateCompanyFeatureAction(
     role: string,
     companyUserId: string | undefined | null,
     featureSlug: FeatureSlug,
     action: PermissionAction,
+    companyId?: string | null,
   ): Promise<boolean> {
+    if (role === 'super_admin') return true;
     if (!companyUserId) return false;
+
+    const resolvedCompanyId =
+      companyId ??
+      (await companyFeaturesQueries.getCompanyIdByCompanyUserId(
+        this.database.db,
+        companyUserId,
+      ));
+    if (!resolvedCompanyId) return false;
+
+    if (isPremiumFeatureSlug(featureSlug)) {
+      const companyEnabled = await this.companyFeaturesService.isEnabled(
+        resolvedCompanyId,
+        featureSlug,
+      );
+      if (!companyEnabled) return false;
+    }
 
     const permission =
       await this.database.db.query.companyUserPermissions.findFirst({
@@ -60,6 +84,10 @@ export class PermissionsService {
       return { mainPaths: ['/company/dashboard'] };
     }
 
+    const companyFeatureFlags = await this.companyFeaturesService.getFeatureFlags(
+      user.companyId,
+    );
+
     if (user.role === 'company_admin') {
       const rows = await this.database.db.query.companyUserPermissions.findMany(
         {
@@ -75,6 +103,12 @@ export class PermissionsService {
       const mainPaths = new Set<string>(['/company/dashboard']);
       for (const [path, slug] of Object.entries(ROUTE_PERMISSIONS)) {
         if (slug && readableSlugs.has(slug)) {
+          if (
+            isPremiumFeatureSlug(slug) &&
+            companyFeatureFlags[slug] !== true
+          ) {
+            continue;
+          }
           mainPaths.add(path);
         }
       }
@@ -96,6 +130,12 @@ export class PermissionsService {
       const mainPaths = new Set<string>(['/company/dashboard']);
       for (const [path, slug] of Object.entries(ROUTE_PERMISSIONS)) {
         if (slug && readableSlugs.has(slug)) {
+          if (
+            isPremiumFeatureSlug(slug) &&
+            companyFeatureFlags[slug] !== true
+          ) {
+            continue;
+          }
           mainPaths.add(path);
         }
       }
@@ -151,6 +191,14 @@ export class PermissionsService {
 
     const companyUserId = user.companyUserId;
     if (!companyUserId) return [];
+
+    if (isPremiumFeatureSlug(featureSlug)) {
+      const companyEnabled = await this.companyFeaturesService.isEnabled(
+        user.companyId,
+        featureSlug,
+      );
+      if (!companyEnabled) return [];
+    }
 
     const permission =
       await this.database.db.query.companyUserPermissions.findFirst({

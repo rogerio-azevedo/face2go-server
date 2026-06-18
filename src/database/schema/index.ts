@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './companies';
+export * from './company-features';
 export * from './invite-links';
 export * from './permissions';
 export * from './clients';
