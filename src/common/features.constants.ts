@@ -4,7 +4,8 @@ export type FeatureSlug =
   | 'devices'
   | 'access_control'
   | 'users'
-  | 'clients';
+  | 'clients'
+  | 'monitoring';
 
 export type PermissionAction =
   | 'can_read'
@@ -55,5 +56,11 @@ export const ALL_FEATURES: FeatureDefinition[] = [
     name: 'Clientes',
     description: 'Unidades atendidas pela empresa',
     category: 'Administração',
+  },
+  {
+    slug: 'monitoring',
+    name: 'Monitoramento',
+    description: 'Central de monitoramento e pedidos de socorro',
+    category: 'Operações',
   },
 ];

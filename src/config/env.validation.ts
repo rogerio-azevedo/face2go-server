@@ -53,6 +53,10 @@ export const envSchema = z.object({
   IENH_API_URL: z.string().url().optional(),
   IENH_API_USER: z.string().min(1).optional(),
   IENH_API_PASSWORD: z.string().min(1).optional(),
+  /** HERE API — geocoding de endereços (proxy backend). Opcional: sem chave, endpoints retornam 503. */
+  HERE_API_KEY: z.string().min(1).optional(),
+  HERE_DISCOVER_BASE_URL: z.string().url().optional(),
+  HERE_GEOCODE_BASE_URL: z.string().url().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

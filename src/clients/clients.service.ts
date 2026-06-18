@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
+import * as clientsMapQueries from '../database/queries/clients-map.queries';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as clientDisplayDevicesQueries from '../database/queries/client-display-devices.queries';
 import * as clientInviteLinksQueries from '../database/queries/client-invite-links.queries';
@@ -106,6 +107,35 @@ export class ClientsService {
       ...safe,
       type: row.type ?? 'other',
     };
+  }
+
+  /** Clientes ativos com endereço principal geocodificado (mapa de monitoramento). */
+  async listMapPoints(user: JwtPayload) {
+    const companyId = this.ensureCompany(user);
+    if (user.role === 'company_admin') {
+      return clientsMapQueries.listClientMapPoints(this.database.db, companyId);
+    }
+    if (user.role === 'company_operator') {
+      const hasMonitoring =
+        await this.permissionsService.evaluateCompanyFeatureAction(
+          user.role,
+          user.companyUserId,
+          'monitoring',
+          'can_read',
+        );
+      const hasClients =
+        await this.permissionsService.evaluateCompanyFeatureAction(
+          user.role,
+          user.companyUserId,
+          'clients',
+          'can_read',
+        );
+      if (!hasMonitoring && !hasClients) {
+        throw new ForbiddenException('Sem permissão.');
+      }
+      return clientsMapQueries.listClientMapPoints(this.database.db, companyId);
+    }
+    throw new ForbiddenException('Sem permissão.');
   }
 
   /** Lista clientes (admin ou operador com `clients` + can_read). */

@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { AccessesModule } from './accesses/accesses.module';
 import { CamerasModule } from './cameras/cameras.module';
 import { ClientsModule } from './clients/clients.module';
+import { ClientAddressesModule } from './client-addresses/client-addresses.module';
 import { ClientInviteLinksModule } from './client-invite-links/client-invite-links.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -43,6 +44,9 @@ import { ShiftsModule } from './shifts/shifts.module';
 import { StorageModule } from './storage/storage.module';
 import { StudentsModule } from './students/students.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
+import { GeocodingModule } from './geocoding/geocoding.module';
+import { PanicEventsModule } from './panic-events/panic-events.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -67,6 +71,7 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     AuthModule,
     CompaniesModule,
     ClientsModule,
+    ClientAddressesModule,
     ClientInviteLinksModule,
     ReadersModule,
     CamerasModule,
@@ -94,6 +99,9 @@ import { VehiclesModule } from './vehicles/vehicles.module';
     ArrivalsModule,
     SimulateModule,
     IenhModule,
+    GeocodingModule,
+    RealtimeModule,
+    PanicEventsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

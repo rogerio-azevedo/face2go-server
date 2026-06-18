@@ -28,6 +28,14 @@ export class ClientsController {
     return this.clientsService.list(user);
   }
 
+  @Get('map-points')
+  @ApiOperation({
+    summary: 'Listar clientes ativos com endereço geocodificado para o mapa',
+  })
+  listMapPoints(@CurrentUser() user: JwtPayload) {
+    return this.clientsService.listMapPoints(user);
+  }
+
   @Get(':clientId/display-short-code')
   @ApiOperation({
     summary: 'Garante e retorna o código curto da URL do display em TV',
