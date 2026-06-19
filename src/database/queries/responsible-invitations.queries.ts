@@ -144,7 +144,6 @@ export async function invitationUpdate(
       typeof responsibleInvitations.$inferInsert,
       | 'status'
       | 'faceApprovalStatus'
-      | 'plateApprovalStatus'
       | 'submittedName'
       | 'submittedEmail'
       | 'submittedPhone'

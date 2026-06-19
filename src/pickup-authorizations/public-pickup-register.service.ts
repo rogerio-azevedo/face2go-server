@@ -7,7 +7,6 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { z } from 'zod';
 
-import { normalizeCpf } from '../auth/utils/auth-identifiers';
 import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
@@ -18,6 +17,7 @@ import {
 } from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { zodFirstMessage } from '../validation/zod-utils';
+import { publicPickupRegisterSubmitSchema } from '../validation/pickup-authorizations.schema';
 import { PickupAuthorizationsService } from './pickup-authorizations.service';
 
 const uploadPhotoBodySchema = z.object({
@@ -143,14 +143,7 @@ export class PublicPickupRegisterService {
   }
 
   async submit(code: string, body: unknown) {
-    const parsed = z
-      .object({
-        faceImageKey: z.string().min(1),
-        guestName: z.string().trim().min(1).max(255).optional(),
-        guestDocument: z.string().trim().min(1).max(64).optional(),
-        guestPhone: z.string().trim().max(32).nullable().optional(),
-      })
-      .safeParse(body);
+    const parsed = publicPickupRegisterSubmitSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
@@ -181,24 +174,42 @@ export class PublicPickupRegisterService {
       throw new ConflictException('A foto já foi enviada.');
     }
 
-    if (!row.guestName) {
-      const gn = parsed.data.guestName?.trim();
-      const gd = parsed.data.guestDocument?.trim();
-      if (!gn || !gd) {
+    const needsGuestData = !row.guestName?.trim();
+    const name = parsed.data.name?.trim();
+    const document = parsed.data.document?.trim();
+    if (needsGuestData) {
+      if (!name || !document) {
         throw new BadRequestException(
           'Informe nome e documento antes de concluir.',
         );
       }
+    }
+
+    const vehicle = parsed.data.vehicle;
+    const profilePatch: Parameters<
+      typeof pickupQueries.pickupAuthUpdateGuestProfile
+    >[2] = {};
+
+    if (name) profilePatch.guestName = name;
+    if (document) profilePatch.guestDocument = document;
+    if (parsed.data.phone !== undefined) {
+      profilePatch.guestPhone = parsed.data.phone?.trim()
+        ? parsed.data.phone.trim()
+        : null;
+    }
+    if (vehicle) {
+      profilePatch.guestVehiclePlate = vehicle.plate;
+      profilePatch.guestVehicleBrand = vehicle.brand;
+      profilePatch.guestVehicleModel = vehicle.model;
+      profilePatch.guestVehicleColor = vehicle.color;
+      profilePatch.guestVehicleLprSyncStatus = 'pending_sync';
+    }
+
+    if (Object.keys(profilePatch).length > 0) {
       await pickupQueries.pickupAuthUpdateGuestProfile(
         this.database.db,
         row.id,
-        {
-          guestName: gn,
-          guestDocument: normalizeCpf(gd) || gd,
-          guestPhone: parsed.data.guestPhone?.trim()
-            ? parsed.data.guestPhone.trim()
-            : null,
-        },
+        profilePatch,
       );
     }
 
@@ -214,7 +225,7 @@ export class PublicPickupRegisterService {
     const guestName =
       updated.guestName?.trim() ||
       row.guestName?.trim() ||
-      parsed.data.guestName?.trim() ||
+      name ||
       'Convidado';
 
     this.eventEmitter.emit(PICKUP_GUEST_FACE_SUBMITTED, {

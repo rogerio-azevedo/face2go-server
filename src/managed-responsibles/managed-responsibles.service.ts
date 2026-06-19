@@ -9,7 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { randomLinkCode } from '../common/utils/link-code';
@@ -27,8 +27,12 @@ import { FaceSyncService } from '../face-sync/face-sync.service';
 import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import {
+  RESPONSIBLE_INVITATION_APPROVED,
   RESPONSIBLE_INVITATION_SUBMITTED,
+  RESPONSIBLE_INVITATION_SYNCED,
+  type ResponsibleInvitationApprovedPayload,
   type ResponsibleInvitationSubmittedPayload,
+  type ResponsibleInvitationSyncedPayload,
 } from '../notifications/notifications.events';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -179,16 +183,8 @@ export class ManagedResponsiblesService {
     return row;
   }
 
-  private plateRequired(row: ResponsibleInvitationRow): boolean {
-    return !!row.vehiclePlate?.trim();
-  }
-
   private canFinalize(row: ResponsibleInvitationRow): boolean {
-    if (row.faceApprovalStatus !== 'approved') return false;
-    if (this.plateRequired(row) && row.plateApprovalStatus !== 'approved') {
-      return false;
-    }
-    return true;
+    return row.faceApprovalStatus === 'approved';
   }
 
   private async syncResponsibleFace(params: {
@@ -364,13 +360,22 @@ export class ManagedResponsiblesService {
       throw new BadRequestException('Foto inválida para sincronização.');
     }
 
-    const faceSync = await this.syncResponsibleFace({
-      clientId: row.clientId,
-      responsibleId: responsible.id,
-      name: row.submittedName,
-      imageBuffer: buffer,
-      logContext: `responsible-invitation=${row.id}`,
-    });
+    let faceSync: Awaited<ReturnType<typeof this.syncResponsibleFace>>;
+    try {
+      faceSync = await this.syncResponsibleFace({
+        clientId: row.clientId,
+        responsibleId: responsible.id,
+        name: row.submittedName,
+        imageBuffer: buffer,
+        logContext: `responsible-invitation=${row.id}`,
+      });
+    } catch (err: unknown) {
+      faceSync = {
+        deviceSyncStatus: 'sync_failed',
+        deviceSyncError:
+          err instanceof Error ? err.message : 'Falha na sincronização da face.',
+      };
+    }
 
     let plateLprResult: {
       lprSyncStatus: 'pending_sync' | 'synced' | 'sync_failed';
@@ -844,7 +849,6 @@ export class ManagedResponsiblesService {
         guestLinkCode: code,
         status: 'pending',
         faceApprovalStatus: 'pending',
-        plateApprovalStatus: 'pending',
       },
       parsed.data.students.map((s) => ({
         studentId: s.studentId,
@@ -902,7 +906,7 @@ export class ManagedResponsiblesService {
 
   async approveFace(user: JwtPayload, id: string) {
     this.assertResponsibleJwt(user);
-    let row = await this.assertOwnedInvitation(
+    const row = await this.assertOwnedInvitation(
       id,
       user.clientId,
       user.responsibleId,
@@ -919,36 +923,41 @@ export class ManagedResponsiblesService {
       throw new BadRequestException('Foto do convidado não encontrada.');
     }
 
-    row = (await invitationQueries.invitationUpdate(
+    const hasVehicle = Boolean(row.vehiclePlate?.trim());
+    const updated = (await invitationQueries.invitationUpdate(
       this.database.db,
       id,
       user.clientId,
-      { faceApprovalStatus: 'approved' },
+      {
+        faceApprovalStatus: 'approved',
+        faceSyncStatus: 'pending_sync',
+        faceSyncedAt: null,
+        faceSyncError: null,
+        ...(hasVehicle
+          ? {
+              plateLprSyncStatus: 'pending_sync' as const,
+              plateLprSyncedAt: null,
+              plateLprSyncError: null,
+            }
+          : {}),
+      },
     ))!;
-
-    if (!this.plateRequired(row)) {
-      row = (await invitationQueries.invitationUpdate(
-        this.database.db,
-        id,
-        user.clientId,
-        { plateApprovalStatus: 'approved' },
-      ))!;
+    if (!updated) {
+      throw new NotFoundException('Convite não encontrado.');
     }
 
-    if (this.canFinalize(row)) {
-      await this.createResponsibleFromInvitation(row);
-    }
+    this.eventEmitter.emit(RESPONSIBLE_INVITATION_APPROVED, {
+      invitationId: id,
+      clientId: user.clientId,
+      inviterResponsibleId: user.responsibleId,
+      guestName: row.submittedName?.trim() ?? '',
+    } satisfies ResponsibleInvitationApprovedPayload);
 
     const students =
       await invitationQueries.invitationListStudentsForInvitation(
         this.database.db,
         id,
       );
-    const updated = await invitationQueries.invitationGetById(
-      this.database.db,
-      id,
-      user.clientId,
-    );
     return this.toInvitationResponse(
       updated,
       students.map((s) => ({
@@ -958,6 +967,61 @@ export class ManagedResponsiblesService {
         isAuthorizedPickup: s.isAuthorizedPickup,
       })),
     );
+  }
+
+  @OnEvent(RESPONSIBLE_INVITATION_APPROVED, { async: true })
+  async handleInvitationApproved(
+    payload: ResponsibleInvitationApprovedPayload,
+  ): Promise<void> {
+    let syncStatus: ResponsibleInvitationSyncedPayload['syncStatus'] =
+      'sync_failed';
+    try {
+      const row = await invitationQueries.invitationGetById(
+        this.database.db,
+        payload.invitationId,
+        payload.clientId,
+      );
+      if (
+        !row ||
+        row.faceApprovalStatus !== 'approved' ||
+        row.status === 'approved'
+      ) {
+        return;
+      }
+
+      await this.createResponsibleFromInvitation(row);
+
+      const after = await invitationQueries.invitationGetById(
+        this.database.db,
+        payload.invitationId,
+        payload.clientId,
+      );
+      const faceOk = after?.faceSyncStatus === 'synced';
+      const hasVehicle = Boolean(after?.vehiclePlate?.trim());
+      const plateOk = !hasVehicle || after?.plateLprSyncStatus === 'synced';
+      syncStatus = faceOk && plateOk ? 'synced' : 'sync_failed';
+    } catch (err: unknown) {
+      this.log.warn(
+        `Sync invitation falhou (${payload.invitationId}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      await invitationQueries.invitationUpdate(
+        this.database.db,
+        payload.invitationId,
+        payload.clientId,
+        {
+          faceSyncStatus: 'sync_failed',
+          faceSyncError:
+            err instanceof Error ? err.message : 'Falha na sincronização.',
+        },
+      );
+    }
+
+    this.eventEmitter.emit(RESPONSIBLE_INVITATION_SYNCED, {
+      ...payload,
+      syncStatus,
+    } satisfies ResponsibleInvitationSyncedPayload);
   }
 
   async rejectFace(user: JwtPayload, id: string) {
@@ -982,114 +1046,6 @@ export class ManagedResponsiblesService {
         status: 'rejected',
       },
     );
-    const students =
-      await invitationQueries.invitationListStudentsForInvitation(
-        this.database.db,
-        id,
-      );
-    return this.toInvitationResponse(
-      updated,
-      students.map((s) => ({
-        studentId: s.studentId,
-        name: s.studentName,
-        relationshipType: s.relationshipType,
-        isAuthorizedPickup: s.isAuthorizedPickup,
-      })),
-    );
-  }
-
-  async approvePlate(user: JwtPayload, id: string) {
-    this.assertResponsibleJwt(user);
-    let row = await this.assertOwnedInvitation(
-      id,
-      user.clientId,
-      user.responsibleId,
-    );
-    if (!this.plateRequired(row)) {
-      throw new BadRequestException('Este convite não possui veículo.');
-    }
-    if (row.plateApprovalStatus !== 'submitted') {
-      throw new BadRequestException(
-        'Só é possível aprovar após o convidado informar a placa.',
-      );
-    }
-
-    row = (await invitationQueries.invitationUpdate(
-      this.database.db,
-      id,
-      user.clientId,
-      { plateApprovalStatus: 'approved' },
-    ))!;
-
-    if (this.canFinalize(row)) {
-      await this.createResponsibleFromInvitation(row);
-    }
-
-    const students =
-      await invitationQueries.invitationListStudentsForInvitation(
-        this.database.db,
-        id,
-      );
-    const updated = await invitationQueries.invitationGetById(
-      this.database.db,
-      id,
-      user.clientId,
-    );
-    return this.toInvitationResponse(
-      updated,
-      students.map((s) => ({
-        studentId: s.studentId,
-        name: s.studentName,
-        relationshipType: s.relationshipType,
-        isAuthorizedPickup: s.isAuthorizedPickup,
-      })),
-    );
-  }
-
-  async rejectPlate(user: JwtPayload, id: string) {
-    this.assertResponsibleJwt(user);
-    const current = await this.assertOwnedInvitation(
-      id,
-      user.clientId,
-      user.responsibleId,
-    );
-    if (!this.plateRequired(current)) {
-      throw new BadRequestException('Este convite não possui veículo.');
-    }
-    if (current.plateApprovalStatus !== 'submitted') {
-      throw new BadRequestException(
-        'Só é possível recusar após o convidado informar a placa.',
-      );
-    }
-    let updated = await invitationQueries.invitationUpdate(
-      this.database.db,
-      id,
-      user.clientId,
-      {
-        plateApprovalStatus: 'rejected',
-        vehiclePlate: null,
-        vehicleBrand: null,
-        vehicleModel: null,
-        vehicleColor: null,
-      },
-    );
-    if (updated?.faceApprovalStatus === 'approved') {
-      updated = await invitationQueries.invitationUpdate(
-        this.database.db,
-        id,
-        user.clientId,
-        { plateApprovalStatus: 'approved' },
-      );
-      if (updated) {
-        await this.createResponsibleFromInvitation(updated);
-        updated =
-          (await invitationQueries.invitationGetById(
-            this.database.db,
-            id,
-            user.clientId,
-          )) ?? updated;
-      }
-    }
     const students =
       await invitationQueries.invitationListStudentsForInvitation(
         this.database.db,

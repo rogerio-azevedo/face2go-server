@@ -45,11 +45,6 @@ export const responsibleInvitations = pgTable(
     )
       .notNull()
       .default('pending'),
-    plateApprovalStatus: responsibleInvitationApprovalStatusEnum(
-      'plate_approval_status',
-    )
-      .notNull()
-      .default('pending'),
     submittedName: varchar('submitted_name', { length: 255 }),
     submittedEmail: varchar('submitted_email', { length: 255 }),
     submittedPhone: varchar('submitted_phone', { length: 32 }),

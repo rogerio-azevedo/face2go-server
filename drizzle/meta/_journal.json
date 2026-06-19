@@ -379,6 +379,27 @@
       "when": 1779220000000,
       "tag": "0053_company_features",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1779230000000,
+      "tag": "0054_pickup_plate_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1779240000000,
+      "tag": "0055_drop_pickup_guest_plate_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1779250000000,
+      "tag": "0056_drop_responsible_plate_approval",
+      "breakpoints": true
     }
   ]
 }

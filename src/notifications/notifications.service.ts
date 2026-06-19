@@ -24,7 +24,9 @@ import {
   type PickupGuestFaceSubmittedPayload,
   type PickupGuestFaceSyncedPayload,
   RESPONSIBLE_INVITATION_SUBMITTED,
+  RESPONSIBLE_INVITATION_SYNCED,
   type ResponsibleInvitationSubmittedPayload,
+  type ResponsibleInvitationSyncedPayload,
 } from './notifications.events';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -254,6 +256,39 @@ export class NotificationsService {
     } catch (err: unknown) {
       this.logger.warn(
         `Push responsible invitation falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  @OnEvent(RESPONSIBLE_INVITATION_SYNCED, { async: true })
+  async handleResponsibleInvitationSynced(
+    payload: ResponsibleInvitationSyncedPayload,
+  ): Promise<void> {
+    if (payload.syncStatus !== 'synced') {
+      return;
+    }
+    try {
+      const token = await responsiblesQueries.getResponsiblePushToken(
+        this.database.db,
+        payload.inviterResponsibleId,
+      );
+      if (!token) {
+        return;
+      }
+      const guestLabel = payload.guestName.trim() || 'Responsável';
+      await this.dispatchExpoPush(
+        [token],
+        'Responsável sincronizado',
+        `Face e veículo de "${guestLabel}" foram sincronizados e já têm acesso.`,
+        {
+          type: 'responsible_invitation_synced',
+          invitationId: payload.invitationId,
+          clientId: payload.clientId,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push responsible invitation synced falhou: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

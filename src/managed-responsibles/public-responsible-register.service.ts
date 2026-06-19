@@ -79,7 +79,6 @@ export class PublicResponsibleRegisterService {
       })),
       status: row.status,
       faceApprovalStatus: row.faceApprovalStatus,
-      plateApprovalStatus: row.plateApprovalStatus,
     };
   }
 
@@ -207,8 +206,6 @@ export class PublicResponsibleRegisterService {
     }
 
     const hashed = password ? await bcrypt.hash(password, 10) : null;
-    const hasVehicle = !!parsed.data.vehicle?.plate?.trim();
-
     const updated = await invitationQueries.invitationUpdate(
       this.database.db,
       row.id,
@@ -216,7 +213,6 @@ export class PublicResponsibleRegisterService {
       {
         status: 'submitted',
         faceApprovalStatus: 'submitted',
-        plateApprovalStatus: hasVehicle ? 'submitted' : 'approved',
         submittedName: parsed.data.name,
         submittedEmail: email ?? null,
         submittedPhone: parsed.data.phone ?? null,

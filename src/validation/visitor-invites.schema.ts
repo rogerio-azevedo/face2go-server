@@ -1,9 +1,8 @@
 import { z } from 'zod';
 
+import { normalizeCpf } from '../auth/utils/auth-identifiers';
 import { normalizeVehiclePlate } from './vehicles.schema';
 import { parseWallClockDate } from './pickup-authorizations.schema';
-
-import { normalizeCpf } from '../auth/utils/auth-identifiers';
 
 export type StoredVisitorInviteStatus =
   | 'active'
@@ -150,3 +149,40 @@ export const updateVisitorInviteSchema = z
       });
     }
   });
+
+function mapLegacyInviteRegisterSubmitBody(val: unknown): unknown {
+  if (!val || typeof val !== 'object') return val;
+  const body = val as Record<string, unknown>;
+  return {
+    ...body,
+    name: body.name ?? body.guestName,
+    document: body.document ?? body.guestDocument,
+    phone: body.phone ?? body.guestPhone,
+  };
+}
+
+const optionalInviteVehicleSchema = inviteVehicleSchema.optional();
+
+export const publicInviteRegisterSubmitSchema = z.preprocess(
+  mapLegacyInviteRegisterSubmitBody,
+  z.object({
+    name: z.string().trim().min(1).max(255).optional(),
+    phone: z.string().trim().max(32).nullable().optional(),
+    faceImageKey: z.string().min(1),
+    vehicle: optionalInviteVehicleSchema,
+    document: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) =>
+        value?.trim() ? normalizeCpf(value.trim()) : undefined,
+      )
+      .refine((value) => value === undefined || value.length === 11, {
+        message: 'CPF inválido.',
+      }),
+  }),
+);
+
+export type PublicInviteRegisterSubmitInput = z.infer<
+  typeof publicInviteRegisterSubmitSchema
+>;

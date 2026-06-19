@@ -79,7 +79,7 @@ export class ManagedResponsiblesController {
   }
 
   @Post('responsible-invitations/:id/approve-face')
-  @ApiOperation({ summary: 'Aprovar face do convidado' })
+  @ApiOperation({ summary: 'Aprovar cadastro do convidado (face e veículo)' })
   approveFace(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
@@ -88,30 +88,12 @@ export class ManagedResponsiblesController {
   }
 
   @Post('responsible-invitations/:id/reject-face')
-  @ApiOperation({ summary: 'Recusar face do convidado' })
+  @ApiOperation({ summary: 'Recusar cadastro do convidado' })
   rejectFace(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.svc.rejectFace(user, id);
-  }
-
-  @Post('responsible-invitations/:id/approve-plate')
-  @ApiOperation({ summary: 'Aprovar placa do convidado' })
-  approvePlate(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.svc.approvePlate(user, id);
-  }
-
-  @Post('responsible-invitations/:id/reject-plate')
-  @ApiOperation({ summary: 'Recusar placa do convidado' })
-  rejectPlate(
-    @CurrentUser() user: JwtPayload,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.svc.rejectPlate(user, id);
   }
 
   @Patch('responsible-invitations/:id/cancel')

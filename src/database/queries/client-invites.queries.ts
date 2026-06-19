@@ -263,18 +263,40 @@ export async function inviteUpdateGuestProfile(
   db: AppDb,
   id: string,
   patch: {
-    guestName: string;
-    guestDocument: string;
+    guestName?: string;
+    guestDocument?: string;
     guestPhone?: string | null;
+    guestVehiclePlate?: string | null;
+    guestVehicleBrand?: string | null;
+    guestVehicleModel?: string | null;
+    guestVehicleColor?: string | null;
+    guestVehicleLprSyncStatus?: ClientInviteRow['guestVehicleLprSyncStatus'];
   },
 ) {
   const rows = await db
     .update(clientInvites)
     .set({
-      guestName: patch.guestName,
-      guestDocument: patch.guestDocument,
+      ...(patch.guestName !== undefined ? { guestName: patch.guestName } : {}),
+      ...(patch.guestDocument !== undefined
+        ? { guestDocument: patch.guestDocument }
+        : {}),
       ...(patch.guestPhone !== undefined
         ? { guestPhone: patch.guestPhone }
+        : {}),
+      ...(patch.guestVehiclePlate !== undefined
+        ? { guestVehiclePlate: patch.guestVehiclePlate }
+        : {}),
+      ...(patch.guestVehicleBrand !== undefined
+        ? { guestVehicleBrand: patch.guestVehicleBrand }
+        : {}),
+      ...(patch.guestVehicleModel !== undefined
+        ? { guestVehicleModel: patch.guestVehicleModel }
+        : {}),
+      ...(patch.guestVehicleColor !== undefined
+        ? { guestVehicleColor: patch.guestVehicleColor }
+        : {}),
+      ...(patch.guestVehicleLprSyncStatus !== undefined
+        ? { guestVehicleLprSyncStatus: patch.guestVehicleLprSyncStatus }
         : {}),
       updatedAt: new Date(),
     })

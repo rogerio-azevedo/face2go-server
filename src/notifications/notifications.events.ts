@@ -50,6 +50,26 @@ export type ResponsibleInvitationSubmittedPayload = {
   guestName: string;
 };
 
+export const RESPONSIBLE_INVITATION_APPROVED =
+  'responsible.invitation.approved';
+
+export type ResponsibleInvitationApprovedPayload = {
+  invitationId: string;
+  clientId: string;
+  inviterResponsibleId: string;
+  guestName: string;
+};
+
+export const RESPONSIBLE_INVITATION_SYNCED = 'responsible.invitation.synced';
+
+export type ResponsibleInvitationSyncedPayload = {
+  invitationId: string;
+  clientId: string;
+  inviterResponsibleId: string;
+  guestName: string;
+  syncStatus: 'synced' | 'sync_failed';
+};
+
 export const PICKUP_GUEST_FACE_APPROVED = 'pickup.guest.face.approved';
 
 export type PickupGuestFaceApprovedPayload = {

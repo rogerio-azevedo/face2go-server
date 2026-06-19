@@ -188,3 +188,40 @@ export const updatePickupAuthorizationSchema = z
       });
     }
   });
+
+const optionalPickupVehicleSchema = pickupVehicleSchema.optional();
+
+function mapLegacyPickupRegisterSubmitBody(val: unknown): unknown {
+  if (!val || typeof val !== 'object') return val;
+  const body = val as Record<string, unknown>;
+  return {
+    ...body,
+    name: body.name ?? body.guestName,
+    document: body.document ?? body.guestDocument,
+    phone: body.phone ?? body.guestPhone,
+  };
+}
+
+export const publicPickupRegisterSubmitSchema = z.preprocess(
+  mapLegacyPickupRegisterSubmitBody,
+  z.object({
+    name: z.string().trim().min(1).max(255).optional(),
+    phone: z.string().trim().max(32).nullable().optional(),
+    faceImageKey: z.string().min(1),
+    vehicle: optionalPickupVehicleSchema,
+    document: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) =>
+        value?.trim() ? normalizeCpf(value.trim()) : undefined,
+      )
+      .refine((value) => value === undefined || value.length === 11, {
+        message: 'CPF inválido.',
+      }),
+  }),
+);
+
+export type PublicPickupRegisterSubmitInput = z.infer<
+  typeof publicPickupRegisterSubmitSchema
+>;
