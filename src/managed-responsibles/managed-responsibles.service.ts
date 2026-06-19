@@ -455,9 +455,42 @@ export class ManagedResponsiblesService {
         d.linkedResponsibleId,
         user.clientId,
       );
-      if (!existing || !existing.isActive) {
+      if (!existing) {
         throw new NotFoundException('Responsável não encontrado.');
       }
+
+      if (!existing.isActive) {
+        await this.database.db.transaction(async (tx) => {
+          await responsiblesQueries.updateResponsible(
+            tx,
+            existing.id,
+            user.clientId,
+            {
+              isActive: true,
+            },
+          );
+          if (existing.userId) {
+            await tx
+              .update(users)
+              .set({ isActive: true })
+              .where(eq(users.id, existing.userId));
+          }
+          for (const link of d.students) {
+            await responsiblesQueries.insertResponsibleStudentLink(tx, {
+              responsibleId: existing.id,
+              studentId: link.studentId,
+              relationshipType: link.relationshipType,
+              isAuthorizedPickup: link.isAuthorizedPickup,
+            });
+          }
+        });
+        return {
+          id: existing.id,
+          name: existing.name,
+          email: d.email ?? null,
+        };
+      }
+
       responsible = existing;
 
       await this.database.db.transaction(async (tx) => {
