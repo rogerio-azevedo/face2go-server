@@ -1,4 +1,15 @@
-import { and, asc, count, eq, ilike, isNotNull, or, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  ilike,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  type SQL,
+} from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { clientMembers, clientRoles, users } from '../schema';
@@ -506,4 +517,55 @@ export async function updateMemberPushTokenById(
     .where(eq(clientMembers.id, memberId))
     .returning({ id: clientMembers.id });
   return row;
+}
+
+export type MemberWithPushTokenRow = {
+  memberId: string;
+  userId: string | null;
+  pushToken: string;
+  name: string;
+};
+
+export async function listMembersWithPushTokenByClient(
+  db: AppDb,
+  clientId: string,
+  excludeUserId?: string | null,
+): Promise<MemberWithPushTokenRow[]> {
+  const conditions: SQL[] = [
+    eq(clientMembers.clientId, clientId),
+    eq(clientMembers.isActive, true),
+    isNotNull(clientMembers.pushToken),
+    ne(clientMembers.pushToken, ''),
+  ];
+
+  if (excludeUserId) {
+    conditions.push(
+      or(
+        isNull(clientMembers.userId),
+        ne(clientMembers.userId, excludeUserId),
+      )!,
+    );
+  }
+
+  const rows = await db
+    .select({
+      memberId: clientMembers.id,
+      userId: clientMembers.userId,
+      pushToken: clientMembers.pushToken,
+      name: clientMembers.name,
+    })
+    .from(clientMembers)
+    .where(and(...conditions));
+
+  return rows
+    .filter(
+      (row): row is typeof row & { pushToken: string } =>
+        typeof row.pushToken === 'string' && row.pushToken.length > 0,
+    )
+    .map((row) => ({
+      memberId: row.memberId,
+      userId: row.userId,
+      pushToken: row.pushToken,
+      name: row.name,
+    }));
 }

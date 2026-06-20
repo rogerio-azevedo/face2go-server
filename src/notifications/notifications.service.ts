@@ -13,6 +13,10 @@ import * as pickupQueries from '../database/queries/pickup-authorizations.querie
 import * as visitorInviteQueries from '../database/queries/client-invites.queries';
 import * as membersQueries from '../database/queries/members.queries';
 import {
+  PANIC_CREATED,
+  type PanicCreatedEvent,
+} from '../panic-events/panic-events.events';
+import {
   ACCESS_FACIAL_RECORDED,
   type AccessFacialRecordedPayload,
   INVITE_GUEST_FACE_SUBMITTED,
@@ -33,6 +37,9 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 /** Deve coincidir com `ANDROID_STUDENT_ACCESS_CHANNEL_ID` no app (Expo Notifications). */
 const EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID = 'student_access';
+
+/** Deve coincidir com `ANDROID_PANIC_CHANNEL_ID` no app (Expo Notifications). */
+const EXPO_PUSH_ANDROID_PANIC_CHANNEL_ID = 'panic_high';
 
 @Injectable()
 export class NotificationsService {
@@ -260,6 +267,17 @@ export class NotificationsService {
     }
   }
 
+  @OnEvent(PANIC_CREATED, { async: true })
+  async handlePanicCreated(payload: PanicCreatedEvent): Promise<void> {
+    try {
+      await this.notifyMembersOfPanic(payload.event);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Push panic falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   @OnEvent(RESPONSIBLE_INVITATION_SYNCED, { async: true })
   async handleResponsibleInvitationSynced(
     payload: ResponsibleInvitationSyncedPayload,
@@ -457,6 +475,38 @@ export class NotificationsService {
     });
   }
 
+  async notifyMembersOfPanic(
+    event: PanicCreatedEvent['event'],
+  ): Promise<void> {
+    const members = await membersQueries.listMembersWithPushTokenByClient(
+      this.database.db,
+      event.clientId,
+      event.requesterUserId,
+    );
+    const tokens = this.collectPushTokens(members);
+    if (tokens.length === 0) {
+      return;
+    }
+
+    await this.dispatchExpoPush(
+      tokens,
+      'Pedido de socorro',
+      `${event.requesterName} precisa de ajuda`,
+      {
+        type: 'panic_new',
+        panicEventId: event.id,
+        clientId: event.clientId,
+        clientName: event.clientName,
+        requesterName: event.requesterName,
+        requesterRole: event.requesterRole,
+        latitude: String(event.location.latitude),
+        longitude: String(event.location.longitude),
+        receivedAt: event.receivedAt,
+      },
+      EXPO_PUSH_ANDROID_PANIC_CHANNEL_ID,
+    );
+  }
+
   private async notifyMemberOfInviteGuestAccess(
     payload: AccessFacialRecordedPayload,
   ): Promise<void> {
@@ -498,6 +548,7 @@ export class NotificationsService {
     title: string,
     body: string,
     data: Record<string, string>,
+    channelId: string = EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID,
   ): Promise<void> {
     const messages = expoPushTokens.map((to) => ({
       to,
@@ -506,7 +557,7 @@ export class NotificationsService {
       body,
       data,
       priority: 'high' as const,
-      channelId: EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID,
+      channelId,
       ttl: 60,
     }));
 
