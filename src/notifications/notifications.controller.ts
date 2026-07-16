@@ -25,7 +25,9 @@ export class NotificationsController {
     if (user.role === 'responsible') {
       const rid = user.responsibleId;
       if (!rid) {
-        throw new ForbiddenException('Usuário não possui perfil de responsável.');
+        throw new ForbiddenException(
+          'Usuário não possui perfil de responsável.',
+        );
       }
       await this.notifications.updatePushToken(rid, body.pushToken);
       return { ok: true };
@@ -40,6 +42,8 @@ export class NotificationsController {
       return { ok: true };
     }
 
-    throw new ForbiddenException('Perfil não autorizado a registrar push token.');
+    throw new ForbiddenException(
+      'Perfil não autorizado a registrar push token.',
+    );
   }
 }

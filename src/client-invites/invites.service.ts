@@ -495,7 +495,7 @@ export class InvitesService {
     }
 
     return {
-      syncStatus: sync.deviceSyncStatus as 'synced' | 'sync_failed',
+      syncStatus: sync.deviceSyncStatus,
       row: updated,
     };
   }

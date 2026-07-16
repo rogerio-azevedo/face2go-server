@@ -62,8 +62,9 @@ export class CompanyFeaturesService {
     );
     const bySlug = new Map(rows.map((row) => [row.featureSlug, row]));
 
-    return companyFeaturesQueries.listPremiumFeatureDefinitions().map(
-      (definition) => {
+    return companyFeaturesQueries
+      .listPremiumFeatureDefinitions()
+      .map((definition) => {
         const row = bySlug.get(definition.slug);
         return {
           slug: definition.slug,
@@ -74,8 +75,7 @@ export class CompanyFeaturesService {
           enabledAt: row?.enabledAt?.toISOString() ?? null,
           enabledBy: row?.enabledBy ?? null,
         };
-      },
-    );
+      });
   }
 
   async toggle(

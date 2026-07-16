@@ -1,12 +1,4 @@
-import {
-  and,
-  count,
-  desc,
-  eq,
-  inArray,
-  or,
-  type SQL,
-} from 'drizzle-orm';
+import { and, count, desc, eq, inArray, or, type SQL } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { listHouseholdResponsibleIds } from './responsibles.queries';

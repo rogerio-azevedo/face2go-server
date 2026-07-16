@@ -73,7 +73,7 @@ export async function upsertCompanyFeature(
       })
       .where(eq(companyFeatures.id, existing.id))
       .returning();
-    return rows[0]!;
+    return rows[0];
   }
 
   const rows = await db
@@ -87,7 +87,7 @@ export async function upsertCompanyFeature(
       updatedAt: now,
     })
     .returning();
-  return rows[0]!;
+  return rows[0];
 }
 
 export async function getCompanyIdByCompanyUserId(

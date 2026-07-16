@@ -55,7 +55,13 @@ export class PanicEventsController {
   }
 
   @Post('panic-events')
-  @Roles('member', 'responsible', 'client_admin', 'client_operator', 'face_user')
+  @Roles(
+    'member',
+    'responsible',
+    'client_admin',
+    'client_operator',
+    'face_user',
+  )
   @ApiOperation({ summary: 'Criar pedido de socorro (app)' })
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreatePanicEventDto) {
     return this.panicEventsService.create(user, dto);
@@ -75,10 +81,7 @@ export class PanicEventsController {
   @Get('panic-events/:eventId')
   @Roles('company_admin', 'company_operator')
   @ApiOperation({ summary: 'Detalhe de evento de socorro' })
-  getById(
-    @CurrentUser() user: JwtPayload,
-    @Param('eventId') eventId: string,
-  ) {
+  getById(@CurrentUser() user: JwtPayload, @Param('eventId') eventId: string) {
     return this.panicEventsService.getById(user, eventId);
   }
 

@@ -23,10 +23,7 @@ export class ClientAddressesRepository {
   }
 
   getPrimary(clientId: string) {
-    return clientAddressesQueries.getPrimaryAddress(
-      this.database.db,
-      clientId,
-    );
+    return clientAddressesQueries.getPrimaryAddress(this.database.db, clientId);
   }
 
   create(data: clientAddressesQueries.ClientAddressInsert) {

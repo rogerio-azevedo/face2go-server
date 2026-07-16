@@ -223,10 +223,7 @@ export class PublicPickupRegisterService {
     }
 
     const guestName =
-      updated.guestName?.trim() ||
-      row.guestName?.trim() ||
-      name ||
-      'Convidado';
+      updated.guestName?.trim() || row.guestName?.trim() || name || 'Convidado';
 
     this.eventEmitter.emit(PICKUP_GUEST_FACE_SUBMITTED, {
       authorizationId: row.id,

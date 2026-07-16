@@ -37,11 +37,6 @@ export class CompanyFeaturesController {
     @Body() body: ToggleCompanyFeatureDto,
     @CurrentUser() user: JwtPayload,
   ) {
-    return this.companyFeaturesService.toggle(
-      id,
-      slug,
-      body.enabled,
-      user.sub,
-    );
+    return this.companyFeaturesService.toggle(id, slug, body.enabled, user.sub);
   }
 }

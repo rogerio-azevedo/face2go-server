@@ -36,7 +36,7 @@ export async function ensurePanicConfig(
       updatedAt: new Date(),
     })
     .returning();
-  return rows[0]!;
+  return rows[0];
 }
 
 export async function upsertPanicConfig(
@@ -57,7 +57,7 @@ export async function upsertPanicConfig(
     })
     .where(eq(clientPanicConfig.clientId, clientId))
     .returning();
-  return rows[0]!;
+  return rows[0];
 }
 
 export async function isRoleAllowedForPanic(

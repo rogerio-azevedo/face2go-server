@@ -149,11 +149,7 @@ export class MonitoringGateway
   }
 
   emitPanicUpdated(payload: PanicUpdatedEvent): void {
-    this.emitToCompany(
-      payload.event.companyId,
-      'panic:updated',
-      payload,
-    );
+    this.emitToCompany(payload.event.companyId, 'panic:updated', payload);
   }
 }
 

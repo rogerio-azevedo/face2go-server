@@ -66,15 +66,12 @@ export const ALL_FEATURES: FeatureDefinition[] = [
   {
     slug: 'monitoring',
     name: 'Pedido de Socorro & Monitoramento',
-    description:
-      'Botão "Me Ajuda" no app + central de monitoramento (premium)',
+    description: 'Botão "Me Ajuda" no app + central de monitoramento (premium)',
     category: 'Premium',
     isPremium: true,
   },
 ];
 
-export function isPremiumFeatureSlug(
-  slug: string,
-): slug is PremiumFeatureSlug {
+export function isPremiumFeatureSlug(slug: string): slug is PremiumFeatureSlug {
   return (PREMIUM_FEATURE_SLUGS as string[]).includes(slug);
 }

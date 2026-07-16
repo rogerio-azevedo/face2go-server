@@ -13,10 +13,7 @@ export class GeocodingController {
 
   @Get('autocomplete')
   @ApiOperation({ summary: 'Autocomplete de endereço via HERE (proxy)' })
-  autocomplete(
-    @Query('q') q: string,
-    @Query('at') at?: string,
-  ) {
+  autocomplete(@Query('q') q: string, @Query('at') at?: string) {
     return this.geocodingService.autocomplete(q, at);
   }
 

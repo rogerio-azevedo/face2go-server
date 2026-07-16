@@ -24,7 +24,9 @@ import { ClientAddressesService } from './client-addresses.service';
 @Roles('company_admin', 'company_operator')
 @Controller('clients/:clientId/addresses')
 export class ClientAddressesController {
-  constructor(private readonly clientAddressesService: ClientAddressesService) {}
+  constructor(
+    private readonly clientAddressesService: ClientAddressesService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Listar endereços do cliente' })

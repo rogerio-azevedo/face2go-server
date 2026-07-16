@@ -16,10 +16,7 @@ import { DatabaseService } from '../database/database.service';
 import * as companyFeaturesQueries from '../database/queries/company-features.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import { CompanyFeaturesService } from '../company-features/company-features.service';
-import {
-  PanicEvent,
-  type PanicEventDocument,
-} from './panic-event.schema';
+import { PanicEvent, type PanicEventDocument } from './panic-event.schema';
 import {
   PANIC_CREATED,
   PANIC_UPDATED,
@@ -168,7 +165,10 @@ export class PanicEventsService {
       if (user.clientId !== clientId) {
         throw new ForbiddenException('Sem permissão.');
       }
-    } else if (user.role === 'company_admin' || user.role === 'company_operator') {
+    } else if (
+      user.role === 'company_admin' ||
+      user.role === 'company_operator'
+    ) {
       const companyId = this.ensureCompany(user);
       const client = await clientsQueries.getClientById(
         this.database.db,
@@ -428,10 +428,7 @@ export class PanicEventsService {
     if (doc.status !== 'claimed') {
       throw new ConflictException('Evento não está em tratativa.');
     }
-    if (
-      doc.claimedBy?.userId !== user.sub &&
-      user.role !== 'company_admin'
-    ) {
+    if (doc.claimedBy?.userId !== user.sub && user.role !== 'company_admin') {
       throw new ForbiddenException('Apenas quem pegou o evento pode soltá-lo.');
     }
 
@@ -449,15 +446,14 @@ export class PanicEventsService {
     await doc.save();
 
     const payload = toPayload(doc);
-    this.eventEmitter.emit(PANIC_UPDATED, { event: payload, action: 'release' });
+    this.eventEmitter.emit(PANIC_UPDATED, {
+      event: payload,
+      action: 'release',
+    });
     return payload;
   }
 
-  async close(
-    user: JwtPayload,
-    eventId: string,
-    input: ClosePanicEventInput,
-  ) {
+  async close(user: JwtPayload, eventId: string, input: ClosePanicEventInput) {
     const companyId = await this.assertMonitoringRead(user);
     const doc = await this.findCompanyEvent(companyId, eventId);
 

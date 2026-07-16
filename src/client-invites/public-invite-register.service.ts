@@ -217,10 +217,7 @@ export class PublicInviteRegisterService {
     }
 
     const guestName =
-      updated.guestName?.trim() ||
-      row.guestName?.trim() ||
-      name ||
-      'Visitante';
+      updated.guestName?.trim() || row.guestName?.trim() || name || 'Visitante';
 
     this.eventEmitter.emit(INVITE_GUEST_FACE_SUBMITTED, {
       inviteId: row.id,

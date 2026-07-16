@@ -103,7 +103,7 @@ export async function createAddress(
       updatedAt: new Date(),
     })
     .returning();
-  return rows[0]!;
+  return rows[0];
 }
 
 export async function updateAddress(

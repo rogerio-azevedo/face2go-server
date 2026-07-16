@@ -67,5 +67,9 @@ export const updateClientAddressSchema = addressFieldsSchema
     }
   });
 
-export type CreateClientAddressInput = z.infer<typeof createClientAddressSchema>;
-export type UpdateClientAddressInput = z.infer<typeof updateClientAddressSchema>;
+export type CreateClientAddressInput = z.infer<
+  typeof createClientAddressSchema
+>;
+export type UpdateClientAddressInput = z.infer<
+  typeof updateClientAddressSchema
+>;

@@ -279,11 +279,9 @@ export class ManagedResponsiblesService {
     }
 
     const userEmail =
-      row.submittedEmail ??
-      `nologin-${crypto.randomUUID()}@sem-acesso.face2go`;
+      row.submittedEmail ?? `nologin-${crypto.randomUUID()}@sem-acesso.face2go`;
     const passwordHash =
-      row.submittedPasswordHash ??
-      (await bcrypt.hash(crypto.randomUUID(), 10));
+      row.submittedPasswordHash ?? (await bcrypt.hash(crypto.randomUUID(), 10));
 
     const existingUser = row.submittedEmail
       ? await this.database.db.query.users.findFirst({
@@ -373,7 +371,9 @@ export class ManagedResponsiblesService {
       faceSync = {
         deviceSyncStatus: 'sync_failed',
         deviceSyncError:
-          err instanceof Error ? err.message : 'Falha na sincronização da face.',
+          err instanceof Error
+            ? err.message
+            : 'Falha na sincronização da face.',
       };
     }
 
@@ -957,7 +957,7 @@ export class ManagedResponsiblesService {
     }
 
     const hasVehicle = Boolean(row.vehiclePlate?.trim());
-    const updated = (await invitationQueries.invitationUpdate(
+    const updated = await invitationQueries.invitationUpdate(
       this.database.db,
       id,
       user.clientId,
@@ -974,7 +974,7 @@ export class ManagedResponsiblesService {
             }
           : {}),
       },
-    ))!;
+    );
     if (!updated) {
       throw new NotFoundException('Convite não encontrado.');
     }

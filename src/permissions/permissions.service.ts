@@ -84,9 +84,8 @@ export class PermissionsService {
       return { mainPaths: ['/company/dashboard'] };
     }
 
-    const companyFeatureFlags = await this.companyFeaturesService.getFeatureFlags(
-      user.companyId,
-    );
+    const companyFeatureFlags =
+      await this.companyFeaturesService.getFeatureFlags(user.companyId);
 
     if (user.role === 'company_admin') {
       const rows = await this.database.db.query.companyUserPermissions.findMany(

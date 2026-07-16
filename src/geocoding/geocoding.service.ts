@@ -38,9 +38,7 @@ export class GeocodingService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly cacheTtlMs = 60_000;
 
-  constructor(
-    private readonly configService: ConfigService<EnvVars, true>,
-  ) {}
+  constructor(private readonly configService: ConfigService<EnvVars, true>) {}
 
   private get apiKey(): string | undefined {
     return this.configService.get('HERE_API_KEY', { infer: true });
@@ -91,7 +89,9 @@ export class GeocodingService {
     const response = await fetch(url);
     if (!response.ok) {
       const body = await response.text();
-      this.logger.warn(`HERE API error ${response.status}: ${body.slice(0, 300)}`);
+      this.logger.warn(
+        `HERE API error ${response.status}: ${body.slice(0, 300)}`,
+      );
       throw new ServiceUnavailableException(
         'Serviço de geocoding temporariamente indisponível.',
       );
@@ -225,17 +225,7 @@ export class GeocodingService {
     const url = `${this.geocodeBaseUrl}/revgeocode?${params.toString()}`;
     const data = await this.fetchHere<{ items?: unknown[] }>(url);
     const first = data.items?.[0];
-    const item = first
-      ? this.normalizeItem(
-          first as {
-            id?: string;
-            title?: string;
-            resultType?: HereResultType;
-            address?: HereAddress;
-            position?: HerePosition;
-          },
-        )
-      : null;
+    const item = first ? this.normalizeItem(first) : null;
 
     this.setCache(cacheKey, item);
     return { item };
@@ -251,17 +241,7 @@ export class GeocodingService {
     const url = `${this.geocodeBaseUrl}/lookup?${params.toString()}`;
     const data = await this.fetchHere<{ items?: unknown[] }>(url);
     const first = data.items?.[0];
-    const item = first
-      ? this.normalizeItem(
-          first as {
-            id?: string;
-            title?: string;
-            resultType?: HereResultType;
-            address?: HereAddress;
-            position?: HerePosition;
-          },
-        )
-      : null;
+    const item = first ? this.normalizeItem(first) : null;
 
     this.setCache(cacheKey, item);
     return { item };

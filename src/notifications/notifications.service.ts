@@ -475,9 +475,7 @@ export class NotificationsService {
     });
   }
 
-  async notifyMembersOfPanic(
-    event: PanicCreatedEvent['event'],
-  ): Promise<void> {
+  async notifyMembersOfPanic(event: PanicCreatedEvent['event']): Promise<void> {
     const members = await membersQueries.listMembersWithPushTokenByClient(
       this.database.db,
       event.clientId,

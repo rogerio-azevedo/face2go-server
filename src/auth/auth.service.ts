@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { AuthPasswordService } from './auth-password.service';
 
 import { DatabaseService } from '../database/database.service';
@@ -36,7 +36,6 @@ import type {
   UserContext,
 } from './interfaces/user-context.interface';
 import type { AuthServiceContract } from './interfaces/auth-service.interface';
-import { normalizeLoginIdentifier } from './utils/auth-identifiers';
 import type { JoinContextInput } from '../validation/join-context.schema';
 import type { RegisterInput } from '../validation/register.schema';
 import type { RequestPasswordInput } from '../validation/request-password.schema';
@@ -94,50 +93,12 @@ export class AuthService implements AuthServiceContract {
     };
   }
 
-  private async findUserByIdentifier(identifier: string) {
-    const parsed = normalizeLoginIdentifier(identifier);
-    const db = this.database.db;
-
-    if (parsed.kind === 'email') {
-      const [row] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, parsed.value))
-        .limit(1);
-      return row;
-    }
-
-    if (parsed.value.length !== 11) {
-      return null;
-    }
-
-    const [byUserCpf] = await db
-      .select()
-      .from(users)
-      .where(eq(users.cpf, parsed.value))
-      .limit(1);
-    if (byUserCpf) return byUserCpf;
-
-    const [byResponsibleDocument] = await db
-      .select({ user: users })
-      .from(users)
-      .innerJoin(responsibles, eq(responsibles.userId, users.id))
-      .where(
-        and(
-          eq(responsibles.isActive, true),
-          sql`regexp_replace(${responsibles.document}, '[^0-9]', '', 'g') = ${parsed.value}`,
-        ),
-      )
-      .limit(1);
-
-    return byResponsibleDocument?.user ?? null;
-  }
-
   async validateCredentials(
     identifier: string,
     password: string,
   ): Promise<IdentityUser | null> {
-    const userRow = await this.findUserByIdentifier(identifier);
+    const userRow =
+      await this.authPasswordService.findUserByIdentifier(identifier);
     if (!userRow?.password) return null;
     if (!userRow.isActive) return null;
 

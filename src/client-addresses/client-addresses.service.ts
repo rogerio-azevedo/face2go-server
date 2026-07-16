@@ -192,7 +192,10 @@ export class ClientAddressesService {
     input: UpdateClientAddressInput,
   ) {
     await this.assertWriteAccess(user, clientId);
-    const existing = await this.addressesRepository.getById(clientId, addressId);
+    const existing = await this.addressesRepository.getById(
+      clientId,
+      addressId,
+    );
     if (!existing) throw new NotFoundException('Endereço não encontrado.');
 
     if (input.isPrimary === true) {
@@ -223,7 +226,10 @@ export class ClientAddressesService {
 
   async remove(user: JwtPayload, clientId: string, addressId: string) {
     await this.assertWriteAccess(user, clientId);
-    const existing = await this.addressesRepository.getById(clientId, addressId);
+    const existing = await this.addressesRepository.getById(
+      clientId,
+      addressId,
+    );
     if (!existing) throw new NotFoundException('Endereço não encontrado.');
     await this.addressesRepository.delete(clientId, addressId);
     if (existing.isPrimary) {
