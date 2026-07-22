@@ -37,6 +37,8 @@ export const SCHOOL_DEFAULT_ROLES = [
   { slug: 'professor', name: 'Professor' },
   { slug: 'coordenador', name: 'Coordenador' },
   { slug: 'diretor', name: 'Diretor' },
+  { slug: 'estagiario', name: 'Estagiário' },
+  { slug: 'terceirizado', name: 'Terceirizado' },
 ] as const;
 
 export const CONDOMINIUM_DEFAULT_ROLES = [

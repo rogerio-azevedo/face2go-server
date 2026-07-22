@@ -5,11 +5,12 @@ const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
 
 const optionalTrimmed = z
   .string()
-  .optional()
+  .nullish()
   .transform((v) => {
     if (v === undefined) return undefined;
+    if (v === null) return null;
     const t = v.trim();
-    return t === '' ? undefined : t;
+    return t === '' ? null : t;
   });
 
 /** Minutos relativos ao UTC; |valor inteiro| ≤ 14 vira horas (ex.: -4 → −240). */
@@ -48,42 +49,39 @@ const baseClientShape = {
       message: 'Selecione um tipo válido.',
     },
   ),
-  cnpj: optionalTrimmed.refine(
-    (val) => val === undefined || CNPJ_REGEX.test(val),
-    {
-      message: 'CNPJ inválido (use XX.XXX.XXX/XXXX-XX)',
-    },
-  ),
+  cnpj: optionalTrimmed.refine((val) => val == null || CNPJ_REGEX.test(val), {
+    message: 'CNPJ inválido (use XX.XXX.XXX/XXXX-XX)',
+  }),
   phone: optionalTrimmed,
   email: optionalTrimmed.refine(
-    (val) => val === undefined || z.email().safeParse(val).success,
+    (val) => val == null || z.email().safeParse(val).success,
     { message: 'E-mail inválido' },
   ),
   logoUrl: optionalTrimmed.refine(
-    (val) => val === undefined || /^https?:\/\/[^\s]+$/.test(val),
+    (val) => val == null || /^https?:\/\/[^\s]+$/.test(val),
     {
       message:
         'Opcional — se preencher, use uma URL completa com http ou https.',
     },
   ),
   primaryColor: optionalTrimmed.refine(
-    (val) => val === undefined || HEX_COLOR_REGEX.test(val),
+    (val) => val == null || HEX_COLOR_REGEX.test(val),
     {
       message: 'Opcional — use cor hexadecimal (#RRGGBB).',
     },
   ),
   privacyPolicyUrl: optionalTrimmed.refine(
-    (val) => val === undefined || /^https?:\/\/[^\s]+$/.test(val),
+    (val) => val == null || /^https?:\/\/[^\s]+$/.test(val),
     {
       message:
         'Opcional — se preencher, use uma URL completa com http ou https.',
     },
   ),
   privacyAlias: optionalTrimmed.pipe(
-    z.string().max(100, 'Alias muito longo (máx. 100 caracteres)').optional(),
+    z.string().max(100, 'Alias muito longo (máx. 100 caracteres)').nullish(),
   ),
   supportEmail: optionalTrimmed.refine(
-    (val) => val === undefined || z.email().safeParse(val).success,
+    (val) => val == null || z.email().safeParse(val).success,
     { message: 'E-mail de suporte inválido' },
   ),
   supportPhone: optionalTrimmed,
