@@ -1,6 +1,8 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -154,6 +156,49 @@ export class R2StorageService {
         'Foto não encontrada no armazenamento. Envie a imagem novamente.',
       );
     }
+  }
+
+  /** Lista objetos sob um prefixo (paginado). */
+  async listObjects(
+    prefix: string,
+  ): Promise<{ key: string; lastModified?: Date; size?: number }[]> {
+    const results: { key: string; lastModified?: Date; size?: number }[] = [];
+    let continuationToken: string | undefined;
+
+    do {
+      const resp = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+
+      for (const obj of resp.Contents ?? []) {
+        if (obj.Key) {
+          results.push({
+            key: obj.Key,
+            lastModified: obj.LastModified,
+            size: obj.Size,
+          });
+        }
+      }
+
+      continuationToken = resp.IsTruncated
+        ? resp.NextContinuationToken
+        : undefined;
+    } while (continuationToken);
+
+    return results;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
   }
 
   /** Download binário direto para sync com leitor. */

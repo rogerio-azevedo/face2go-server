@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
+
+import { R2StorageService } from '../storage/r2-storage.service';
 
 import {
   fetchIenhSchema,
@@ -17,6 +18,7 @@ import type {
 
 const DEFAULT_FILIAIS = [1, 2, 3];
 const DEFAULT_NIVEIS = [1, 2, 3];
+export const IENH_SNAPSHOT_R2_PREFIX = 'ienh-snapshots/';
 
 export interface FetchAndSaveResult {
   count: number;
@@ -28,7 +30,10 @@ export interface FetchAndSaveResult {
 export class IenhService {
   private readonly logger = new Logger(IenhService.name);
 
-  constructor(private readonly totvsClient: TotvsIenhClient) {}
+  constructor(
+    private readonly totvsClient: TotvsIenhClient,
+    private readonly r2Storage: R2StorageService,
+  ) {}
 
   async fetchAllRecordsTagged(input: {
     perlet: string;
@@ -181,12 +186,9 @@ export class IenhService {
     records: TotvsIenhRecord[];
     taggedRecords?: TotvsIenhRecordWithFilial[];
   }): Promise<string> {
-    const dir = join(process.cwd(), 'data');
-    await mkdir(dir, { recursive: true });
-
     const stamp = this.formatTimestamp(args.fetchedAt);
     const filename = `ienh-snapshot-${stamp}.json`;
-    const filePath = join(dir, filename);
+    const key = `${IENH_SNAPSHOT_R2_PREFIX}${filename}`;
 
     const snapshot: TotvsIenhSnapshot = {
       meta: {
@@ -204,12 +206,16 @@ export class IenhService {
         : {}),
     };
 
-    await writeFile(filePath, JSON.stringify(snapshot, null, 2), 'utf8');
+    await this.r2Storage.putObject(
+      key,
+      Buffer.from(JSON.stringify(snapshot, null, 2), 'utf8'),
+      'application/json',
+    );
     this.logger.log(
-      `Snapshot TOTVS IENH salvo em ${filePath} (${args.records.length} registros)`,
+      `Snapshot TOTVS IENH salvo em R2 ${key} (${args.records.length} registros)`,
     );
 
-    return filePath;
+    return key;
   }
 
   private formatTimestamp(date: Date): string {

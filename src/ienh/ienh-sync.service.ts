@@ -6,8 +6,6 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { readFile, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
 
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
@@ -17,6 +15,7 @@ import * as schoolClassQueries from '../database/queries/school-classes.queries'
 import * as studentClassesQueries from '../database/queries/student-classes.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { users } from '../database/schema';
+import { R2StorageService } from '../storage/r2-storage.service';
 import {
   syncFromSnapshotSchema,
   syncIenhSchema,
@@ -35,7 +34,7 @@ import {
   resolveFilialFromRecord,
   resolvePerlets,
 } from './ienh.mapper';
-import { IenhService } from './ienh.service';
+import { IENH_SNAPSHOT_R2_PREFIX, IenhService } from './ienh.service';
 import type {
   IenhSnapshotInfo,
   IenhSyncResult,
@@ -69,6 +68,7 @@ export class IenhSyncService {
   constructor(
     private readonly database: DatabaseService,
     private readonly ienhService: IenhService,
+    private readonly r2Storage: R2StorageService,
   ) {}
 
   async runSyncForCompany(
@@ -177,32 +177,25 @@ export class IenhSyncService {
   }
 
   async listSnapshots(): Promise<IenhSnapshotInfo[]> {
-    const dir = join(process.cwd(), 'data');
-    let files: string[] = [];
-    try {
-      files = await readdir(dir);
-    } catch {
-      return [];
-    }
-
-    const snapshotFiles = files.filter(
-      (f) => f.startsWith('ienh-snapshot-') && f.endsWith('.json'),
-    );
+    const objects = await this.r2Storage.listObjects(IENH_SNAPSHOT_R2_PREFIX);
 
     const infos: IenhSnapshotInfo[] = [];
-    for (const file of snapshotFiles) {
+    for (const obj of objects) {
+      const filename = obj.key.slice(IENH_SNAPSHOT_R2_PREFIX.length);
+      if (!SNAPSHOT_FILENAME_RE.test(filename)) continue;
+
       try {
-        const raw = await readFile(join(dir, file), 'utf8');
-        const snap = JSON.parse(raw) as TotvsIenhSnapshot;
+        const { buffer } = await this.r2Storage.getObjectBytes(obj.key);
+        const snap = JSON.parse(buffer.toString('utf8')) as TotvsIenhSnapshot;
         infos.push({
-          file,
+          file: filename,
           recordCount: snap.meta.recordCount,
           fetchedAt: snap.meta.fetchedAt,
           perlet: snap.meta.perlet,
           ...(snap.meta.perlets?.length ? { perlets: snap.meta.perlets } : {}),
         });
       } catch {
-        // ignora arquivos corrompidos
+        // ignora objetos corrompidos
       }
     }
 
@@ -216,15 +209,15 @@ export class IenhSyncService {
       throw new BadRequestException('Nome de snapshot inválido.');
     }
 
-    const filePath = join(process.cwd(), 'data', filename);
-    let raw: string;
+    const key = `${IENH_SNAPSHOT_R2_PREFIX}${filename}`;
+    let snap: TotvsIenhSnapshot;
     try {
-      raw = await readFile(filePath, 'utf8');
+      const { buffer } = await this.r2Storage.getObjectBytes(key);
+      snap = JSON.parse(buffer.toString('utf8')) as TotvsIenhSnapshot;
     } catch {
       throw new NotFoundException(`Snapshot não encontrado: ${filename}`);
     }
 
-    const snap = JSON.parse(raw) as TotvsIenhSnapshot;
     let tagged: TotvsIenhRecordWithFilial[];
 
     if (snap.taggedRecords?.length) {
