@@ -19,6 +19,7 @@ import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { PersonLookupService } from '../people/person-lookup.service';
+import { PersonProfileService } from '../people/person-profile.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
@@ -48,6 +49,7 @@ export class ResponsiblesService {
     private readonly accessTimeZone: AccessTimeZoneService,
     private readonly lprPlateSync: LprPlateSyncService,
     private readonly personLookup: PersonLookupService,
+    private readonly personProfile: PersonProfileService,
   ) {}
 
   async list(
@@ -208,14 +210,39 @@ export class ResponsiblesService {
         );
       }
 
-      return responsiblesQueries.insertResponsible(this.database.db, {
-        clientId,
-        userId,
+      const responsible = await responsiblesQueries.insertResponsible(
+        this.database.db,
+        {
+          clientId,
+          userId,
+          name: d.name,
+          phone: d.phone ?? null,
+          document: d.document ? normalizeCpf(d.document) : null,
+          isActive: d.isActive,
+        },
+      );
+
+      const bondRef = {
+        type: 'responsible' as const,
+        id: responsible.id,
         name: d.name,
-        phone: d.phone ?? null,
-        document: d.document ? normalizeCpf(d.document) : null,
-        isActive: d.isActive,
-      });
+      };
+      const appliedSameClient =
+        await this.personProfile.applySharedFaceFromSameClient(
+          userId,
+          clientId,
+          bondRef,
+        );
+      if (!appliedSameClient) {
+        await this.personProfile.copyFaceFromOtherClientToBond(
+          userId,
+          clientId,
+          bondRef,
+          `create-responsible=${responsible.id}`,
+        );
+      }
+
+      return responsible;
     } catch {
       if (createdUser) {
         await this.database.db.delete(users).where(eq(users.id, userId));
@@ -591,6 +618,21 @@ export class ResponsiblesService {
       },
     );
 
+    if (responsible.userId) {
+      await this.personProfile.propagateFaceToSiblings(
+        responsible.userId,
+        clientId,
+        {
+          faceId: row.faceId,
+          photoKey: row.photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        },
+        { responsibleId },
+      );
+    }
+
     return {
       deviceSyncStatus: sync.deviceSyncStatus,
       deviceSyncError: sync.deviceSyncError,
@@ -627,12 +669,18 @@ export class ResponsiblesService {
     const logContext = `delete-responsible=${target.id}`;
 
     if (faceId != null) {
-      await this.faceSync.removePersonFromReaders({
-        clientId,
-        faceId,
-        logContext,
-        requireAll: true,
-      });
+      const removeFromReader =
+        await this.personProfile.shouldRemoveFaceFromReader(faceId, clientId, {
+          responsibleId: target.id,
+        });
+      if (removeFromReader) {
+        await this.faceSync.removePersonFromReaders({
+          clientId,
+          faceId,
+          logContext,
+          requireAll: true,
+        });
+      }
     }
 
     for (const vehicle of targetVehicles) {

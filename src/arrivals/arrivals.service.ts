@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import * as displayDeviceQueries from '../database/queries/client-display-devices.queries';
 import type { ClientDisplayDeviceType } from '../database/queries/client-display-devices.queries';
-import * as membersQueries from '../database/queries/members.queries';
+import * as peopleQueries from '../database/queries/people.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
@@ -326,12 +326,18 @@ export class ArrivalsService {
         return;
       }
 
-      const responsible =
-        await responsiblesQueries.findResponsibleByFaceIdAndClientId(
+      const responsibles =
+        await peopleQueries.listResponsiblesByFaceIdAndClientId(
           this.database.db,
           payload.faceId,
           payload.clientId,
         );
+      const members = await peopleQueries.listMembersByFaceIdAndClientId(
+        this.database.db,
+        payload.faceId,
+        payload.clientId,
+      );
+      const responsible = responsibles[0] ?? null;
 
       let kind: ArrivalDisplayKind;
       let responsibleId: string | null = null;
@@ -355,10 +361,12 @@ export class ArrivalsService {
             responsible.id,
           ),
         );
-        vehiclePlate = await vehiclesQueries.findVehiclePlateForArrival(
+        const memberIds = members.map((m) => m.id);
+        vehiclePlate = await vehiclesQueries.findVehiclePlateForPersonOwners(
           this.database.db,
-          responsible.id,
           payload.clientId,
+          [responsible.id],
+          memberIds,
         );
       } else {
         const student = await studentsQueries.findStudentByFaceIdAndClientId(
@@ -372,21 +380,46 @@ export class ArrivalsService {
           personPhotoUrl = await this.presignPhoto(student.photoKey);
           students = [];
         } else {
-          const member = await membersQueries.findMemberByFaceIdAndClientId(
-            this.database.db,
-            payload.faceId,
-            payload.clientId,
-          );
+          const member = members[0] ?? null;
           if (member) {
             kind = 'responsible';
             personName = member.name;
             personPhotoUrl = await this.presignPortraitPhoto(member.photoKey);
-            students = [];
-            vehiclePlate = await vehiclesQueries.findVehiclePlateForMember(
-              this.database.db,
-              member.id,
-              payload.clientId,
-            );
+            if (member.userId) {
+              const owners =
+                await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+                  this.database.db,
+                  member.userId,
+                  payload.clientId,
+                );
+              const primaryResponsibleId = owners.responsibleIds[0];
+              if (primaryResponsibleId) {
+                responsibleId = primaryResponsibleId;
+                students = await this.mergeLinkedPickupStudents(
+                  payload.clientId,
+                  primaryResponsibleId,
+                  await this.resolveStudentsResponsible(
+                    payload.clientId,
+                    primaryResponsibleId,
+                  ),
+                );
+              } else {
+                students = [];
+              }
+              vehiclePlate = await vehiclesQueries.findVehiclePlateForPersonOwners(
+                this.database.db,
+                payload.clientId,
+                owners.responsibleIds,
+                owners.memberIds,
+              );
+            } else {
+              students = [];
+              vehiclePlate = await vehiclesQueries.findVehiclePlateForMember(
+                this.database.db,
+                member.id,
+                payload.clientId,
+              );
+            }
           } else {
             const pickupAuths =
               await pickupQueries.pickupAuthFindActiveByGuestFaceId(
@@ -494,6 +527,27 @@ export class ArrivalsService {
           ),
         );
 
+        let vehiclePlate = payload.plateNumber;
+        const userId = await peopleQueries.findUserIdByVehicleOwner(
+          this.database.db,
+          payload.clientId,
+          { responsibleId: responsible.id },
+        );
+        if (userId) {
+          const owners = await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+            this.database.db,
+            userId,
+            payload.clientId,
+          );
+          const mergedPlate = await vehiclesQueries.findVehiclePlateForPersonOwners(
+            this.database.db,
+            payload.clientId,
+            owners.responsibleIds,
+            owners.memberIds,
+          );
+          if (mergedPlate) vehiclePlate = mergedPlate;
+        }
+
         const out: ArrivalSsePayload = {
           type: 'arrival',
           kind: 'responsible',
@@ -503,7 +557,7 @@ export class ArrivalsService {
           personPhotoUrl,
           readerName: payload.cameraName,
           eventDate: payload.snapTime?.toISOString() ?? null,
-          vehiclePlate: payload.plateNumber,
+          vehiclePlate,
           students,
         };
 
@@ -518,17 +572,44 @@ export class ArrivalsService {
       );
 
       if (member) {
+        let students: ArrivalSseStudent[] = [];
+        let responsibleId: string | null = null;
+        const userId = await peopleQueries.findUserIdByVehicleOwner(
+          this.database.db,
+          payload.clientId,
+          { memberId: member.id },
+        );
+        if (userId) {
+          const owners = await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+            this.database.db,
+            userId,
+            payload.clientId,
+          );
+          const primaryResponsibleId = owners.responsibleIds[0];
+          if (primaryResponsibleId) {
+            responsibleId = primaryResponsibleId;
+            students = await this.mergeLinkedPickupStudents(
+              payload.clientId,
+              primaryResponsibleId,
+              await this.resolveStudentsResponsible(
+                payload.clientId,
+                primaryResponsibleId,
+              ),
+            );
+          }
+        }
+
         const out: ArrivalSsePayload = {
           type: 'arrival',
           kind: 'responsible',
           accessId: payload.accessId,
-          responsibleId: null,
+          responsibleId,
           personName: member.name,
           personPhotoUrl: await this.presignPortraitPhoto(member.photoKey),
           readerName: payload.cameraName,
           eventDate: payload.snapTime?.toISOString() ?? null,
           vehiclePlate: payload.plateNumber,
-          students: [],
+          students,
         };
         this.emitToHub(payload.clientId, out);
         return;

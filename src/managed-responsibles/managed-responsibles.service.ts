@@ -35,6 +35,8 @@ import {
   type ResponsibleInvitationSyncedPayload,
 } from '../notifications/notifications.events';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
+import { PeopleModule } from '../people/people.module';
+import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
   createManagedResponsibleSchema,
@@ -68,6 +70,7 @@ export class ManagedResponsiblesService {
     private readonly accessTimeZone: AccessTimeZoneService,
     private readonly lprPlateSync: LprPlateSyncService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly personProfile: PersonProfileService,
   ) {}
 
   private assertResponsibleJwt(user: JwtPayload): asserts user is JwtPayload & {
@@ -239,33 +242,6 @@ export class ManagedResponsiblesService {
     );
 
     return faceSync;
-  }
-
-  private async copyFaceFromExistingResponsibleIfAvailable(params: {
-    userId: string;
-    clientId: string;
-    responsibleId: string;
-    name: string;
-    logContext: string;
-  }): Promise<boolean> {
-    const source = await responsiblesQueries.findResponsibleWithPhotoByUserId(
-      this.database.db,
-      params.userId,
-      params.clientId,
-    );
-    if (!source?.photoKey) return false;
-
-    const { buffer } = await this.r2.getObjectBytes(source.photoKey);
-    if (!(await isPortraitImageUsable(buffer))) return false;
-
-    await this.syncResponsibleFace({
-      clientId: params.clientId,
-      responsibleId: params.responsibleId,
-      name: params.name,
-      imageBuffer: buffer,
-      logContext: `${params.logContext}-face-copy`,
-    });
-    return true;
   }
 
   private async createResponsibleFromInvitation(
@@ -588,13 +564,25 @@ export class ManagedResponsiblesService {
         });
       }
     } else if (!d.linkedResponsibleId && responsible.userId && !d.imageBase64) {
-      await this.copyFaceFromExistingResponsibleIfAvailable({
-        userId: responsible.userId,
-        clientId: user.clientId,
-        responsibleId: responsible.id,
+      const bondRef = {
+        type: 'responsible' as const,
+        id: responsible.id,
         name: d.name,
-        logContext: `managed-responsible=${responsible.id}`,
-      });
+      };
+      const appliedSameClient =
+        await this.personProfile.applySharedFaceFromSameClient(
+          responsible.userId,
+          user.clientId,
+          bondRef,
+        );
+      if (!appliedSameClient) {
+        await this.personProfile.copyFaceFromOtherClientToBond(
+          responsible.userId,
+          user.clientId,
+          bondRef,
+          `managed-responsible=${responsible.id}`,
+        );
+      }
     }
 
     if (d.vehicle) {

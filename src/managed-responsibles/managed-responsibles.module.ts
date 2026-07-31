@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { FaceSyncModule } from '../face-sync/face-sync.module';
 import { LprPlateSyncModule } from '../lpr-plate-sync/lpr-plate-sync.module';
+import { PeopleModule } from '../people/people.module';
 import { StorageModule } from '../storage/storage.module';
 import { ManagedResponsiblesController } from './managed-responsibles.controller';
 import { ManagedResponsibleCreateService } from './managed-responsible-create.service';
@@ -11,7 +12,7 @@ import { PublicResponsibleRegisterController } from './public-responsible-regist
 import { PublicResponsibleRegisterService } from './public-responsible-register.service';
 
 @Module({
-  imports: [DatabaseModule, StorageModule, FaceSyncModule, LprPlateSyncModule],
+  imports: [DatabaseModule, StorageModule, FaceSyncModule, LprPlateSyncModule, PeopleModule],
   controllers: [
     ManagedResponsiblesController,
     PublicResponsibleRegisterController,

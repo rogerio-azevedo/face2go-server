@@ -12,6 +12,7 @@ import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
 import * as visitorInviteQueries from '../database/queries/client-invites.queries';
 import * as membersQueries from '../database/queries/members.queries';
+import * as peopleQueries from '../database/queries/people.queries';
 import {
   PANIC_CREATED,
   type PanicCreatedEvent,
@@ -388,21 +389,21 @@ export class NotificationsService {
     const verb = this.accessVerb(payload.readerDirection);
     const title = 'Acesso facial';
 
-    const responsible =
-      await responsiblesQueries.findResponsibleByFaceIdAndClientId(
+    const responsibles =
+      await peopleQueries.listResponsiblesByFaceIdAndClientId(
         this.database.db,
         payload.faceId,
         payload.clientId,
       );
 
-    if (responsible) {
+    for (const responsible of responsibles) {
       const auths = await pickupQueries.pickupAuthFindActiveByLinkedResponsible(
         this.database.db,
         payload.clientId,
         responsible.id,
       );
       if (auths.length === 0) {
-        return;
+        continue;
       }
 
       const responsibleIds = [
@@ -414,7 +415,7 @@ export class NotificationsService {
       );
       const tokens = this.collectPushTokens(targets);
       if (tokens.length === 0) {
-        return;
+        continue;
       }
 
       const displayName = payload.personName?.trim() || responsible.name;
@@ -426,7 +427,6 @@ export class NotificationsService {
         faceId: String(payload.faceId),
         clientId: payload.clientId,
       });
-      return;
     }
 
     const pickupAuths = await pickupQueries.pickupAuthFindActiveByGuestFaceId(

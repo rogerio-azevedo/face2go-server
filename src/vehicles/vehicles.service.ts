@@ -8,7 +8,9 @@ import {
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
+import * as membersQueries from '../database/queries/members.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
+import * as peopleQueries from '../database/queries/people.queries';
 import * as vehicleQueries from '../database/queries/vehicles.queries';
 import type { VehicleWithDriverRow } from '../database/queries/vehicles.queries';
 import {
@@ -193,9 +195,129 @@ export class VehiclesService {
     );
   }
 
+  /** Copia veículos de outras escolas para vínculos locais da mesma pessoa (lazy backfill). */
+  private async reconcileCrossClientVehiclesForUser(
+    userId: string,
+    clientId: string,
+  ): Promise<void> {
+    const owners = await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+      this.database.db,
+      userId,
+      clientId,
+    );
+    const targetResponsibleId = owners.responsibleIds[0];
+    const targetMemberId = owners.memberIds[0];
+    if (!targetResponsibleId && !targetMemberId) return;
+
+    const sourceVehicles =
+      await vehicleQueries.vehicleListByUserIdExcludingClient(
+        this.database.db,
+        userId,
+        clientId,
+      );
+    if (sourceVehicles.length === 0) return;
+
+    const currentVehicles = await vehicleQueries.vehicleListForOwnerBonds(
+      this.database.db,
+      clientId,
+      owners.responsibleIds,
+      owners.memberIds,
+    );
+    const localPlates = new Set(
+      currentVehicles.map((v) => normalizeVehiclePlateCmp(v.plate)),
+    );
+
+    let driverName = 'Condutor';
+    if (targetResponsibleId) {
+      const r = await responsiblesQueries.getResponsibleById(
+        this.database.db,
+        targetResponsibleId,
+        clientId,
+      );
+      driverName = r?.name ?? driverName;
+    } else if (targetMemberId) {
+      const m = await membersQueries.getMemberById(
+        this.database.db,
+        targetMemberId,
+        clientId,
+      );
+      driverName = m?.name ?? driverName;
+    }
+
+    for (const source of sourceVehicles) {
+      const plateNorm = normalizeVehiclePlateCmp(source.plate);
+      if (localPlates.has(plateNorm)) continue;
+
+      const existing = await vehicleQueries.vehicleFindByPlateInClient(
+        this.database.db,
+        clientId,
+        source.plate,
+      );
+      if (existing) {
+        this.log.warn(
+          `Placa ${source.plate} já existe em clientId=${clientId} — skip cópia cross-client`,
+        );
+        continue;
+      }
+
+      try {
+        const row = await vehicleQueries.vehicleInsert(this.database.db, {
+          clientId,
+          responsibleId: targetResponsibleId ?? null,
+          memberId: targetResponsibleId ? null : targetMemberId,
+          plate: source.plate.trim().toUpperCase(),
+          brand: source.brand,
+          model: source.model,
+          color: source.color,
+        });
+        if (!row) continue;
+
+        await this.syncLprForVehicleRow(
+          { ...row, driverName },
+          clientId,
+          driverName,
+          `cross-client-vehicle userId=${userId}`,
+        );
+        localPlates.add(plateNorm);
+      } catch (e) {
+        if (isUniqueViolation(e)) continue;
+        this.log.warn(
+          `Falha ao copiar veículo ${source.plate} para clientId=${clientId}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+  }
+
   async listForResponsible(user: JwtPayload): Promise<VehicleWithDriverRow[]> {
     this.assertResponsibleJwt(user);
     const household = await this.householdResponsibleIds(user);
+
+    const self = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      user.responsibleId,
+      user.clientId,
+    );
+    if (self?.userId) {
+      await this.reconcileCrossClientVehiclesForUser(
+        self.userId,
+        user.clientId,
+      );
+      const owners = await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+        this.database.db,
+        self.userId,
+        user.clientId,
+      );
+      const responsibleIds = [
+        ...new Set([...household, ...owners.responsibleIds]),
+      ];
+      return vehicleQueries.vehicleListForOwnerBonds(
+        this.database.db,
+        user.clientId,
+        responsibleIds,
+        owners.memberIds,
+      );
+    }
+
     return vehicleQueries.vehicleListForHousehold(
       this.database.db,
       household,
@@ -617,6 +739,40 @@ export class VehiclesService {
 
   async listForMember(user: JwtPayload): Promise<VehicleWithDriverRow[]> {
     this.assertMemberJwt(user);
+
+    const self = await vehicleQueries.vehicleGetMemberName(
+      this.database.db,
+      user.memberId,
+      user.clientId,
+    );
+    const memberRow = await membersQueries.getMemberById(
+      this.database.db,
+      user.memberId,
+      user.clientId,
+    );
+
+    if (memberRow?.userId) {
+      await this.reconcileCrossClientVehiclesForUser(
+        memberRow.userId,
+        user.clientId,
+      );
+      const owners = await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+        this.database.db,
+        memberRow.userId,
+        user.clientId,
+      );
+      return vehicleQueries.vehicleListForOwnerBonds(
+        this.database.db,
+        user.clientId,
+        owners.responsibleIds,
+        [...new Set([user.memberId, ...owners.memberIds])],
+      );
+    }
+
+    if (!self) {
+      return [];
+    }
+
     return vehicleQueries.vehicleListForMember(
       this.database.db,
       user.memberId,

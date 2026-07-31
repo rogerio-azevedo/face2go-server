@@ -19,6 +19,7 @@ import {
   type ListPaginationParams,
 } from '../common/pagination';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
+import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 
 export type FaceEnrollmentStatusDto = {
@@ -67,6 +68,7 @@ export class FaceEnrollmentService {
     private readonly r2: R2StorageService,
     private readonly faceSync: FaceSyncService,
     private readonly accessTimeZone: AccessTimeZoneService,
+    private readonly personProfile: PersonProfileService,
   ) {}
 
   private assertResponsibleScope(user: JwtPayload): {
@@ -112,7 +114,7 @@ export class FaceEnrollmentService {
     responsibleId: string,
     clientId: string,
   ): Promise<FaceEnrollmentStatusDto> {
-    const row = await responsiblesQueries.getResponsibleWithFaceStatus(
+    let row = await responsiblesQueries.getResponsibleById(
       this.database.db,
       responsibleId,
       clientId,
@@ -120,6 +122,22 @@ export class FaceEnrollmentService {
     if (!row) {
       throw new NotFoundException('Responsável não encontrado.');
     }
+
+    if (row.userId) {
+      await this.personProfile.reconcileSharedFaceOnBond(
+        row.userId,
+        clientId,
+        { type: 'responsible', id: responsibleId, name: row.name },
+        { faceId: row.faceId, photoKey: row.photoKey },
+      );
+      row =
+        (await responsiblesQueries.getResponsibleById(
+          this.database.db,
+          responsibleId,
+          clientId,
+        )) ?? row;
+    }
+
     return {
       photoUrl: await this.optionalPhotoUrl(row.photoKey),
       faceId: row.faceId ?? null,
@@ -207,7 +225,12 @@ export class FaceEnrollmentService {
     const photoKey = `responsibles/${clientId}/${responsibleId}/face.jpg`;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
 
-    let faceId = responsible.faceId ?? null;
+    let faceId = await this.personProfile.resolveSharedFaceIdForEnrollment(
+      responsible.userId,
+      clientId,
+      responsible.faceId,
+      { responsibleId },
+    );
     if (faceId == null) {
       faceId = await registrationsQueries.bumpClientFaceCounter(
         this.database.db,
@@ -250,6 +273,21 @@ export class FaceEnrollmentService {
         deviceSyncError: sync.deviceSyncError,
       },
     );
+
+    if (responsible.userId) {
+      await this.personProfile.propagateFaceToSiblings(
+        responsible.userId,
+        clientId,
+        {
+          faceId,
+          photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        },
+        { responsibleId },
+      );
+    }
 
     return {
       photoUrl: await this.optionalPhotoUrl(photoKey),
@@ -466,6 +504,21 @@ export class FaceEnrollmentService {
       },
     );
 
+    if (responsible.userId && row.photoKey) {
+      await this.personProfile.propagateFaceToSiblings(
+        responsible.userId,
+        clientId,
+        {
+          faceId: row.faceId,
+          photoKey: row.photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        },
+        { responsibleId },
+      );
+    }
+
     return {
       photoUrl: await this.optionalPhotoUrl(row.photoKey),
       faceId: row.faceId,
@@ -663,7 +716,7 @@ export class FaceEnrollmentService {
     memberId: string,
     clientId: string,
   ): Promise<FaceEnrollmentStatusDto> {
-    const row = await membersQueries.getMemberWithFaceStatus(
+    let row = await membersQueries.getMemberWithFaceStatus(
       this.database.db,
       memberId,
       clientId,
@@ -671,6 +724,22 @@ export class FaceEnrollmentService {
     if (!row) {
       throw new NotFoundException('Membro não encontrado.');
     }
+
+    if (row.userId) {
+      await this.personProfile.reconcileSharedFaceOnBond(
+        row.userId,
+        clientId,
+        { type: 'member', id: memberId, name: row.name },
+        { faceId: row.faceId, photoKey: row.photoKey },
+      );
+      row =
+        (await membersQueries.getMemberWithFaceStatus(
+          this.database.db,
+          memberId,
+          clientId,
+        )) ?? row;
+    }
+
     return {
       photoUrl: await this.optionalPhotoUrl(row.photoKey),
       faceId: row.faceId ?? null,
@@ -716,7 +785,12 @@ export class FaceEnrollmentService {
     const photoKey = `members/${clientId}/${memberId}/face.jpg`;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
 
-    let faceId = member.faceId ?? null;
+    let faceId = await this.personProfile.resolveSharedFaceIdForEnrollment(
+      member.userId,
+      clientId,
+      member.faceId,
+      { memberId },
+    );
     if (faceId == null) {
       faceId = await registrationsQueries.bumpClientFaceCounter(
         this.database.db,
@@ -755,6 +829,21 @@ export class FaceEnrollmentService {
         deviceSyncError: sync.deviceSyncError,
       },
     );
+
+    if (member.userId) {
+      await this.personProfile.propagateFaceToSiblings(
+        member.userId,
+        clientId,
+        {
+          faceId,
+          photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        },
+        { memberId },
+      );
+    }
 
     return {
       photoUrl: await this.optionalPhotoUrl(photoKey),
@@ -816,6 +905,21 @@ export class FaceEnrollmentService {
         deviceSyncError: sync.deviceSyncError,
       },
     );
+
+    if (member.userId && member.photoKey) {
+      await this.personProfile.propagateFaceToSiblings(
+        member.userId,
+        clientId,
+        {
+          faceId: member.faceId,
+          photoKey: member.photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        },
+        { memberId },
+      );
+    }
 
     return this.memberFaceStatusDto(memberId, clientId);
   }

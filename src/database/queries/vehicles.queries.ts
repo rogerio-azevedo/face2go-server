@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, or, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne, or, type SQL } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { listHouseholdResponsibleIds } from './responsibles.queries';
@@ -244,6 +244,121 @@ const vehicleListSelect = {
       'driver_name',
     ),
 };
+
+/** Veículos de múltiplos vínculos (responsável e/ou membro) da mesma pessoa na escola. */
+export async function vehicleListForOwnerBonds(
+  db: AppDb,
+  clientId: string,
+  responsibleIds: string[],
+  memberIds: string[],
+): Promise<VehicleWithDriverRow[]> {
+  const ownerFilters: SQL[] = [];
+  if (responsibleIds.length > 0) {
+    ownerFilters.push(inArray(vehicles.responsibleId, responsibleIds));
+  }
+  if (memberIds.length > 0) {
+    ownerFilters.push(inArray(vehicles.memberId, memberIds));
+  }
+  if (ownerFilters.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select(vehicleListSelect)
+    .from(vehicles)
+    .leftJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+    .leftJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
+    .where(and(eq(vehicles.clientId, clientId), or(...ownerFilters)))
+    .orderBy(desc(vehicles.createdAt));
+
+  return rows;
+}
+
+function dedupeVehiclesByPlate(
+  rows: VehicleWithDriverRow[],
+): VehicleWithDriverRow[] {
+  const seen = new Set<string>();
+  const out: VehicleWithDriverRow[] = [];
+  for (const row of rows) {
+    const key = row.plate.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+/** Veículos da pessoa (userId) cadastrados em outras escolas. */
+export async function vehicleListByUserIdExcludingClient(
+  db: AppDb,
+  userId: string,
+  excludeClientId: string,
+): Promise<VehicleWithDriverRow[]> {
+  const [responsibleRows, memberRows] = await Promise.all([
+    db
+      .select(vehicleListSelect)
+      .from(vehicles)
+      .innerJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+      .leftJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
+      .where(
+        and(
+          eq(responsibles.userId, userId),
+          eq(responsibles.isActive, true),
+          ne(vehicles.clientId, excludeClientId),
+        ),
+      )
+      .orderBy(desc(vehicles.createdAt)),
+    db
+      .select(vehicleListSelect)
+      .from(vehicles)
+      .innerJoin(clientMembers, eq(vehicles.memberId, clientMembers.id))
+      .leftJoin(responsibles, eq(vehicles.responsibleId, responsibles.id))
+      .where(
+        and(
+          eq(clientMembers.userId, userId),
+          eq(clientMembers.isActive, true),
+          ne(vehicles.clientId, excludeClientId),
+        ),
+      )
+      .orderBy(desc(vehicles.createdAt)),
+  ]);
+
+  return dedupeVehiclesByPlate([...responsibleRows, ...memberRows]);
+}
+
+export async function vehicleFindByPlateInClient(
+  db: AppDb,
+  clientId: string,
+  plate: string,
+) {
+  const normalizedPlate = plate.trim().toUpperCase();
+  const [row] = await db
+    .select({ id: vehicles.id })
+    .from(vehicles)
+    .where(
+      and(eq(vehicles.clientId, clientId), eq(vehicles.plate, normalizedPlate)),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Primeira placa encontrada entre vínculos da mesma pessoa na escola. */
+export async function findVehiclePlateForPersonOwners(
+  db: AppDb,
+  clientId: string,
+  responsibleIds: string[],
+  memberIds: string[],
+): Promise<string | null> {
+  for (const responsibleId of responsibleIds) {
+    const plate = await findVehiclePlateForArrival(db, responsibleId, clientId);
+    if (plate) return plate;
+  }
+  for (const memberId of memberIds) {
+    const plate = await findVehiclePlateForMember(db, memberId, clientId);
+    if (plate) return plate;
+  }
+  return null;
+}
 
 export async function countVehiclesForClient(
   db: AppDb,

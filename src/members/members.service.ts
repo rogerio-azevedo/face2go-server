@@ -19,6 +19,7 @@ import { users } from '../database/schema';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { PersonLookupService } from '../people/person-lookup.service';
+import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
   buildPaginatedResult,
@@ -77,6 +78,7 @@ export class MembersService {
     private readonly r2Storage: R2StorageService,
     private readonly faceSync: FaceSyncService,
     private readonly personLookup: PersonLookupService,
+    private readonly personProfile: PersonProfileService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -416,6 +418,22 @@ export class MembersService {
         isActive: d.isActive,
       });
 
+      const bondRef = { type: 'member' as const, id: row.id, name: d.name };
+      const appliedSameClient =
+        await this.personProfile.applySharedFaceFromSameClient(
+          userId,
+          clientId,
+          bondRef,
+        );
+      if (!appliedSameClient) {
+        await this.personProfile.copyFaceFromOtherClientToBond(
+          userId,
+          clientId,
+          bondRef,
+          `create-member=${row.id}`,
+        );
+      }
+
       return this.getById(user, clientId, row.id);
     } catch {
       if (createdUser) {
@@ -614,6 +632,21 @@ export class MembersService {
       },
     );
 
+    if (row.userId) {
+      await this.personProfile.propagateFaceToSiblings(
+        row.userId,
+        clientId,
+        {
+          faceId: row.faceId,
+          photoKey: row.photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        },
+        { memberId },
+      );
+    }
+
     return {
       deviceSyncStatus: sync.deviceSyncStatus,
       deviceSyncError: sync.deviceSyncError,
@@ -645,16 +678,23 @@ export class MembersService {
     const logContext = `delete-member=${target.id}`;
 
     if (faceId != null) {
-      try {
-        await this.faceSync.removePersonFromReaders({
-          clientId,
-          faceId,
-          logContext,
-        });
-      } catch (e: unknown) {
-        this.log.warn(
-          `${logContext} remove face: ${e instanceof Error ? e.message : String(e)}`,
-        );
+      const removeFromReader = await this.personProfile.shouldRemoveFaceFromReader(
+        faceId,
+        clientId,
+        { memberId: target.id },
+      );
+      if (removeFromReader) {
+        try {
+          await this.faceSync.removePersonFromReaders({
+            clientId,
+            faceId,
+            logContext,
+          });
+        } catch (e: unknown) {
+          this.log.warn(
+            `${logContext} remove face: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
       }
     }
 
