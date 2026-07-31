@@ -18,6 +18,7 @@ import { users } from '../database/schema';
 import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
+import { PersonLookupService } from '../people/person-lookup.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
@@ -32,6 +33,8 @@ import {
   updateResponsibleStudentLinkSchema,
 } from '../validation/responsibles.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
+import * as usersQueries from '../database/queries/users.queries';
+import { normalizeCpf } from '../auth/utils/auth-identifiers';
 
 @Injectable()
 export class ResponsiblesService {
@@ -44,6 +47,7 @@ export class ResponsiblesService {
     private readonly faceSync: FaceSyncService,
     private readonly accessTimeZone: AccessTimeZoneService,
     private readonly lprPlateSync: LprPlateSyncService,
+    private readonly personLookup: PersonLookupService,
   ) {}
 
   async list(
@@ -118,6 +122,11 @@ export class ResponsiblesService {
     };
   }
 
+  async lookupPerson(user: JwtPayload, clientId: string, query: unknown) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    return this.personLookup.lookup(query);
+  }
+
   async create(user: JwtPayload, clientId: string, body: unknown) {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
     const parsed = createResponsibleSchema.safeParse(body);
@@ -126,36 +135,77 @@ export class ResponsiblesService {
     }
     const d = parsed.data;
 
-    const existingUser = await this.database.db.query.users.findFirst({
-      where: eq(users.email, d.email),
+    const resolved = await this.personLookup.resolvePerson({
+      cpf: d.document ?? undefined,
+      email: d.email,
     });
-    if (
-      existingUser &&
-      (await responsiblesQueries.getResponsibleByUserIdAndClient(
+    if (resolved.conflict) {
+      throw new ConflictException(resolved.conflict);
+    }
+
+    let userId: string;
+    let createdUser = false;
+
+    if (resolved.matched && resolved.userId) {
+      if (
+        await responsiblesQueries.getResponsibleByUserIdAndClient(
+          this.database.db,
+          resolved.userId,
+          clientId,
+        )
+      ) {
+        throw new ConflictException(
+          'Este e-mail já está vinculado a um responsável nesta escola.',
+        );
+      }
+      userId = resolved.userId;
+    } else {
+      if (!d.password) {
+        throw new BadRequestException(
+          resolved.matched
+            ? 'Informe a senha para criar a conta de login.'
+            : 'Informe a senha para o novo cadastro.',
+        );
+      }
+
+      const existingUser = await usersQueries.findUserByEmail(
         this.database.db,
-        existingUser.id,
-        clientId,
-      ))
-    ) {
-      throw new ConflictException(
-        'Este e-mail já está vinculado a um responsável nesta escola.',
+        d.email,
+      );
+      if (existingUser) {
+        throw new ConflictException('E-mail já cadastrado.');
+      }
+
+      userId = crypto.randomUUID();
+      createdUser = true;
+      const hashed = await bcrypt.hash(d.password, 10);
+      const normalizedCpf = d.document ? normalizeCpf(d.document) : null;
+
+      await this.database.db.insert(users).values({
+        id: userId,
+        email: d.email,
+        password: hashed,
+        name: d.name,
+        cpf: normalizedCpf?.length === 11 ? normalizedCpf : null,
+        role: 'member',
+        isActive: true,
+      });
+    }
+
+    if (!createdUser && d.document) {
+      await usersQueries.updateUserCpfIfMissing(
+        this.database.db,
+        userId,
+        d.document,
       );
     }
 
-    const userId = existingUser?.id ?? crypto.randomUUID();
-    const hashed =
-      existingUser?.password ?? (await bcrypt.hash(d.password, 10));
-
     try {
-      if (!existingUser) {
-        await this.database.db.insert(users).values({
-          id: userId,
-          email: d.email,
-          password: hashed,
-          name: d.name,
-          role: 'member',
-          isActive: true,
-        });
+      if (d.document) {
+        await this.personLookup.linkLegacyProfilesByDocument(
+          d.document,
+          userId,
+        );
       }
 
       return responsiblesQueries.insertResponsible(this.database.db, {
@@ -163,11 +213,11 @@ export class ResponsiblesService {
         userId,
         name: d.name,
         phone: d.phone ?? null,
-        document: d.document ?? null,
+        document: d.document ? normalizeCpf(d.document) : null,
         isActive: d.isActive,
       });
     } catch {
-      if (!existingUser) {
+      if (createdUser) {
         await this.database.db.delete(users).where(eq(users.id, userId));
       }
       throw new BadRequestException(

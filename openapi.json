@@ -2764,6 +2764,51 @@
         ]
       }
     },
+    "/clients/{clientId}/members/lookup": {
+      "get": {
+        "operationId": "MembersController_lookupMember",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cpf",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "email",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Buscar pessoa existente por CPF ou e-mail antes do cadastro",
+        "tags": [
+          "members"
+        ]
+      }
+    },
     "/clients/{clientId}/members/{memberId}": {
       "get": {
         "operationId": "MembersController_getOne",
@@ -3872,6 +3917,51 @@
           }
         ],
         "summary": "SSE — progresso da sincronização global de responsáveis (token na query)",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles/lookup": {
+      "get": {
+        "operationId": "ResponsiblesController_lookupResponsible",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cpf",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "email",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Buscar pessoa existente por CPF ou e-mail antes do cadastro",
         "tags": [
           "responsibles"
         ]
@@ -5690,7 +5780,7 @@
             "bearer": []
           }
         ],
-        "summary": "Aprovar face do convidado",
+        "summary": "Aprovar cadastro do convidado (face e veículo)",
         "tags": [
           "managed-responsibles"
         ]
@@ -5719,65 +5809,7 @@
             "bearer": []
           }
         ],
-        "summary": "Recusar face do convidado",
-        "tags": [
-          "managed-responsibles"
-        ]
-      }
-    },
-    "/responsible/responsible-invitations/{id}/approve-plate": {
-      "post": {
-        "operationId": "ManagedResponsiblesController_approvePlate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Aprovar placa do convidado",
-        "tags": [
-          "managed-responsibles"
-        ]
-      }
-    },
-    "/responsible/responsible-invitations/{id}/reject-plate": {
-      "post": {
-        "operationId": "ManagedResponsiblesController_rejectPlate",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Recusar placa do convidado",
+        "summary": "Recusar cadastro do convidado",
         "tags": [
           "managed-responsibles"
         ]

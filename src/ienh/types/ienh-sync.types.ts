@@ -17,6 +17,8 @@ export interface IenhSyncResult {
   responsiblesCreated: number;
   responsiblesUpdated: number;
   accountsCreated: number;
+  /** Contas não vinculadas por conflito CPF/e-mail (pessoas diferentes). */
+  accountsSkippedEmailConflict: number;
   classesCreated: number;
   classesMerged: number;
   classLinksCreated: number;

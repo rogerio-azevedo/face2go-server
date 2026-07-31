@@ -14,7 +14,13 @@ import {
 } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { responsibleStudents, responsibles, students, users } from '../schema';
+import {
+  clients,
+  responsibleStudents,
+  responsibles,
+  students,
+  users,
+} from '../schema';
 
 import * as studentClassesQueries from './student-classes.queries';
 import * as studentsQueries from './students.queries';
@@ -972,4 +978,119 @@ export async function listActiveShiftZoneIndicesForResponsible(
   }
 
   return [...indices].sort((a, b) => a - b);
+}
+
+export type ResponsibleProfileContextRow = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  userId: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  document: string | null;
+  isActive: boolean;
+};
+
+/** Apenas clientes escola — app e cadastro unificado são exclusivos desse domínio. */
+const schoolClientType = eq(clients.type, 'school');
+
+export async function findResponsiblesByDocumentGlobally(
+  db: AppDb,
+  document: string,
+): Promise<ResponsibleProfileContextRow[]> {
+  const normalized = document.replace(/\D/g, '');
+  if (normalized.length !== 11) return [];
+  const rows = await db
+    .select({
+      id: responsibles.id,
+      clientId: responsibles.clientId,
+      clientName: clients.name,
+      userId: responsibles.userId,
+      name: responsibles.name,
+      phone: responsibles.phone,
+      document: responsibles.document,
+      isActive: responsibles.isActive,
+      userEmail: users.email,
+    })
+    .from(responsibles)
+    .innerJoin(clients, eq(responsibles.clientId, clients.id))
+    .leftJoin(users, eq(responsibles.userId, users.id))
+    .where(and(eq(responsibles.document, normalized), schoolClientType))
+    .orderBy(asc(clients.name), asc(responsibles.name));
+
+  return rows.map((row) => ({
+    id: row.id,
+    clientId: row.clientId,
+    clientName: row.clientName,
+    userId: row.userId,
+    name: row.name,
+    email: row.userEmail,
+    phone: row.phone,
+    document: row.document,
+    isActive: row.isActive,
+  }));
+}
+
+export async function listResponsibleContextsByUserId(
+  db: AppDb,
+  userId: string,
+): Promise<ResponsibleProfileContextRow[]> {
+  const rows = await db
+    .select({
+      id: responsibles.id,
+      clientId: responsibles.clientId,
+      clientName: clients.name,
+      userId: responsibles.userId,
+      name: responsibles.name,
+      phone: responsibles.phone,
+      document: responsibles.document,
+      isActive: responsibles.isActive,
+      userEmail: users.email,
+    })
+    .from(responsibles)
+    .innerJoin(clients, eq(responsibles.clientId, clients.id))
+    .leftJoin(users, eq(responsibles.userId, users.id))
+    .where(and(eq(responsibles.userId, userId), schoolClientType))
+    .orderBy(asc(clients.name), asc(responsibles.name));
+
+  return rows.map((row) => ({
+    id: row.id,
+    clientId: row.clientId,
+    clientName: row.clientName,
+    userId: row.userId,
+    name: row.name,
+    email: row.userEmail,
+    phone: row.phone,
+    document: row.document,
+    isActive: row.isActive,
+  }));
+}
+
+export async function linkLegacyResponsiblesByDocument(
+  db: AppDb,
+  document: string,
+  userId: string,
+) {
+  const normalized = document.replace(/\D/g, '');
+  if (normalized.length !== 11) return;
+
+  const targets = await db
+    .select({ id: responsibles.id })
+    .from(responsibles)
+    .innerJoin(clients, eq(responsibles.clientId, clients.id))
+    .where(
+      and(
+        eq(responsibles.document, normalized),
+        isNull(responsibles.userId),
+        schoolClientType,
+      ),
+    );
+
+  if (targets.length === 0) return;
+
+  await db
+    .update(responsibles)
+    .set({ userId, updatedAt: new Date() })
+    .where(inArray(responsibles.id, targets.map((row) => row.id)));
 }

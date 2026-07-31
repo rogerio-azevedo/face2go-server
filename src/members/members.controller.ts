@@ -74,6 +74,19 @@ export class MembersController {
     });
   }
 
+  @Get('members/lookup')
+  @ApiOperation({
+    summary: 'Buscar pessoa existente por CPF ou e-mail antes do cadastro',
+  })
+  lookupMember(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Query('cpf') cpf?: string,
+    @Query('email') email?: string,
+  ) {
+    return this.membersService.lookupPerson(user, clientId, { cpf, email });
+  }
+
   @Post('members')
   @ApiOperation({ summary: 'Cadastrar membro com login (usuário + senha)' })
   create(

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
+import { PeopleModule } from '../people/people.module';
 import { StorageModule } from '../storage/storage.module';
 import { IenhFilialMappingService } from './ienh-filial-mapping.service';
 import { IenhSyncService } from './ienh-sync.service';
@@ -9,7 +10,7 @@ import { IenhService } from './ienh.service';
 import { TotvsIenhClient } from './totvs-ienh.client';
 
 @Module({
-  imports: [DatabaseModule, StorageModule],
+  imports: [DatabaseModule, PeopleModule, StorageModule],
   controllers: [IenhController],
   providers: [
     IenhService,

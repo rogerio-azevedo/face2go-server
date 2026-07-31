@@ -18,6 +18,7 @@ import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { PermissionsService } from '../permissions/permissions.service';
+import { PersonLookupService } from '../people/person-lookup.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
   buildPaginatedResult,
@@ -31,6 +32,8 @@ import {
   updateMemberSchema,
 } from '../validation/members.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
+import * as usersQueries from '../database/queries/users.queries';
+import { normalizeCpf } from '../auth/utils/auth-identifiers';
 
 function mapMemberRow(
   row: membersQueries.MemberWithRoleRow,
@@ -73,6 +76,7 @@ export class MembersService {
     private readonly permissionsService: PermissionsService,
     private readonly r2Storage: R2StorageService,
     private readonly faceSync: FaceSyncService,
+    private readonly personLookup: PersonLookupService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -300,6 +304,11 @@ export class MembersService {
     return mapMemberRow(row, await this.optionalPhotoUrl(row.photoKey));
   }
 
+  async lookupPerson(user: JwtPayload, clientId: string, query: unknown) {
+    await this.assertManageClient(user, clientId);
+    return this.personLookup.lookup(query);
+  }
+
   async create(user: JwtPayload, clientId: string, body: unknown) {
     const client = await this.assertManageClient(user, clientId);
     await membersQueries.seedDefaultRolesForClient(
@@ -322,36 +331,77 @@ export class MembersService {
       throw new BadRequestException('Função inválida ou inativa.');
     }
 
-    const existingUser = await this.database.db.query.users.findFirst({
-      where: eq(users.email, d.email),
+    const resolved = await this.personLookup.resolvePerson({
+      cpf: d.document ?? undefined,
+      email: d.email,
     });
-    if (
-      existingUser &&
-      (await membersQueries.getMemberByUserIdAndClient(
+    if (resolved.conflict) {
+      throw new ConflictException(resolved.conflict);
+    }
+
+    let userId: string;
+    let createdUser = false;
+
+    if (resolved.matched && resolved.userId) {
+      if (
+        await membersQueries.getMemberByUserIdAndClient(
+          this.database.db,
+          resolved.userId,
+          clientId,
+        )
+      ) {
+        throw new ConflictException(
+          'Este e-mail já está vinculado a um membro neste cliente.',
+        );
+      }
+      userId = resolved.userId;
+    } else {
+      if (!d.password) {
+        throw new BadRequestException(
+          resolved.matched
+            ? 'Informe a senha para criar a conta de login.'
+            : 'Informe a senha para o novo cadastro.',
+        );
+      }
+
+      const existingUser = await usersQueries.findUserByEmail(
         this.database.db,
-        existingUser.id,
-        clientId,
-      ))
-    ) {
-      throw new ConflictException(
-        'Este e-mail já está vinculado a um membro neste cliente.',
+        d.email,
+      );
+      if (existingUser) {
+        throw new ConflictException('E-mail já cadastrado.');
+      }
+
+      userId = crypto.randomUUID();
+      createdUser = true;
+      const hashed = await bcrypt.hash(d.password, 10);
+      const normalizedCpf = d.document ? normalizeCpf(d.document) : null;
+
+      await this.database.db.insert(users).values({
+        id: userId,
+        email: d.email,
+        password: hashed,
+        name: d.name,
+        cpf: normalizedCpf?.length === 11 ? normalizedCpf : null,
+        role: 'member',
+        isActive: true,
+      });
+    }
+
+    if (!createdUser && d.document) {
+      await usersQueries.updateUserCpfIfMissing(
+        this.database.db,
+        userId,
+        d.document,
       );
     }
 
-    const userId = existingUser?.id ?? crypto.randomUUID();
-    const hashed =
-      existingUser?.password ?? (await bcrypt.hash(d.password, 10));
-
     try {
-      if (!existingUser) {
-        await this.database.db.insert(users).values({
-          id: userId,
-          email: d.email,
-          password: hashed,
-          name: d.name,
-          role: 'member',
-          isActive: true,
-        });
+      if (d.document) {
+        await this.personLookup.linkLegacyProfilesByDocument(
+          d.document,
+          userId,
+        );
       }
 
       const row = await membersQueries.insertMember(this.database.db, {
@@ -361,14 +411,14 @@ export class MembersService {
         name: d.name,
         email: d.email,
         phone: d.phone ?? null,
-        document: d.document ?? null,
+        document: d.document ? normalizeCpf(d.document) : null,
         birthDate: d.birthDate ?? null,
         isActive: d.isActive,
       });
 
       return this.getById(user, clientId, row.id);
     } catch {
-      if (!existingUser) {
+      if (createdUser) {
         await this.database.db.delete(users).where(eq(users.id, userId));
       }
       throw new BadRequestException('Não foi possível cadastrar o membro.');

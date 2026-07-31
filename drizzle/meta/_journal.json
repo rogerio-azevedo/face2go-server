@@ -400,6 +400,13 @@
       "when": 1779250000000,
       "tag": "0056_drop_responsible_plate_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1779260000000,
+      "tag": "0057_unlink_non_school_member_logins",
+      "breakpoints": true
     }
   ]
 }

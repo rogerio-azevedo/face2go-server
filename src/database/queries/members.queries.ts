@@ -4,6 +4,7 @@ import {
   count,
   eq,
   ilike,
+  inArray,
   isNotNull,
   isNull,
   ne,
@@ -12,7 +13,7 @@ import {
 } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { clientMembers, clientRoles, users } from '../schema';
+import { clientMembers, clientRoles, clients, users } from '../schema';
 
 import { unaccentIlike } from './search-utils';
 
@@ -570,4 +571,134 @@ export async function listMembersWithPushTokenByClient(
       pushToken: row.pushToken,
       name: row.name,
     }));
+}
+
+export type MemberProfileContextRow = {
+  id: string;
+  clientId: string;
+  clientName: string;
+  userId: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  document: string | null;
+  isActive: boolean;
+};
+
+/** Apenas clientes escola — app e cadastro unificado são exclusivos desse domínio. */
+const schoolClientType = eq(clients.type, 'school');
+
+export async function findMembersByDocumentGlobally(
+  db: AppDb,
+  document: string,
+): Promise<MemberProfileContextRow[]> {
+  const normalized = document.replace(/\D/g, '');
+  if (normalized.length !== 11) return [];
+  return db
+    .select({
+      id: clientMembers.id,
+      clientId: clientMembers.clientId,
+      clientName: clients.name,
+      userId: clientMembers.userId,
+      name: clientMembers.name,
+      email: clientMembers.email,
+      phone: clientMembers.phone,
+      document: clientMembers.document,
+      isActive: clientMembers.isActive,
+    })
+    .from(clientMembers)
+    .innerJoin(clients, eq(clientMembers.clientId, clients.id))
+    .where(and(eq(clientMembers.document, normalized), schoolClientType))
+    .orderBy(asc(clients.name), asc(clientMembers.name));
+}
+
+export async function findMembersByEmailGlobally(
+  db: AppDb,
+  email: string,
+): Promise<MemberProfileContextRow[]> {
+  const normalized = email.trim().toLowerCase();
+  return db
+    .select({
+      id: clientMembers.id,
+      clientId: clientMembers.clientId,
+      clientName: clients.name,
+      userId: clientMembers.userId,
+      name: clientMembers.name,
+      email: clientMembers.email,
+      phone: clientMembers.phone,
+      document: clientMembers.document,
+      isActive: clientMembers.isActive,
+    })
+    .from(clientMembers)
+    .innerJoin(clients, eq(clientMembers.clientId, clients.id))
+    .where(and(eq(clientMembers.email, normalized), schoolClientType))
+    .orderBy(asc(clients.name), asc(clientMembers.name));
+}
+
+export async function listMemberContextsByUserId(
+  db: AppDb,
+  userId: string,
+): Promise<MemberProfileContextRow[]> {
+  return db
+    .select({
+      id: clientMembers.id,
+      clientId: clientMembers.clientId,
+      clientName: clients.name,
+      userId: clientMembers.userId,
+      name: clientMembers.name,
+      email: clientMembers.email,
+      phone: clientMembers.phone,
+      document: clientMembers.document,
+      isActive: clientMembers.isActive,
+    })
+    .from(clientMembers)
+    .innerJoin(clients, eq(clientMembers.clientId, clients.id))
+    .where(and(eq(clientMembers.userId, userId), schoolClientType))
+    .orderBy(asc(clients.name), asc(clientMembers.name));
+}
+
+export async function linkLegacyMembersByDocument(
+  db: AppDb,
+  document: string,
+  userId: string,
+) {
+  const normalized = document.replace(/\D/g, '');
+  if (normalized.length !== 11) return;
+
+  const targets = await db
+    .select({ id: clientMembers.id })
+    .from(clientMembers)
+    .innerJoin(clients, eq(clientMembers.clientId, clients.id))
+    .where(
+      and(
+        eq(clientMembers.document, normalized),
+        isNull(clientMembers.userId),
+        schoolClientType,
+      ),
+    );
+
+  if (targets.length === 0) return;
+
+  await db
+    .update(clientMembers)
+    .set({ userId, updatedAt: new Date() })
+    .where(inArray(clientMembers.id, targets.map((row) => row.id)));
+}
+
+/** Remove login de membros em clientes que não são escola (correção de vínculo indevido). */
+export async function unlinkNonSchoolMemberLogins(db: AppDb) {
+  const rows = await db
+    .select({ id: clientMembers.id })
+    .from(clientMembers)
+    .innerJoin(clients, eq(clientMembers.clientId, clients.id))
+    .where(and(isNotNull(clientMembers.userId), ne(clients.type, 'school')));
+
+  if (rows.length === 0) return 0;
+
+  await db
+    .update(clientMembers)
+    .set({ userId: null, updatedAt: new Date() })
+    .where(inArray(clientMembers.id, rows.map((row) => row.id)));
+
+  return rows.length;
 }

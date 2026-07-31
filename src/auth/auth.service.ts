@@ -244,7 +244,11 @@ export class AuthService implements AuthServiceContract {
       .innerJoin(clients, eq(responsibles.clientId, clients.id))
       .innerJoin(companies, eq(clients.companyId, companies.id))
       .where(
-        and(eq(responsibles.userId, userId), eq(responsibles.isActive, true)),
+        and(
+          eq(responsibles.userId, userId),
+          eq(responsibles.isActive, true),
+          eq(clients.type, 'school'),
+        ),
       );
 
     for (const link of responsibleLinks) {
@@ -283,7 +287,11 @@ export class AuthService implements AuthServiceContract {
       .innerJoin(clients, eq(clientMembers.clientId, clients.id))
       .innerJoin(companies, eq(clients.companyId, companies.id))
       .where(
-        and(eq(clientMembers.userId, userId), eq(clientMembers.isActive, true)),
+        and(
+          eq(clientMembers.userId, userId),
+          eq(clientMembers.isActive, true),
+          eq(clients.type, 'school'),
+        ),
       );
 
     for (const link of memberLinks) {

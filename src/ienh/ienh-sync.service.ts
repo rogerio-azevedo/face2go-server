@@ -5,16 +5,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
 
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
+import * as usersQueries from '../database/queries/users.queries';
 import * as responsibleStudentsQueries from '../database/queries/responsible-students.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as schoolClassQueries from '../database/queries/school-classes.queries';
 import * as studentClassesQueries from '../database/queries/student-classes.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import { users } from '../database/schema';
+import { PersonLookupService } from '../people/person-lookup.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import {
   syncFromSnapshotSchema,
@@ -69,6 +70,7 @@ export class IenhSyncService {
     private readonly database: DatabaseService,
     private readonly ienhService: IenhService,
     private readonly r2Storage: R2StorageService,
+    private readonly personLookup: PersonLookupService,
   ) {}
 
   async runSyncForCompany(
@@ -254,6 +256,7 @@ export class IenhSyncService {
       responsiblesCreated: 0,
       responsiblesUpdated: 0,
       accountsCreated: 0,
+      accountsSkippedEmailConflict: 0,
       classesCreated: 0,
       classesMerged: 0,
       classLinksCreated: 0,
@@ -785,6 +788,7 @@ export class IenhSyncService {
       clientId,
       responsibleId,
       responsibleCacheKey: cacheKey,
+      document,
       name,
       side,
       userId,
@@ -802,6 +806,7 @@ export class IenhSyncService {
     clientId: string;
     responsibleId: string;
     responsibleCacheKey: string;
+    document: string;
     name: string;
     side: 'mother' | 'father';
     userId: string | null;
@@ -814,6 +819,7 @@ export class IenhSyncService {
       clientId,
       responsibleId,
       responsibleCacheKey,
+      document,
       name,
       side,
       userId: knownUserId,
@@ -824,18 +830,12 @@ export class IenhSyncService {
     const isMother = side === 'mother';
     const emailRaw = isMother ? record.EMAILMAE : record.EMAILPAI;
     const email = emailRaw?.trim().toLowerCase() || null;
-    if (!email) return knownUserId;
 
     if (knownUserId) return knownUserId;
 
-    let inflight = accountCreationInflight.get(email);
+    let inflight = accountCreationInflight.get(responsibleCacheKey);
     if (!inflight) {
       inflight = (async () => {
-        const emailTaken = await this.database.db.query.users.findFirst({
-          where: eq(users.email, email),
-        });
-        if (emailTaken) return;
-
         const fresh = await responsiblesQueries.getResponsibleById(
           this.database.db,
           responsibleId,
@@ -847,6 +847,41 @@ export class IenhSyncService {
           return;
         }
 
+        const resolved = await this.personLookup.resolvePerson({
+          cpf: document,
+          email: email ?? undefined,
+        });
+
+        if (resolved.conflict) {
+          result.accountsSkippedEmailConflict += 1;
+          this.logger.warn(
+            `IENH sync: conflito CPF/e-mail ao vincular responsável ${responsibleId} ` +
+              `(CPF ${document}, e-mail ${email ?? '—'}): ${resolved.conflict}`,
+          );
+          return;
+        }
+
+        const setLinkedUserId = (linkedUserId: string) => {
+          const entry = responsibleCache.get(responsibleCacheKey);
+          if (entry) entry.userId = linkedUserId;
+        };
+
+        if (resolved.userId) {
+          await this.personLookup.linkLegacyProfilesByDocument(
+            document,
+            resolved.userId,
+          );
+          await usersQueries.updateUserCpfIfMissing(
+            this.database.db,
+            resolved.userId,
+            document,
+          );
+          setLinkedUserId(resolved.userId);
+          return;
+        }
+
+        if (!email) return;
+
         const newUserId = crypto.randomUUID();
         try {
           await this.database.db.insert(users).values({
@@ -854,18 +889,16 @@ export class IenhSyncService {
             email,
             password: DEFAULT_RESPONSIBLE_PASSWORD_HASH,
             name,
+            cpf: document,
             role: 'member',
             isActive: true,
           });
-          await responsiblesQueries.linkUserToResponsible(
-            this.database.db,
-            responsibleId,
-            clientId,
+          await this.personLookup.linkLegacyProfilesByDocument(
+            document,
             newUserId,
           );
           result.accountsCreated += 1;
-          const entry = responsibleCache.get(responsibleCacheKey);
-          if (entry) entry.userId = newUserId;
+          setLinkedUserId(newUserId);
         } catch (err: unknown) {
           const afterRace = await responsiblesQueries.getResponsibleById(
             this.database.db,
@@ -873,14 +906,13 @@ export class IenhSyncService {
             clientId,
           );
           if (afterRace?.userId) {
-            const entry = responsibleCache.get(responsibleCacheKey);
-            if (entry) entry.userId = afterRace.userId;
+            setLinkedUserId(afterRace.userId);
             return;
           }
           throw err;
         }
       })();
-      accountCreationInflight.set(email, inflight);
+      accountCreationInflight.set(responsibleCacheKey, inflight);
     }
 
     await inflight;

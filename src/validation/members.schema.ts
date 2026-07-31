@@ -30,9 +30,14 @@ export const createMemberSchema = z.object({
   roleId: z.uuid('Selecione a função.'),
   email: z.email('E-mail inválido.'),
   password: z
-    .string()
-    .min(8, 'Senha deve ter pelo menos 8 caracteres.')
-    .max(128),
+    .union([
+      z.literal(''),
+      z
+        .string()
+        .min(8, 'Senha deve ter pelo menos 8 caracteres.')
+        .max(128),
+    ])
+    .optional(),
   name: z.string().trim().min(1, 'Informe o nome.').max(255),
   phone: z.string().trim().max(32).nullable().optional(),
   document: z.string().trim().max(32).nullable().optional(),
@@ -56,9 +61,13 @@ export const updateMemberSchema = z.object({
     .nullable()
     .optional(),
   password: z
-    .string()
-    .min(8, 'Senha deve ter pelo menos 8 caracteres.')
-    .max(128)
+    .union([
+      z.literal(''),
+      z
+        .string()
+        .min(8, 'Senha deve ter pelo menos 8 caracteres.')
+        .max(128),
+    ])
     .optional(),
   isActive: z.boolean().optional(),
   canEnrollStudentFace: z.boolean().optional(),

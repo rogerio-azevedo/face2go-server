@@ -94,6 +94,22 @@ export class ResponsiblesController {
     return this.responsiblesService.create(user, clientId, body);
   }
 
+  @Get('lookup')
+  @ApiOperation({
+    summary: 'Buscar pessoa existente por CPF ou e-mail antes do cadastro',
+  })
+  lookupResponsible(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Query('cpf') cpf?: string,
+    @Query('email') email?: string,
+  ) {
+    return this.responsiblesService.lookupPerson(user, clientId, {
+      cpf,
+      email,
+    });
+  }
+
   @Get(':responsibleId/students')
   @ApiOperation({
     summary: 'Listar alunos vinculados ao responsável',
