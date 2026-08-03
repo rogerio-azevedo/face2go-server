@@ -816,6 +816,10 @@ export class FaceEnrollmentService {
       faceId,
       name: member.name,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
+        clientId,
+        memberId,
+      ),
       logContext: `member=${memberId}`,
     });
 
@@ -892,6 +896,10 @@ export class FaceEnrollmentService {
       faceId: member.faceId,
       name: member.name,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
+        clientId,
+        memberId,
+      ),
       logContext: `member-resync=${memberId}`,
     });
 

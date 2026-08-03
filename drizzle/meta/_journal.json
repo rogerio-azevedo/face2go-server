@@ -407,6 +407,13 @@
       "when": 1779260000000,
       "tag": "0057_unlink_non_school_member_logins",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1779270000000,
+      "tag": "0058_client_members_shift_id",
+      "breakpoints": true
     }
   ]
 }

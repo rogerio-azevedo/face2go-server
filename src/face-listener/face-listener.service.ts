@@ -259,7 +259,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
     if (valid.length === 0) {
       this.logger.warn(
-        'Nenhum leitor Intelbras ativo com credenciais — streams não iniciados',
+        'Nenhum leitor ativo com credenciais — streams não iniciados',
       );
       return;
     }

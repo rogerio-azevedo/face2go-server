@@ -13,10 +13,12 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
+import * as shiftsQueries from '../database/queries/shifts.queries';
 import * as vehicleQueries from '../database/queries/vehicles.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { PersonLookupService } from '../people/person-lookup.service';
 import { PersonProfileService } from '../people/person-profile.service';
@@ -46,6 +48,8 @@ function mapMemberRow(
     roleId: row.roleId,
     roleName: row.roleName,
     roleSlug: row.roleSlug,
+    shiftId: row.shiftId,
+    shiftName: row.shiftName,
     userId: row.userId,
     name: row.name,
     email: row.email,
@@ -77,6 +81,7 @@ export class MembersService {
     private readonly permissionsService: PermissionsService,
     private readonly r2Storage: R2StorageService,
     private readonly faceSync: FaceSyncService,
+    private readonly accessTimeZone: AccessTimeZoneService,
     private readonly personLookup: PersonLookupService,
     private readonly personProfile: PersonProfileService,
   ) {}
@@ -333,6 +338,17 @@ export class MembersService {
       throw new BadRequestException('Função inválida ou inativa.');
     }
 
+    if (d.shiftId) {
+      const shift = await shiftsQueries.getShiftById(
+        this.database.db,
+        d.shiftId,
+        clientId,
+      );
+      if (!shift || !shift.isActive) {
+        throw new BadRequestException('Horário inválido ou inativo.');
+      }
+    }
+
     const resolved = await this.personLookup.resolvePerson({
       cpf: d.document ?? undefined,
       email: d.email,
@@ -409,6 +425,7 @@ export class MembersService {
       const row = await membersQueries.insertMember(this.database.db, {
         clientId,
         roleId: d.roleId,
+        shiftId: d.shiftId ?? null,
         userId,
         name: d.name,
         email: d.email,
@@ -464,6 +481,7 @@ export class MembersService {
       d.password === undefined &&
       d.isActive === undefined &&
       d.roleId === undefined &&
+      d.shiftId === undefined &&
       d.canEnrollStudentFace === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
@@ -486,6 +504,17 @@ export class MembersService {
       );
       if (!role || !role.isActive) {
         throw new BadRequestException('Função inválida ou inativa.');
+      }
+    }
+
+    if (d.shiftId) {
+      const shift = await shiftsQueries.getShiftById(
+        this.database.db,
+        d.shiftId,
+        clientId,
+      );
+      if (!shift || !shift.isActive) {
+        throw new BadRequestException('Horário inválido ou inativo.');
       }
     }
 
@@ -552,6 +581,7 @@ export class MembersService {
 
     await membersQueries.updateMember(this.database.db, memberId, clientId, {
       ...(d.roleId !== undefined ? { roleId: d.roleId } : {}),
+      ...(d.shiftId !== undefined ? { shiftId: d.shiftId } : {}),
       ...(d.name !== undefined ? { name: d.name } : {}),
       ...(d.email !== undefined ? { email: d.email } : {}),
       ...(d.phone !== undefined ? { phone: d.phone } : {}),
@@ -618,6 +648,10 @@ export class MembersService {
       faceId: row.faceId,
       name: row.name,
       imageBuffer: buffer,
+      timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
+        clientId,
+        memberId,
+      ),
       logContext: `member-sync=${memberId}`,
     });
 

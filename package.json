@@ -26,6 +26,7 @@
     "db:merge-duplicate-school-classes": "tsx src/scripts/merge-duplicate-school-classes.ts",
     "db:reconcile-shared-faces": "tsx src/scripts/reconcile-shared-person-faces.ts",
     "db:reconcile-shared-vehicles": "tsx src/scripts/reconcile-shared-vehicles.ts",
+    "db:backfill-member-shifts": "tsx src/scripts/backfill-member-shifts.ts",
     "openapi:generate": "nest build && tsx scripts/generate-openapi.ts",
     "openapi:export": "curl -sf ${OPENAPI_URL:-http://localhost:6200/api/docs-json} -o openapi.json"
   },

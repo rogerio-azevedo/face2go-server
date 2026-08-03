@@ -13,7 +13,7 @@ import {
 } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { clientMembers, clientRoles, clients, users } from '../schema';
+import { clientMembers, clientRoles, clients, shifts, users } from '../schema';
 
 import { unaccentIlike } from './search-utils';
 
@@ -30,6 +30,7 @@ export type ClientMemberRow = typeof clientMembers.$inferSelect;
 export type MemberWithRoleRow = ClientMemberRow & {
   roleName: string;
   roleSlug: string;
+  shiftName: string | null;
   email: string | null;
 };
 
@@ -99,10 +100,12 @@ export async function listMembersByClientWithRole(
       member: clientMembers,
       roleName: clientRoles.name,
       roleSlug: clientRoles.slug,
+      shiftName: shifts.name,
       email: users.email,
     })
     .from(clientMembers)
     .innerJoin(clientRoles, eq(clientMembers.roleId, clientRoles.id))
+    .leftJoin(shifts, eq(clientMembers.shiftId, shifts.id))
     .leftJoin(users, eq(clientMembers.userId, users.id))
     .where(memberClientWhere(clientId, options))
     .orderBy(asc(clientMembers.name));
@@ -115,6 +118,7 @@ export async function listMembersByClientWithRole(
     ...r.member,
     roleName: r.roleName,
     roleSlug: r.roleSlug,
+    shiftName: r.shiftName ?? null,
     email: r.email ?? r.member.email ?? null,
   }));
 }
@@ -253,10 +257,12 @@ export async function getMemberWithRoleById(
       member: clientMembers,
       roleName: clientRoles.name,
       roleSlug: clientRoles.slug,
+      shiftName: shifts.name,
       email: users.email,
     })
     .from(clientMembers)
     .innerJoin(clientRoles, eq(clientMembers.roleId, clientRoles.id))
+    .leftJoin(shifts, eq(clientMembers.shiftId, shifts.id))
     .leftJoin(users, eq(clientMembers.userId, users.id))
     .where(
       and(eq(clientMembers.id, memberId), eq(clientMembers.clientId, clientId)),
@@ -268,6 +274,7 @@ export async function getMemberWithRoleById(
     ...row.member,
     roleName: row.roleName,
     roleSlug: row.roleSlug,
+    shiftName: row.shiftName ?? null,
     email: row.email ?? row.member.email ?? null,
   };
 }
@@ -316,6 +323,7 @@ export async function insertMember(
   input: {
     clientId: string;
     roleId: string;
+    shiftId?: string | null;
     userId?: string | null;
     registrationId?: string | null;
     name: string;
@@ -337,6 +345,7 @@ export async function insertMember(
     .values({
       clientId: input.clientId,
       roleId: input.roleId,
+      shiftId: input.shiftId ?? null,
       userId: input.userId ?? null,
       registrationId: input.registrationId ?? null,
       name: input.name,
@@ -365,6 +374,7 @@ export async function updateMember(
     Pick<
       ClientMemberRow,
       | 'roleId'
+      | 'shiftId'
       | 'name'
       | 'email'
       | 'phone'

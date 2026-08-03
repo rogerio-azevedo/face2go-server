@@ -16,6 +16,7 @@ import { users } from './auth';
 import { clients } from './clients';
 import { deviceSyncStatusEnum } from './registrations';
 import { registrations } from './registrations';
+import { shifts } from './shifts';
 
 export const clientRoles = pgTable(
   'client_roles',
@@ -45,6 +46,10 @@ export const clientMembers = pgTable(
     roleId: uuid('role_id')
       .notNull()
       .references(() => clientRoles.id, { onDelete: 'restrict' }),
+    /** Horário de acesso nos leitores (entidade `shifts`). */
+    shiftId: uuid('shift_id').references(() => shifts.id, {
+      onDelete: 'set null',
+    }),
     userId: text('user_id').references(() => users.id, {
       onDelete: 'cascade',
     }),
@@ -101,6 +106,10 @@ export const clientMembersRelations = relations(clientMembers, ({ one }) => ({
   role: one(clientRoles, {
     fields: [clientMembers.roleId],
     references: [clientRoles.id],
+  }),
+  shift: one(shifts, {
+    fields: [clientMembers.shiftId],
+    references: [shifts.id],
   }),
   user: one(users, {
     fields: [clientMembers.userId],

@@ -30,6 +30,7 @@ export type GlobalFaceSyncProgressEvent =
   | { type: 'start'; total: number }
   | {
       type: 'progress';
+      entities: SyncEntity[];
       processed: number;
       synced: number;
       failed: number;
@@ -183,8 +184,7 @@ export class GlobalFaceSyncService {
     if (readers.length === 0) {
       emit({
         type: 'error',
-        message:
-          'Nenhum leitor Intelbras ativo com credenciais para este cliente.',
+        message: 'Nenhum leitor ativo com credenciais para este cliente.',
       });
       return;
     }
@@ -278,7 +278,7 @@ export class GlobalFaceSyncService {
           });
         }
 
-        emit({ type: 'progress', processed, synced, failed, total });
+        emit({ type: 'progress', entities, processed, synced, failed, total });
       }
 
       emit({ type: 'done', synced, failed, total });

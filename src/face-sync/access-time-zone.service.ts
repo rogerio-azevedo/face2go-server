@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
+import * as membersQueries from '../database/queries/members.queries';
 import * as readersQueries from '../database/queries/readers.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as shiftsQueries from '../database/queries/shifts.queries';
@@ -227,6 +228,33 @@ export class AccessTimeZoneService {
 
     const sorted = [...zoneIndices].sort((a, b) => a - b);
     return sorted.length > 0 ? sorted : this.defaultTimeSections();
+  }
+
+  /** Turno vinculado ao membro; fallback 24/7 quando ausente. */
+  async resolveMemberTimeSections(
+    clientId: string,
+    memberId: string,
+  ): Promise<number[]> {
+    const member = await membersQueries.getMemberById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!member?.shiftId) {
+      return this.defaultTimeSections();
+    }
+
+    const shift = await shiftsQueries.getShiftById(
+      this.database.db,
+      member.shiftId,
+      clientId,
+    );
+    if (!shift) {
+      return this.defaultTimeSections();
+    }
+
+    const zoneIndex = await this.ensureShiftZoneIndex(clientId, shift);
+    return [zoneIndex];
   }
 
   /**

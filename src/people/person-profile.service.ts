@@ -113,7 +113,10 @@ export class PersonProfileService {
             clientId,
             target.id,
           )
-        : [];
+        : await this.accessTimeZone.resolveMemberTimeSections(
+            clientId,
+            target.id,
+          );
 
     const sync = await this.faceSync.syncPersonOnReaders({
       clientId,

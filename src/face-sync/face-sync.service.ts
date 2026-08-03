@@ -35,12 +35,12 @@ import {
 export type FaceSyncProgressEvent =
   | { type: 'start'; total: number }
   | {
-      type: 'item';
-      registrationId: string;
-      name: string | null;
-      ok: boolean;
-      error?: string;
-    }
+    type: 'item';
+    registrationId: string;
+    name: string | null;
+    ok: boolean;
+    error?: string;
+  }
   | { type: 'done' }
   | { type: 'error'; message: string };
 
@@ -54,7 +54,7 @@ export class FaceSyncService {
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly permissionsService: PermissionsService,
     private readonly accessTimeZone: AccessTimeZoneService,
-  ) {}
+  ) { }
 
   private ensureCompany(user: JwtPayload): string {
     const companyId = user.companyId ?? undefined;
@@ -217,7 +217,7 @@ export class FaceSyncService {
         return {
           deviceSyncStatus: 'sync_failed',
           deviceSyncError:
-            'Nenhum leitor Intelbras ativo com credenciais para este cliente.',
+            'Nenhum leitor ativo com credenciais para este cliente.',
         };
       }
 

@@ -47,6 +47,7 @@ export const createMemberSchema = z.object({
     .nullable()
     .optional(),
   isActive: z.boolean().optional().default(true),
+  shiftId: z.uuid().nullable().optional(),
 });
 
 export const updateMemberSchema = z.object({
@@ -71,6 +72,7 @@ export const updateMemberSchema = z.object({
     .optional(),
   isActive: z.boolean().optional(),
   canEnrollStudentFace: z.boolean().optional(),
+  shiftId: z.uuid().nullable().optional(),
 });
 
 export const createMemberVehicleSchema = z.object({
