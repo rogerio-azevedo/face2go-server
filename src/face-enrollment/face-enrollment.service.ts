@@ -282,7 +282,8 @@ export class FaceEnrollmentService {
           faceId,
           photoKey,
           deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
           deviceSyncError: sync.deviceSyncError,
         },
         { responsibleId },
@@ -512,7 +513,8 @@ export class FaceEnrollmentService {
           faceId: row.faceId,
           photoKey: row.photoKey,
           deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
           deviceSyncError: sync.deviceSyncError,
         },
         { responsibleId },
@@ -842,7 +844,8 @@ export class FaceEnrollmentService {
           faceId,
           photoKey,
           deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
           deviceSyncError: sync.deviceSyncError,
         },
         { memberId },
@@ -922,7 +925,8 @@ export class FaceEnrollmentService {
           faceId: member.faceId,
           photoKey: member.photoKey,
           deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
           deviceSyncError: sync.deviceSyncError,
         },
         { memberId },

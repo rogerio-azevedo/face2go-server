@@ -12,15 +12,17 @@ describe('AuthService', () => {
   let whereMember: jest.Mock;
 
   beforeEach(async () => {
-    const limit = jest.fn().mockResolvedValue([
-      { id: 'user-1', isActive: true, role: 'member' },
-    ]);
+    const limit = jest
+      .fn()
+      .mockResolvedValue([{ id: 'user-1', isActive: true, role: 'member' }]);
     const whereUser = jest.fn().mockReturnValue({ limit });
     const fromUser = jest.fn().mockReturnValue({ where: whereUser });
 
     const whereCompany = jest.fn().mockResolvedValue([]);
     const innerJoinCompany = jest.fn().mockReturnValue({ where: whereCompany });
-    const fromCompany = jest.fn().mockReturnValue({ innerJoin: innerJoinCompany });
+    const fromCompany = jest
+      .fn()
+      .mockReturnValue({ innerJoin: innerJoinCompany });
 
     const whereClientUser = jest.fn().mockResolvedValue([]);
     const innerJoinClientUserCompany = jest
@@ -29,7 +31,9 @@ describe('AuthService', () => {
     const innerJoinClientUser = jest
       .fn()
       .mockReturnValue({ innerJoin: innerJoinClientUserCompany });
-    const fromClientUser = jest.fn().mockReturnValue({ innerJoin: innerJoinClientUser });
+    const fromClientUser = jest
+      .fn()
+      .mockReturnValue({ innerJoin: innerJoinClientUser });
 
     whereResponsible = jest.fn().mockResolvedValue([]);
     const innerJoinResponsibleCompany = jest
@@ -38,17 +42,23 @@ describe('AuthService', () => {
     const innerJoinResponsible = jest
       .fn()
       .mockReturnValue({ innerJoin: innerJoinResponsibleCompany });
-    const fromResponsible = jest.fn().mockReturnValue({ innerJoin: innerJoinResponsible });
+    const fromResponsible = jest
+      .fn()
+      .mockReturnValue({ innerJoin: innerJoinResponsible });
 
     whereMember = jest.fn().mockResolvedValue([]);
-    const innerJoinMemberCompany = jest.fn().mockReturnValue({ where: whereMember });
+    const innerJoinMemberCompany = jest
+      .fn()
+      .mockReturnValue({ where: whereMember });
     const innerJoinMemberClient = jest
       .fn()
       .mockReturnValue({ innerJoin: innerJoinMemberCompany });
     const innerJoinMemberRole = jest
       .fn()
       .mockReturnValue({ innerJoin: innerJoinMemberClient });
-    const fromMember = jest.fn().mockReturnValue({ innerJoin: innerJoinMemberRole });
+    const fromMember = jest
+      .fn()
+      .mockReturnValue({ innerJoin: innerJoinMemberRole });
 
     let selectCall = 0;
     const db = {

@@ -674,7 +674,8 @@ export class MembersService {
           faceId: row.faceId,
           photoKey: row.photoKey,
           deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
           deviceSyncError: sync.deviceSyncError,
         },
         { memberId },
@@ -712,11 +713,10 @@ export class MembersService {
     const logContext = `delete-member=${target.id}`;
 
     if (faceId != null) {
-      const removeFromReader = await this.personProfile.shouldRemoveFaceFromReader(
-        faceId,
-        clientId,
-        { memberId: target.id },
-      );
+      const removeFromReader =
+        await this.personProfile.shouldRemoveFaceFromReader(faceId, clientId, {
+          memberId: target.id,
+        });
       if (removeFromReader) {
         try {
           await this.faceSync.removePersonFromReaders({

@@ -38,7 +38,9 @@ const FUNCIONARIOS_SHIFT_NAME = 'Funcionários';
 
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
-const clientIdArg = args.find((a) => a.startsWith('--client-id='))?.split('=')[1];
+const clientIdArg = args
+  .find((a) => a.startsWith('--client-id='))
+  ?.split('=')[1];
 
 function runningFromDist(): boolean {
   return __dirname.includes(`${join('dist', 'scripts')}`);
@@ -70,11 +72,7 @@ function reexecFromDistBuild(): void {
 class BackfillMemberShiftsScriptModule {}
 
 function normalizeShiftName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '');
+  return name.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
 }
 
 function findShiftByName(
@@ -158,7 +156,11 @@ async function main() {
   const db = drizzle(sql, { schema }) as AppDb;
 
   const [client] = await db
-    .select({ id: schema.clients.id, name: schema.clients.name, type: schema.clients.type })
+    .select({
+      id: schema.clients.id,
+      name: schema.clients.name,
+      type: schema.clients.type,
+    })
     .from(schema.clients)
     .where(eq(schema.clients.id, clientIdArg))
     .limit(1);
@@ -182,7 +184,10 @@ async function main() {
     process.exit(1);
   }
 
-  const members = await membersQueries.listMembersByClientWithRole(db, clientIdArg);
+  const members = await membersQueries.listMembersByClientWithRole(
+    db,
+    clientIdArg,
+  );
 
   console.log(
     `Cliente: ${client.name} (${client.id})\n` +

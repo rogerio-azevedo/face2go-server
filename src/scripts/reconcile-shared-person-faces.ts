@@ -52,7 +52,9 @@ type ClientGroup = {
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
 const crossClient = !args.includes('--no-cross-client');
-const userIdFilter = args.find((a) => a.startsWith('--user-id='))?.split('=')[1];
+const userIdFilter = args
+  .find((a) => a.startsWith('--user-id='))
+  ?.split('=')[1];
 
 function runningFromDist(): boolean {
   return __dirname.includes(`${join('dist', 'scripts')}`);
@@ -102,7 +104,7 @@ function bondRef(bond: PersonBond): {
 
 function pickCrossClientTarget(bonds: PersonBond[]): PersonBond {
   const responsible = bonds.find((b) => b.kind === 'responsible');
-  return responsible ?? bonds[0]!;
+  return responsible ?? bonds[0];
 }
 
 function findSharedFaceInGroup(group: ClientGroup): PersonBond | null {
@@ -147,7 +149,9 @@ async function loadPersonBonds(db: AppDb): Promise<PersonBond[]> {
         and(
           eq(schema.responsibles.isActive, true),
           isNotNull(schema.responsibles.userId),
-          userIdFilter ? eq(schema.responsibles.userId, userIdFilter) : undefined,
+          userIdFilter
+            ? eq(schema.responsibles.userId, userIdFilter)
+            : undefined,
         ),
       ),
     db
@@ -164,7 +168,9 @@ async function loadPersonBonds(db: AppDb): Promise<PersonBond[]> {
         and(
           eq(schema.clientMembers.isActive, true),
           isNotNull(schema.clientMembers.userId),
-          userIdFilter ? eq(schema.clientMembers.userId, userIdFilter) : undefined,
+          userIdFilter
+            ? eq(schema.clientMembers.userId, userIdFilter)
+            : undefined,
         ),
       ),
     db
@@ -240,7 +246,9 @@ async function main() {
   const groups = groupByUserAndClient(bonds);
   const facesByUser = indexCompleteFacesByUser(bonds);
 
-  console.log(`${bonds.length} vínculo(s) com userId, ${groups.length} grupo(s) user+escola.\n`);
+  console.log(
+    `${bonds.length} vínculo(s) com userId, ${groups.length} grupo(s) user+escola.\n`,
+  );
   console.log(
     apply
       ? 'Modo APPLY — alterações serão persistidas.\n'

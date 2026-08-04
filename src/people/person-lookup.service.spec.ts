@@ -207,13 +207,16 @@ describe('PersonLookupService', () => {
     });
 
     expect(result.matched).toBe(true);
-    expect(result.contexts.every((ctx) => !ctx.clientName.includes('Condomínio'))).toBe(
-      true,
-    );
+    expect(
+      result.contexts.every((ctx) => !ctx.clientName.includes('Condomínio')),
+    ).toBe(true);
     expect(result.contexts).toHaveLength(2);
     expect(result.contexts).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'member', clientName: 'Escola São Gonçalo' }),
+        expect.objectContaining({
+          type: 'member',
+          clientName: 'Escola São Gonçalo',
+        }),
         expect.objectContaining({
           type: 'responsible',
           clientName: 'Escola Santo Antonio',

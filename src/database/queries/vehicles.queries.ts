@@ -280,7 +280,10 @@ function dedupeVehiclesByPlate(
   const seen = new Set<string>();
   const out: VehicleWithDriverRow[] = [];
   for (const row of rows) {
-    const key = row.plate.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const key = row.plate
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '');
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(row);

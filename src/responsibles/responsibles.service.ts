@@ -626,7 +626,8 @@ export class ResponsiblesService {
           faceId: row.faceId,
           photoKey: row.photoKey,
           deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
           deviceSyncError: sync.deviceSyncError,
         },
         { responsibleId },

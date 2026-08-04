@@ -15,7 +15,10 @@ import { FaceSyncService } from '../face-sync/face-sync.service';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
 
-export type { BondExclude, SharedFaceSnapshot } from '../database/queries/people.queries';
+export type {
+  BondExclude,
+  SharedFaceSnapshot,
+} from '../database/queries/people.queries';
 
 @Injectable()
 export class PersonProfileService {
@@ -41,7 +44,7 @@ export class PersonProfileService {
     );
   }
 
-  /** Aplica face compartilhada da mesma escola em um vínculo recém-criado (sem sync no leitor). */
+  /** Aplica face compartilhada da mesma escola em um vínculo recém-criado e sincroniza nos leitores. */
   async applySharedFaceFromSameClient(
     userId: string,
     clientId: string,
@@ -53,7 +56,77 @@ export class PersonProfileService {
     });
     if (!shared) return false;
 
-    await this.writeFaceToBond(clientId, target, shared);
+    const logContext = `same-client-${target.type}=${target.id}`;
+
+    let buffer: Buffer;
+    try {
+      const got = await this.r2.getObjectBytes(shared.photoKey);
+      buffer = got.buffer;
+    } catch (e: unknown) {
+      this.log.warn(
+        `${logContext}: falha ao ler foto (${shared.photoKey}): ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return false;
+    }
+
+    if (!(await isPortraitImageUsable(buffer))) {
+      this.log.warn(
+        `${logContext}: imagem inválida ou muito pequena (${shared.photoKey})`,
+      );
+      return false;
+    }
+
+    await this.writeFaceToBond(clientId, target, {
+      ...shared,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncedAt: null,
+      deviceSyncError: null,
+    });
+
+    const timeSectionIds =
+      target.type === 'responsible'
+        ? await this.accessTimeZone.resolveResponsibleTimeSections(
+            clientId,
+            target.id,
+          )
+        : await this.accessTimeZone.resolveMemberTimeSections(
+            clientId,
+            target.id,
+          );
+
+    const sync = await this.faceSync.syncPersonOnReaders({
+      clientId,
+      faceId: shared.faceId,
+      name: target.name,
+      imageBuffer: buffer,
+      timeSectionIds,
+      logContext,
+    });
+
+    await this.writeFaceToBond(clientId, target, {
+      faceId: shared.faceId,
+      photoKey: shared.photoKey,
+      deviceSyncStatus: sync.deviceSyncStatus,
+      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+      deviceSyncError: sync.deviceSyncError,
+    });
+
+    await this.propagateFaceToSiblings(
+      userId,
+      clientId,
+      {
+        faceId: shared.faceId,
+        photoKey: shared.photoKey,
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+      {
+        responsibleId: target.type === 'responsible' ? target.id : undefined,
+        memberId: target.type === 'member' ? target.id : undefined,
+      },
+    );
+
     return true;
   }
 
@@ -72,7 +145,12 @@ export class PersonProfileService {
       userId,
       clientId,
     );
-    if (!source?.photoKey) return false;
+    if (!source?.photoKey) {
+      this.log.warn(
+        `${logContext}: nenhuma foto encontrada em outra escola para userId=${userId}`,
+      );
+      return false;
+    }
 
     let buffer: Buffer;
     try {
@@ -135,16 +213,21 @@ export class PersonProfileService {
       deviceSyncError: sync.deviceSyncError,
     });
 
-    await this.propagateFaceToSiblings(userId, clientId, {
-      faceId,
-      photoKey,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-      deviceSyncError: sync.deviceSyncError,
-    }, {
-      responsibleId: target.type === 'responsible' ? target.id : undefined,
-      memberId: target.type === 'member' ? target.id : undefined,
-    });
+    await this.propagateFaceToSiblings(
+      userId,
+      clientId,
+      {
+        faceId,
+        photoKey,
+        deviceSyncStatus: sync.deviceSyncStatus,
+        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
+        deviceSyncError: sync.deviceSyncError,
+      },
+      {
+        responsibleId: target.type === 'responsible' ? target.id : undefined,
+        memberId: target.type === 'member' ? target.id : undefined,
+      },
+    );
 
     return true;
   }
@@ -198,8 +281,7 @@ export class PersonProfileService {
     if (!shared) return null;
 
     const aligned =
-      current.faceId === shared.faceId &&
-      current.photoKey === shared.photoKey;
+      current.faceId === shared.faceId && current.photoKey === shared.photoKey;
 
     if (!aligned) {
       await this.writeFaceToBond(clientId, target, shared);

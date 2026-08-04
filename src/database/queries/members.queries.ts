@@ -692,7 +692,12 @@ export async function linkLegacyMembersByDocument(
   await db
     .update(clientMembers)
     .set({ userId, updatedAt: new Date() })
-    .where(inArray(clientMembers.id, targets.map((row) => row.id)));
+    .where(
+      inArray(
+        clientMembers.id,
+        targets.map((row) => row.id),
+      ),
+    );
 }
 
 /** Remove login de membros em clientes que não são escola (correção de vínculo indevido). */
@@ -708,7 +713,12 @@ export async function unlinkNonSchoolMemberLogins(db: AppDb) {
   await db
     .update(clientMembers)
     .set({ userId: null, updatedAt: new Date() })
-    .where(inArray(clientMembers.id, rows.map((row) => row.id)));
+    .where(
+      inArray(
+        clientMembers.id,
+        rows.map((row) => row.id),
+      ),
+    );
 
   return rows.length;
 }

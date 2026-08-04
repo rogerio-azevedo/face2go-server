@@ -406,12 +406,13 @@ export class ArrivalsService {
               } else {
                 students = [];
               }
-              vehiclePlate = await vehiclesQueries.findVehiclePlateForPersonOwners(
-                this.database.db,
-                payload.clientId,
-                owners.responsibleIds,
-                owners.memberIds,
-              );
+              vehiclePlate =
+                await vehiclesQueries.findVehiclePlateForPersonOwners(
+                  this.database.db,
+                  payload.clientId,
+                  owners.responsibleIds,
+                  owners.memberIds,
+                );
             } else {
               students = [];
               vehiclePlate = await vehiclesQueries.findVehiclePlateForMember(
@@ -534,17 +535,19 @@ export class ArrivalsService {
           { responsibleId: responsible.id },
         );
         if (userId) {
-          const owners = await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
-            this.database.db,
-            userId,
-            payload.clientId,
-          );
-          const mergedPlate = await vehiclesQueries.findVehiclePlateForPersonOwners(
-            this.database.db,
-            payload.clientId,
-            owners.responsibleIds,
-            owners.memberIds,
-          );
+          const owners =
+            await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+              this.database.db,
+              userId,
+              payload.clientId,
+            );
+          const mergedPlate =
+            await vehiclesQueries.findVehiclePlateForPersonOwners(
+              this.database.db,
+              payload.clientId,
+              owners.responsibleIds,
+              owners.memberIds,
+            );
           if (mergedPlate) vehiclePlate = mergedPlate;
         }
 
@@ -580,11 +583,12 @@ export class ArrivalsService {
           { memberId: member.id },
         );
         if (userId) {
-          const owners = await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
-            this.database.db,
-            userId,
-            payload.clientId,
-          );
+          const owners =
+            await peopleQueries.listVehicleOwnerIdsByUserIdAndClient(
+              this.database.db,
+              userId,
+              payload.clientId,
+            );
           const primaryResponsibleId = owners.responsibleIds[0];
           if (primaryResponsibleId) {
             responsibleId = primaryResponsibleId;

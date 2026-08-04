@@ -6,11 +6,7 @@ import { clientMembers, responsibles } from '../schema';
 export type SharedFaceSnapshot = {
   faceId: number;
   photoKey: string;
-  deviceSyncStatus:
-    | 'pending_sync'
-    | 'synced'
-    | 'sync_failed'
-    | null;
+  deviceSyncStatus: 'pending_sync' | 'synced' | 'sync_failed' | null;
   deviceSyncedAt: Date | null;
   deviceSyncError: string | null;
 };

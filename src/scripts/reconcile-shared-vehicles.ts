@@ -20,10 +20,15 @@ import * as schema from '../database/schema';
 
 const args = process.argv.slice(2);
 const apply = args.includes('--apply');
-const userIdFilter = args.find((a) => a.startsWith('--user-id='))?.split('=')[1];
+const userIdFilter = args
+  .find((a) => a.startsWith('--user-id='))
+  ?.split('=')[1];
 
 function normalizePlate(plate: string): string {
-  return plate.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return plate
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 }
 
 type UserClientGroup = {
@@ -101,11 +106,12 @@ async function reconcileGroup(
     return { planned: 0, applied: 0 };
   }
 
-  const sourceVehicles = await vehicleQueries.vehicleListByUserIdExcludingClient(
-    db,
-    group.userId,
-    group.clientId,
-  );
+  const sourceVehicles =
+    await vehicleQueries.vehicleListByUserIdExcludingClient(
+      db,
+      group.userId,
+      group.clientId,
+    );
   if (sourceVehicles.length === 0) {
     return { planned: 0, applied: 0 };
   }
@@ -141,7 +147,7 @@ async function reconcileGroup(
 
     planned += 1;
     const targetKind = targetResponsibleId ? 'responsible' : 'member';
-    const targetId = targetResponsibleId ?? targetMemberId!;
+    const targetId = targetResponsibleId ?? targetMemberId;
     console.log(
       `${apply ? '→' : '○'} Copiar ${source.plate} (${source.brand} ${source.model}) ` +
         `para ${targetKind} em ${group.clientName} [${group.clientId}]`,

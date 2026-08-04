@@ -15,9 +15,7 @@ describe('unlinkNonSchoolMemberLogins', () => {
 
     const db = { select, update };
 
-    const count = await membersQueries.unlinkNonSchoolMemberLogins(
-      db as never,
-    );
+    const count = await membersQueries.unlinkNonSchoolMemberLogins(db as never);
 
     expect(count).toBe(2);
     expect(update).toHaveBeenCalled();
@@ -33,9 +31,7 @@ describe('unlinkNonSchoolMemberLogins', () => {
 
     const db = { select, update };
 
-    const count = await membersQueries.unlinkNonSchoolMemberLogins(
-      db as never,
-    );
+    const count = await membersQueries.unlinkNonSchoolMemberLogins(db as never);
 
     expect(count).toBe(0);
     expect(update).not.toHaveBeenCalled();

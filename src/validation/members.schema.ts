@@ -32,10 +32,7 @@ export const createMemberSchema = z.object({
   password: z
     .union([
       z.literal(''),
-      z
-        .string()
-        .min(8, 'Senha deve ter pelo menos 8 caracteres.')
-        .max(128),
+      z.string().min(8, 'Senha deve ter pelo menos 8 caracteres.').max(128),
     ])
     .optional(),
   name: z.string().trim().min(1, 'Informe o nome.').max(255),
@@ -64,10 +61,7 @@ export const updateMemberSchema = z.object({
   password: z
     .union([
       z.literal(''),
-      z
-        .string()
-        .min(8, 'Senha deve ter pelo menos 8 caracteres.')
-        .max(128),
+      z.string().min(8, 'Senha deve ter pelo menos 8 caracteres.').max(128),
     ])
     .optional(),
   isActive: z.boolean().optional(),

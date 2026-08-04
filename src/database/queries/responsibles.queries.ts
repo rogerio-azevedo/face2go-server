@@ -1092,5 +1092,10 @@ export async function linkLegacyResponsiblesByDocument(
   await db
     .update(responsibles)
     .set({ userId, updatedAt: new Date() })
-    .where(inArray(responsibles.id, targets.map((row) => row.id)));
+    .where(
+      inArray(
+        responsibles.id,
+        targets.map((row) => row.id),
+      ),
+    );
 }
