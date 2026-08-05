@@ -22,6 +22,8 @@ export type MemberListQueryOptions = {
   roleId?: string;
   offset?: number;
   limit?: number;
+  excludeMemberId?: string;
+  activeOnly?: boolean;
 };
 
 export type ClientRoleRow = typeof clientRoles.$inferSelect;
@@ -67,7 +69,10 @@ function memberSearchCondition(search?: string): SQL | undefined {
 
 function memberClientWhere(
   clientId: string,
-  options: Pick<MemberListQueryOptions, 'search' | 'roleId'> = {},
+  options: Pick<
+    MemberListQueryOptions,
+    'search' | 'roleId' | 'excludeMemberId' | 'activeOnly'
+  > = {},
 ) {
   const conditions: SQL[] = [eq(clientMembers.clientId, clientId)];
   const nameCond = memberSearchCondition(options.search);
@@ -75,13 +80,22 @@ function memberClientWhere(
   if (options.roleId) {
     conditions.push(eq(clientMembers.roleId, options.roleId));
   }
+  if (options.excludeMemberId) {
+    conditions.push(ne(clientMembers.id, options.excludeMemberId));
+  }
+  if (options.activeOnly) {
+    conditions.push(eq(clientMembers.isActive, true));
+  }
   return and(...conditions);
 }
 
 export async function countMembersByClient(
   db: AppDb,
   clientId: string,
-  options: Pick<MemberListQueryOptions, 'search' | 'roleId'> = {},
+  options: Pick<
+    MemberListQueryOptions,
+    'search' | 'roleId' | 'excludeMemberId' | 'activeOnly'
+  > = {},
 ) {
   const [row] = await db
     .select({ total: count() })
@@ -388,6 +402,7 @@ export async function updateMember(
       | 'additionalData'
       | 'isActive'
       | 'canEnrollStudentFace'
+      | 'canEnrollMemberFace'
       | 'userId'
     >
   >,

@@ -74,4 +74,37 @@ export class MemberFaceEnrollmentController {
       dto.imageBase64,
     );
   }
+
+  @Get('members')
+  @ApiOperation({
+    summary: 'Buscar membros para cadastro facial (funcionário autorizado)',
+  })
+  listMembers(
+    @CurrentUser() user: JwtPayload,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.faceEnrollmentService.listMembersForMemberEnrollment(user, {
+      search,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
+  }
+
+  @Post('members/:memberId/face')
+  @ApiOperation({
+    summary: 'Enviar/atualizar foto de membro e sincronizar com os leitores',
+  })
+  uploadMemberFace(
+    @CurrentUser() user: JwtPayload,
+    @Param('memberId') memberId: string,
+    @Body() dto: UploadFaceDto,
+  ) {
+    return this.faceEnrollmentService.uploadAndSyncMemberFaceByMember(
+      user,
+      memberId,
+      dto.imageBase64,
+    );
+  }
 }

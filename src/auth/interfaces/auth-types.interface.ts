@@ -15,6 +15,7 @@ export type AuthenticatedUser = {
   responsibleId?: string;
   memberId?: string;
   canEnrollStudentFace?: boolean;
+  canEnrollMemberFace?: boolean;
 };
 
 export type IdentityUser = {

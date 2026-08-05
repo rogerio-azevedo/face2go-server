@@ -414,6 +414,13 @@
       "when": 1779270000000,
       "tag": "0058_client_members_shift_id",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1779280000000,
+      "tag": "0059_member_can_enroll_member_face",
+      "breakpoints": true
     }
   ]
 }

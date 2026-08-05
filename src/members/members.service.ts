@@ -67,6 +67,7 @@ function mapMemberRow(
     additionalData: row.additionalData,
     isActive: row.isActive,
     canEnrollStudentFace: row.canEnrollStudentFace,
+    canEnrollMemberFace: row.canEnrollMemberFace,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -482,7 +483,8 @@ export class MembersService {
       d.isActive === undefined &&
       d.roleId === undefined &&
       d.shiftId === undefined &&
-      d.canEnrollStudentFace === undefined
+      d.canEnrollStudentFace === undefined &&
+      d.canEnrollMemberFace === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
     }
@@ -590,6 +592,9 @@ export class MembersService {
       ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
       ...(d.canEnrollStudentFace !== undefined
         ? { canEnrollStudentFace: d.canEnrollStudentFace }
+        : {}),
+      ...(d.canEnrollMemberFace !== undefined
+        ? { canEnrollMemberFace: d.canEnrollMemberFace }
         : {}),
     });
 

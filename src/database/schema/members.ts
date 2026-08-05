@@ -78,6 +78,10 @@ export const clientMembers = pgTable(
     canEnrollStudentFace: boolean('can_enroll_student_face')
       .default(false)
       .notNull(),
+    /** Permite cadastrar foto facial de outros membros pelo app do funcionário. */
+    canEnrollMemberFace: boolean('can_enroll_member_face')
+      .default(false)
+      .notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

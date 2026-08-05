@@ -66,6 +66,7 @@ export const updateMemberSchema = z.object({
     .optional(),
   isActive: z.boolean().optional(),
   canEnrollStudentFace: z.boolean().optional(),
+  canEnrollMemberFace: z.boolean().optional(),
   shiftId: z.uuid().nullable().optional(),
 });
 

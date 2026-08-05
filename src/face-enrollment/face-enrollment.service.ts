@@ -43,6 +43,8 @@ export type MemberStudentSearchItemDto = {
   deviceSyncStatus: FaceEnrollmentStatusDto['deviceSyncStatus'];
 };
 
+export type MemberSearchItemDto = MemberStudentSearchItemDto;
+
 function stripDataUrlBase64(imageBase64: string): string {
   const trimmed = imageBase64.trim();
   const comma = trimmed.indexOf(',');
@@ -668,6 +670,27 @@ export class FaceEnrollmentService {
     return { memberId, clientId };
   }
 
+  private async assertMemberCanEnrollMemberFace(user: JwtPayload): Promise<{
+    memberId: string;
+    clientId: string;
+  }> {
+    const { memberId, clientId } = this.assertMemberScope(user);
+    const member = await membersQueries.getMemberById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!member) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    if (!member.canEnrollMemberFace) {
+      throw new ForbiddenException(
+        'Sem permissão para fotografar outros membros.',
+      );
+    }
+    return { memberId, clientId };
+  }
+
   async listStudentsForMemberEnrollment(
     user: JwtPayload,
     query: ListPaginationParams = {},
@@ -690,6 +713,48 @@ export class FaceEnrollmentService {
       ),
     ]);
     const data: MemberStudentSearchItemDto[] = await Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        name: row.name,
+        photoUrl: await this.optionalPhotoUrl(row.photoKey),
+        faceId: row.faceId ?? null,
+        deviceSyncStatus: row.deviceSyncStatus ?? null,
+      })),
+    );
+    return buildPaginatedResult(data, total, page, pageSize);
+  }
+
+  async listMembersForMemberEnrollment(
+    user: JwtPayload,
+    query: ListPaginationParams = {},
+  ) {
+    const { memberId, clientId } =
+      await this.assertMemberCanEnrollMemberFace(user);
+    const { page, pageSize, search, offset } = parseListPaginationParams(
+      query.page !== undefined ? String(query.page) : undefined,
+      query.pageSize !== undefined ? String(query.pageSize) : undefined,
+      query.search,
+    );
+    const listOpts = {
+      search,
+      offset,
+      limit: pageSize,
+      excludeMemberId: memberId,
+      activeOnly: true,
+    };
+    const [total, rows] = await Promise.all([
+      membersQueries.countMembersByClient(this.database.db, clientId, {
+        search,
+        excludeMemberId: memberId,
+        activeOnly: true,
+      }),
+      membersQueries.listMembersByClientWithRole(
+        this.database.db,
+        clientId,
+        listOpts,
+      ),
+    ]);
+    const data: MemberSearchItemDto[] = await Promise.all(
       rows.map(async (row) => ({
         id: row.id,
         name: row.name,
@@ -765,6 +830,37 @@ export class FaceEnrollmentService {
     imageBase64: string,
   ): Promise<FaceEnrollmentStatusDto> {
     const { memberId, clientId } = this.assertMemberScope(user);
+    return this.uploadAndSyncMemberFaceInternal(
+      clientId,
+      memberId,
+      imageBase64,
+    );
+  }
+
+  async uploadAndSyncMemberFaceByMember(
+    user: JwtPayload,
+    targetMemberId: string,
+    imageBase64: string,
+  ): Promise<FaceEnrollmentStatusDto> {
+    const { memberId, clientId } =
+      await this.assertMemberCanEnrollMemberFace(user);
+    if (targetMemberId === memberId) {
+      throw new BadRequestException(
+        'Use o cadastro da sua própria foto para atualizar seu perfil.',
+      );
+    }
+    return this.uploadAndSyncMemberFaceInternal(
+      clientId,
+      targetMemberId,
+      imageBase64,
+    );
+  }
+
+  private async uploadAndSyncMemberFaceInternal(
+    clientId: string,
+    memberId: string,
+    imageBase64: string,
+  ): Promise<FaceEnrollmentStatusDto> {
     const member = await membersQueries.getMemberById(
       this.database.db,
       memberId,
@@ -772,6 +868,9 @@ export class FaceEnrollmentService {
     );
     if (!member) {
       throw new NotFoundException('Membro não encontrado.');
+    }
+    if (!member.isActive) {
+      throw new BadRequestException('Membro inativo.');
     }
 
     const buffer = decodeBase64ToBuffer(imageBase64);

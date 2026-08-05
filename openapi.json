@@ -6773,6 +6773,90 @@
         ]
       }
     },
+    "/member/members": {
+      "get": {
+        "operationId": "MemberFaceEnrollmentController_listMembers",
+        "parameters": [
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Buscar membros para cadastro facial (funcionário autorizado)",
+        "tags": [
+          "member-face-enrollment"
+        ]
+      }
+    },
+    "/member/members/{memberId}/face": {
+      "post": {
+        "operationId": "MemberFaceEnrollmentController_uploadMemberFace",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadFaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enviar/atualizar foto de membro e sincronizar com os leitores",
+        "tags": [
+          "member-face-enrollment"
+        ]
+      }
+    },
     "/me/navigation": {
       "get": {
         "operationId": "MeController_navigation",

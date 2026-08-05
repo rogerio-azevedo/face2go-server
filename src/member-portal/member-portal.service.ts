@@ -72,6 +72,7 @@ export class MemberPortalService {
       additionalData: row.additionalData,
       isActive: row.isActive,
       canEnrollStudentFace: row.canEnrollStudentFace,
+      canEnrollMemberFace: row.canEnrollMemberFace,
     };
   }
 

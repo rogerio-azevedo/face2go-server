@@ -271,6 +271,7 @@ export class AuthService implements AuthServiceContract {
         memberName: clientMembers.name,
         roleName: clientRoles.name,
         canEnrollStudentFace: clientMembers.canEnrollStudentFace,
+        canEnrollMemberFace: clientMembers.canEnrollMemberFace,
         clientName: clients.name,
         clientLogoUrl: clients.logoUrl,
         companyLogoUrl: companies.logoUrl,
@@ -304,6 +305,7 @@ export class AuthService implements AuthServiceContract {
         clientName: link.clientName,
         roleName: link.roleName,
         canEnrollStudentFace: link.canEnrollStudentFace,
+        canEnrollMemberFace: link.canEnrollMemberFace,
         branding: this.buildTenantBranding(link),
         label: `${link.roleName} — ${link.clientName}`,
       });
@@ -385,6 +387,7 @@ export class AuthService implements AuthServiceContract {
           clientId: context.clientId,
           memberId: context.memberId,
           canEnrollStudentFace: context.canEnrollStudentFace,
+          canEnrollMemberFace: context.canEnrollMemberFace,
         };
       case 'face_user':
         return {
