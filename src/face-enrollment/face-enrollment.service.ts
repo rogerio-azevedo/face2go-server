@@ -28,6 +28,7 @@ export type FaceEnrollmentStatusDto = {
   deviceSyncStatus: 'pending_sync' | 'synced' | 'sync_failed' | null;
   deviceSyncError: string | null;
   deviceSyncedAt: string | null;
+  hasFacialReaders: boolean;
 };
 
 export type ChildFaceEnrollmentStatusDto = FaceEnrollmentStatusDto & {
@@ -41,6 +42,7 @@ export type MemberStudentSearchItemDto = {
   photoUrl: string | null;
   faceId: number | null;
   deviceSyncStatus: FaceEnrollmentStatusDto['deviceSyncStatus'];
+  hasFacialReaders: boolean;
 };
 
 export type MemberSearchItemDto = MemberStudentSearchItemDto;
@@ -92,6 +94,10 @@ export class FaceEnrollmentService {
     } catch {
       return null;
     }
+  }
+
+  private async clientHasFacialReaders(clientId: string): Promise<boolean> {
+    return this.faceSync.hasActiveFacialReaders(clientId);
   }
 
   private async assertHouseholdPeer(
@@ -148,6 +154,7 @@ export class FaceEnrollmentService {
       deviceSyncedAt: row.deviceSyncedAt
         ? row.deviceSyncedAt.toISOString()
         : null,
+      hasFacialReaders: await this.clientHasFacialReaders(clientId),
     };
   }
 
@@ -187,6 +194,7 @@ export class FaceEnrollmentService {
     if (!student) {
       throw new NotFoundException('Aluno não encontrado.');
     }
+    const hasFacialReaders = await this.clientHasFacialReaders(clientId);
     return {
       studentId: student.id,
       name: student.name,
@@ -197,6 +205,7 @@ export class FaceEnrollmentService {
       deviceSyncedAt: student.deviceSyncedAt
         ? student.deviceSyncedAt.toISOString()
         : null,
+      hasFacialReaders,
     };
   }
 
@@ -292,6 +301,8 @@ export class FaceEnrollmentService {
       );
     }
 
+    const hasFacialReaders = await this.clientHasFacialReaders(clientId);
+
     return {
       photoUrl: await this.optionalPhotoUrl(photoKey),
       faceId,
@@ -299,6 +310,7 @@ export class FaceEnrollmentService {
       deviceSyncError: sync.deviceSyncError,
       deviceSyncedAt:
         sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      hasFacialReaders,
     };
   }
 
@@ -421,6 +433,8 @@ export class FaceEnrollmentService {
       },
     );
 
+    const hasFacialReaders = await this.clientHasFacialReaders(clientId);
+
     return {
       studentId: student.id,
       name: student.name,
@@ -430,6 +444,7 @@ export class FaceEnrollmentService {
       deviceSyncError: sync.deviceSyncError,
       deviceSyncedAt:
         sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      hasFacialReaders,
     };
   }
 
@@ -523,6 +538,8 @@ export class FaceEnrollmentService {
       );
     }
 
+    const hasFacialReaders = await this.clientHasFacialReaders(clientId);
+
     return {
       photoUrl: await this.optionalPhotoUrl(row.photoKey),
       faceId: row.faceId,
@@ -530,6 +547,7 @@ export class FaceEnrollmentService {
       deviceSyncError: sync.deviceSyncError,
       deviceSyncedAt:
         sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      hasFacialReaders,
     };
   }
 
@@ -598,6 +616,8 @@ export class FaceEnrollmentService {
       },
     );
 
+    const hasFacialReaders = await this.clientHasFacialReaders(clientId);
+
     return {
       studentId: student.id,
       name: student.name,
@@ -607,6 +627,7 @@ export class FaceEnrollmentService {
       deviceSyncError: sync.deviceSyncError,
       deviceSyncedAt:
         sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      hasFacialReaders,
     };
   }
 
@@ -702,7 +723,7 @@ export class FaceEnrollmentService {
       query.search,
     );
     const listOpts = { search, offset, limit: pageSize };
-    const [total, rows] = await Promise.all([
+    const [total, rows, hasFacialReaders] = await Promise.all([
       studentsQueries.countStudentsByClient(this.database.db, clientId, {
         search,
       }),
@@ -711,6 +732,7 @@ export class FaceEnrollmentService {
         clientId,
         listOpts,
       ),
+      this.clientHasFacialReaders(clientId),
     ]);
     const data: MemberStudentSearchItemDto[] = await Promise.all(
       rows.map(async (row) => ({
@@ -719,6 +741,7 @@ export class FaceEnrollmentService {
         photoUrl: await this.optionalPhotoUrl(row.photoKey),
         faceId: row.faceId ?? null,
         deviceSyncStatus: row.deviceSyncStatus ?? null,
+        hasFacialReaders,
       })),
     );
     return buildPaginatedResult(data, total, page, pageSize);
@@ -742,7 +765,7 @@ export class FaceEnrollmentService {
       excludeMemberId: memberId,
       activeOnly: true,
     };
-    const [total, rows] = await Promise.all([
+    const [total, rows, hasFacialReaders] = await Promise.all([
       membersQueries.countMembersByClient(this.database.db, clientId, {
         search,
         excludeMemberId: memberId,
@@ -753,6 +776,7 @@ export class FaceEnrollmentService {
         clientId,
         listOpts,
       ),
+      this.clientHasFacialReaders(clientId),
     ]);
     const data: MemberSearchItemDto[] = await Promise.all(
       rows.map(async (row) => ({
@@ -761,6 +785,7 @@ export class FaceEnrollmentService {
         photoUrl: await this.optionalPhotoUrl(row.photoKey),
         faceId: row.faceId ?? null,
         deviceSyncStatus: row.deviceSyncStatus ?? null,
+        hasFacialReaders,
       })),
     );
     return buildPaginatedResult(data, total, page, pageSize);
@@ -815,6 +840,7 @@ export class FaceEnrollmentService {
       deviceSyncedAt: row.deviceSyncedAt
         ? row.deviceSyncedAt.toISOString()
         : null,
+      hasFacialReaders: await this.clientHasFacialReaders(clientId),
     };
   }
 
@@ -951,6 +977,8 @@ export class FaceEnrollmentService {
       );
     }
 
+    const hasFacialReaders = await this.clientHasFacialReaders(clientId);
+
     return {
       photoUrl: await this.optionalPhotoUrl(photoKey),
       faceId,
@@ -958,6 +986,7 @@ export class FaceEnrollmentService {
       deviceSyncError: sync.deviceSyncError,
       deviceSyncedAt:
         sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      hasFacialReaders,
     };
   }
 

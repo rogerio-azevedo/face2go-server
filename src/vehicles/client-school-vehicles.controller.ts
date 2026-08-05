@@ -19,6 +19,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import {
   VehiclesService,
   type VehicleDriverOptionDto,
+  type VehicleDto,
   type VehicleWithDriverRow,
 } from './vehicles.service';
 
@@ -68,7 +69,7 @@ export class ClientVehiclesController {
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Body() body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     return this.vehiclesService.createVehicleForCompanyClient(
       user,
       clientId,
@@ -83,7 +84,7 @@ export class ClientVehiclesController {
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     return this.vehiclesService.updateVehicleForCompanyClient(
       user,
       clientId,

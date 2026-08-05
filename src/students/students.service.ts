@@ -148,8 +148,12 @@ export class StudentsService {
     }
 
     const withClasses = await this.attachClassesToStudents(rows);
+    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
     const data = await Promise.all(
-      withClasses.map((row) => this.mapStudentWithPhoto(row)),
+      withClasses.map(async (row) => ({
+        ...(await this.mapStudentWithPhoto(row)),
+        hasFacialReaders,
+      })),
     );
 
     return buildPaginatedResult(data, total, page, pageSize);

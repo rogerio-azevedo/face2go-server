@@ -63,7 +63,7 @@ export class ResponsiblesService {
       query.pageSize !== undefined ? String(query.pageSize) : undefined,
       query.search,
     );
-    const [total, rows] = await Promise.all([
+    const [total, rows, hasFacialReaders] = await Promise.all([
       responsiblesQueries.countResponsiblesByClient(
         this.database.db,
         clientId,
@@ -76,11 +76,13 @@ export class ResponsiblesService {
         clientId,
         { search, offset, limit: pageSize },
       ),
+      this.faceSync.hasActiveFacialReaders(clientId),
     ]);
     const data = await Promise.all(
       rows.map(async (row) => ({
         ...row,
         photoUrl: await this.optionalPhotoUrl(row.photoKey),
+        hasFacialReaders,
       })),
     );
     return buildPaginatedResult(data, total, page, pageSize);

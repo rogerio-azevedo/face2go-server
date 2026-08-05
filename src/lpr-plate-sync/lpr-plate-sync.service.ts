@@ -103,6 +103,15 @@ export class LprPlateSyncService {
     return clientId;
   }
 
+  /** Indica se o cliente possui ao menos uma câmera LPR Intelbras ativa com credenciais. */
+  async hasActiveLprCameras(clientId: string): Promise<boolean> {
+    const cams = await camerasQueries.listCamerasForLprPlateSyncByClient(
+      this.database.db,
+      clientId,
+    );
+    return cams.length > 0;
+  }
+
   /**
    * Empurra placa às câmeras LPR sem persistir em `vehicles` (ex.: convidado de retirada temporária).
    */

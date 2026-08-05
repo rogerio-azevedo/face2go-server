@@ -41,6 +41,7 @@ import { normalizeCpf } from '../auth/utils/auth-identifiers';
 function mapMemberRow(
   row: membersQueries.MemberWithRoleRow,
   photoUrl: string | null,
+  hasFacialReaders: boolean,
 ) {
   return {
     id: row.id,
@@ -70,6 +71,7 @@ function mapMemberRow(
     canEnrollMemberFace: row.canEnrollMemberFace,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    hasFacialReaders,
   };
 }
 
@@ -279,7 +281,7 @@ export class MembersService {
       query.pageSize !== undefined ? String(query.pageSize) : undefined,
       query.search,
     );
-    const [total, rows] = await Promise.all([
+    const [total, rows, hasFacialReaders] = await Promise.all([
       membersQueries.countMembersByClient(this.database.db, clientId, {
         search,
         roleId: query.roleId,
@@ -290,10 +292,11 @@ export class MembersService {
         offset,
         limit: pageSize,
       }),
+      this.faceSync.hasActiveFacialReaders(clientId),
     ]);
     const data = await Promise.all(
       rows.map(async (row) =>
-        mapMemberRow(row, await this.optionalPhotoUrl(row.photoKey)),
+        mapMemberRow(row, await this.optionalPhotoUrl(row.photoKey), hasFacialReaders),
       ),
     );
     return buildPaginatedResult(data, total, page, pageSize);
@@ -309,7 +312,8 @@ export class MembersService {
     if (!row) {
       throw new NotFoundException('Membro não encontrado.');
     }
-    return mapMemberRow(row, await this.optionalPhotoUrl(row.photoKey));
+    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
+    return mapMemberRow(row, await this.optionalPhotoUrl(row.photoKey), hasFacialReaders);
   }
 
   async lookupPerson(user: JwtPayload, clientId: string, query: unknown) {

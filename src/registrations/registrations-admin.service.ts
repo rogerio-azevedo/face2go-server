@@ -91,7 +91,10 @@ export class RegistrationsAdminService {
     return clientId;
   }
 
-  private mapRow(row: registrationsQueries.RegistrationRow) {
+  private mapRow(
+    row: registrationsQueries.RegistrationRow,
+    hasFacialReaders: boolean,
+  ) {
     return {
       id: row.id,
       clientId: row.clientId,
@@ -113,6 +116,7 @@ export class RegistrationsAdminService {
         ? row.deviceSyncedAt.toISOString()
         : null,
       deviceSyncError: row.deviceSyncError ?? null,
+      hasFacialReaders,
     };
   }
 
@@ -126,12 +130,15 @@ export class RegistrationsAdminService {
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
-    const rows = await registrationsQueries.listSubmittedRegistrationsForClient(
-      this.database.db,
-      clientId,
-      parsed.data.status,
-    );
-    return rows.map((r) => this.mapRow(r));
+    const [rows, hasFacialReaders] = await Promise.all([
+      registrationsQueries.listSubmittedRegistrationsForClient(
+        this.database.db,
+        clientId,
+        parsed.data.status,
+      ),
+      this.faceSync.hasActiveFacialReaders(clientId),
+    ]);
+    return rows.map((r) => this.mapRow(r, hasFacialReaders));
   }
 
   async listForClientTenant(
@@ -143,12 +150,15 @@ export class RegistrationsAdminService {
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
-    const rows = await registrationsQueries.listSubmittedRegistrationsForClient(
-      this.database.db,
-      clientId,
-      parsed.data.status,
-    );
-    return rows.map((r) => this.mapRow(r));
+    const [rows, hasFacialReaders] = await Promise.all([
+      registrationsQueries.listSubmittedRegistrationsForClient(
+        this.database.db,
+        clientId,
+        parsed.data.status,
+      ),
+      this.faceSync.hasActiveFacialReaders(clientId),
+    ]);
+    return rows.map((r) => this.mapRow(r, hasFacialReaders));
   }
 
   async faceUrlForCompanyUser(
@@ -260,7 +270,8 @@ export class RegistrationsAdminService {
       }
     }
 
-    return this.mapRow(rowOut);
+    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
+    return this.mapRow(rowOut, hasFacialReaders);
   }
 
   async rejectForCompanyUser(
@@ -304,6 +315,7 @@ export class RegistrationsAdminService {
         'Cadastro não encontrado ou já foi processado.',
       );
     }
-    return this.mapRow(updated);
+    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
+    return this.mapRow(updated, hasFacialReaders);
   }
 }

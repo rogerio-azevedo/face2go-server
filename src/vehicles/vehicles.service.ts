@@ -35,6 +35,8 @@ import { zodFirstMessage } from '../validation/zod-utils';
 
 export type { VehicleWithDriverRow };
 
+export type VehicleDto = VehicleWithDriverRow & { hasLprCameras: boolean };
+
 const DUPLICATE_PLATE_MESSAGE =
   'Essa placa já está cadastrada no sistema, por favor procure o suporte.';
 
@@ -72,14 +74,23 @@ function vehicleRowWithLprSync(
   row: VehicleWithDriverRow,
   driverName: string,
   lpr: SyncVehiclePlateResult,
-): VehicleWithDriverRow {
+  hasLprCameras: boolean,
+): VehicleDto {
   return {
     ...row,
     driverName,
     lprSyncStatus: lpr.lprSyncStatus,
     lprSyncError: lpr.lprSyncError,
     lprSyncedAt: lpr.lprSyncStatus === 'synced' ? new Date() : null,
+    hasLprCameras,
   };
+}
+
+function attachHasLprCamerasToList(
+  rows: VehicleWithDriverRow[],
+  hasLprCameras: boolean,
+): VehicleDto[] {
+  return rows.map((row) => ({ ...row, hasLprCameras }));
 }
 
 export type VehicleDriverOptionDto = {
@@ -104,8 +115,9 @@ export class VehiclesService {
     clientId: string,
     ownerDisplayName: string,
     logContext: string,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     const driverName = ownerDisplayName.trim() || 'CONDUTOR';
+    const hasLprCameras = await this.lprPlateSync.hasActiveLprCameras(clientId);
     try {
       const lpr = await this.lprPlateSync.syncVehiclePlateOnCameras({
         clientId,
@@ -115,7 +127,7 @@ export class VehiclesService {
         vehicleColor: row.color,
         logContext,
       });
-      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr);
+      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr, hasLprCameras);
     } catch (e) {
       this.log.warn(
         `${logContext}: ${e instanceof Error ? e.message : String(e)}`,
@@ -126,7 +138,7 @@ export class VehiclesService {
           e instanceof Error
             ? e.message
             : 'Falha ao sincronizar placa com LPR.',
-      });
+      }, hasLprCameras);
     }
   }
 
@@ -136,8 +148,9 @@ export class VehiclesService {
     previousPlate: string,
     ownerDisplayName: string,
     logContext: string,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     const driverName = ownerDisplayName.trim() || 'CONDUTOR';
+    const hasLprCameras = await this.lprPlateSync.hasActiveLprCameras(clientId);
     try {
       await this.lprPlateSync.removePlateFromAllLprCameras(
         clientId,
@@ -152,7 +165,7 @@ export class VehiclesService {
         vehicleColor: row.color,
         logContext,
       });
-      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr);
+      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr, hasLprCameras);
     } catch (e) {
       this.log.warn(
         `${logContext}: ${e instanceof Error ? e.message : String(e)}`,
@@ -163,7 +176,7 @@ export class VehiclesService {
           e instanceof Error
             ? e.message
             : 'Falha ao sincronizar placa com LPR.',
-      });
+      }, hasLprCameras);
     }
   }
 
@@ -288,9 +301,12 @@ export class VehiclesService {
     }
   }
 
-  async listForResponsible(user: JwtPayload): Promise<VehicleWithDriverRow[]> {
+  async listForResponsible(user: JwtPayload): Promise<VehicleDto[]> {
     this.assertResponsibleJwt(user);
     const household = await this.householdResponsibleIds(user);
+    const hasLprCameras = await this.lprPlateSync.hasActiveLprCameras(
+      user.clientId,
+    );
 
     const self = await responsiblesQueries.getResponsibleById(
       this.database.db,
@@ -310,25 +326,27 @@ export class VehiclesService {
       const responsibleIds = [
         ...new Set([...household, ...owners.responsibleIds]),
       ];
-      return vehicleQueries.vehicleListForOwnerBonds(
+      const rows = await vehicleQueries.vehicleListForOwnerBonds(
         this.database.db,
         user.clientId,
         responsibleIds,
         owners.memberIds,
       );
+      return attachHasLprCamerasToList(rows, hasLprCameras);
     }
 
-    return vehicleQueries.vehicleListForHousehold(
+    const rows = await vehicleQueries.vehicleListForHousehold(
       this.database.db,
       household,
       user.clientId,
     );
+    return attachHasLprCamerasToList(rows, hasLprCameras);
   }
 
   async createFromResponsible(
     user: JwtPayload,
     body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     this.assertResponsibleJwt(user);
     const parsed = createVehicleSchema.safeParse(body);
     if (!parsed.success) {
@@ -379,7 +397,7 @@ export class VehiclesService {
     user: JwtPayload,
     id: string,
     body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     this.assertResponsibleJwt(user);
     const parsed = updateVehicleSchema.safeParse(body);
     if (!parsed.success) {
@@ -533,7 +551,7 @@ export class VehiclesService {
       query.pageSize !== undefined ? String(query.pageSize) : undefined,
       query.search,
     );
-    const [total, data] = await Promise.all([
+    const [total, data, hasLprCameras] = await Promise.all([
       vehicleQueries.countVehiclesForClient(this.database.db, clientId, {
         search,
       }),
@@ -542,8 +560,14 @@ export class VehiclesService {
         offset,
         limit: pageSize,
       }),
+      this.lprPlateSync.hasActiveLprCameras(clientId),
     ]);
-    return buildPaginatedResult(data, total, page, pageSize);
+    return buildPaginatedResult(
+      attachHasLprCamerasToList(data, hasLprCameras),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   async listDriverOptionsForCompanyClient(
@@ -561,7 +585,7 @@ export class VehiclesService {
     user: JwtPayload,
     clientId: string,
     body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
     const parsed = createVehicleSchema.safeParse(body);
     if (!parsed.success) {
@@ -613,7 +637,7 @@ export class VehiclesService {
     clientId: string,
     id: string,
     body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
     const parsed = updateVehicleSchema.safeParse(body);
     if (!parsed.success) {
@@ -737,8 +761,11 @@ export class VehiclesService {
     }
   }
 
-  async listForMember(user: JwtPayload): Promise<VehicleWithDriverRow[]> {
+  async listForMember(user: JwtPayload): Promise<VehicleDto[]> {
     this.assertMemberJwt(user);
+    const hasLprCameras = await this.lprPlateSync.hasActiveLprCameras(
+      user.clientId,
+    );
 
     const self = await vehicleQueries.vehicleGetMemberName(
       this.database.db,
@@ -761,29 +788,31 @@ export class VehiclesService {
         memberRow.userId,
         user.clientId,
       );
-      return vehicleQueries.vehicleListForOwnerBonds(
+      const rows = await vehicleQueries.vehicleListForOwnerBonds(
         this.database.db,
         user.clientId,
         owners.responsibleIds,
         [...new Set([user.memberId, ...owners.memberIds])],
       );
+      return attachHasLprCamerasToList(rows, hasLprCameras);
     }
 
     if (!self) {
       return [];
     }
 
-    return vehicleQueries.vehicleListForMember(
+    const rows = await vehicleQueries.vehicleListForMember(
       this.database.db,
       user.memberId,
       user.clientId,
     );
+    return attachHasLprCamerasToList(rows, hasLprCameras);
   }
 
   async createFromMember(
     user: JwtPayload,
     body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     this.assertMemberJwt(user);
     const parsed = createMemberVehicleSchema.safeParse(body);
     if (!parsed.success) {
@@ -830,7 +859,7 @@ export class VehiclesService {
     user: JwtPayload,
     id: string,
     body: unknown,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     this.assertMemberJwt(user);
     const parsed = updateMemberVehicleSchema.safeParse(body);
     if (!parsed.success) {
@@ -895,7 +924,10 @@ export class VehiclesService {
         );
       }
 
-      return { ...updated, driverName: member.name };
+      const hasLprCameras = await this.lprPlateSync.hasActiveLprCameras(
+        user.clientId,
+      );
+      return { ...updated, driverName: member.name, hasLprCameras };
     } catch (err) {
       if (err instanceof NotFoundException) {
         throw err;
@@ -910,7 +942,7 @@ export class VehiclesService {
   async syncForMember(
     user: JwtPayload,
     id: string,
-  ): Promise<VehicleWithDriverRow> {
+  ): Promise<VehicleDto> {
     this.assertMemberJwt(user);
     const row = await vehicleQueries.vehicleGetWithDriver(
       this.database.db,

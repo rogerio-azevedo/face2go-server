@@ -110,6 +110,15 @@ export class FaceSyncService {
     return clientId;
   }
 
+  /** Indica se o cliente possui ao menos um leitor facial Intelbras ativo com credenciais. */
+  async hasActiveFacialReaders(clientId: string): Promise<boolean> {
+    const readers = await readersQueries.listReadersForFaceSyncByClient(
+      this.database.db,
+      clientId,
+    );
+    return readers.length > 0;
+  }
+
   /** Próximo ID por cliente (após aprovação com foto). */
   async assignFaceIdForClient(clientId: string): Promise<number> {
     return registrationsQueries.bumpClientFaceCounter(
