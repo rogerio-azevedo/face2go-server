@@ -56,6 +56,7 @@ function toStreamContext(
       clientName: row.clientName,
       companyId: row.companyId,
       brand: row.brand,
+      direction: row.direction ?? null,
       host: hostFromIpPort(row.ip, row.port),
       username: row.username.trim(),
       passwordPlain,

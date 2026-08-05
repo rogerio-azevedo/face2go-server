@@ -12,6 +12,7 @@ import type { CameraStreamContext } from '../lpr-listener/lpr-listener.types';
 import type { LprStreamReadingPayload } from '../lpr-listener/lpr-stream.parser';
 import { ACCESS_LPR_RECORDED } from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
+import * as vehiclesQueries from '../database/queries/vehicles.queries';
 import { LprAccess, type LprAccessDocument } from './lpr-access.schema';
 
 export type LprAccessListItemDto = {
@@ -267,6 +268,46 @@ export class LprAccessesService {
 
     const rawPayload = buildLprRawPayload(reading, plateNum, eventId, ctx.host);
 
+    let personName: string | null = null;
+    let personId: string | null = null;
+    let personType: 'student' | 'responsible' | 'member' | null = null;
+
+    try {
+      const responsible = await vehiclesQueries.findResponsibleByPlate(
+        this.database.db,
+        plateNum,
+        ctx.clientId,
+      );
+      if (responsible) {
+        personName = responsible.name;
+        personId = responsible.id;
+        personType = 'responsible';
+      }
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Lookup responsible by plate falhou (placa=${plateNum}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    if (!personId) {
+      try {
+        const member = await vehiclesQueries.findMemberByPlate(
+          this.database.db,
+          plateNum,
+          ctx.clientId,
+        );
+        if (member) {
+          personName = member.name;
+          personId = member.id;
+          personType = 'member';
+        }
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Lookup member by plate falhou (placa=${plateNum}): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
     const docFields = {
       companyId: ctx.companyId,
       cameraId: ctx.id,
@@ -283,6 +324,7 @@ export class LprAccessesService {
       vehicleBrand: reading.vehicleBrand ?? null,
       speed: reading.speed ?? null,
       direction: reading.direction ?? null,
+      cameraDirection: ctx.direction ?? null,
       laneNo: reading.laneNo ?? null,
       channel: reading.channel ?? null,
       snapTime,
@@ -295,6 +337,9 @@ export class LprAccessesService {
       normalPicKey,
       correlationEventId: eventId,
       rawPayload,
+      personName,
+      personId,
+      personType,
     };
 
     try {
@@ -339,8 +384,13 @@ export class LprAccessesService {
         accessId: String(doc._id),
         cameraId: ctx.id,
         clientId: ctx.clientId,
+        companyId: ctx.companyId,
         plateNumber: plateNum,
         cameraName: ctx.name,
+        cameraDirection: ctx.direction ?? null,
+        personName,
+        personId,
+        personType,
         snapTime: doc.snapTime ?? snapTime,
       });
     } catch (err: unknown) {

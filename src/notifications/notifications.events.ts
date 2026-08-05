@@ -4,7 +4,10 @@ export type AccessFacialRecordedPayload = {
   accessId: string;
   faceId: number;
   clientId: string;
+  companyId: string;
   personName: string | null;
+  personId: string | null;
+  personType: 'student' | 'responsible' | 'member' | 'guest' | null;
   readerId: string;
   readerName: string;
   readerDirection: 'in' | 'out' | null;
@@ -17,8 +20,13 @@ export type AccessLprRecordedPayload = {
   accessId: string;
   cameraId: string;
   clientId: string;
+  companyId: string;
   plateNumber: string;
   cameraName: string;
+  cameraDirection: 'in' | 'out' | null;
+  personName: string | null;
+  personId: string | null;
+  personType: 'student' | 'responsible' | 'member' | null;
   snapTime: Date | null;
 };
 

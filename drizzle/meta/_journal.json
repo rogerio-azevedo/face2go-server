@@ -421,6 +421,13 @@
       "when": 1779280000000,
       "tag": "0059_member_can_enroll_member_face",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1779290000000,
+      "tag": "0060_presence_emergency",
+      "breakpoints": true
     }
   ]
 }

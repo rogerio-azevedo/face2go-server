@@ -47,6 +47,8 @@ import { StudentsModule } from './students/students.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { GeocodingModule } from './geocoding/geocoding.module';
 import { PanicEventsModule } from './panic-events/panic-events.module';
+import { PresenceModule } from './presence/presence.module';
+import { EmergencyEventsModule } from './emergency-events/emergency-events.module';
 import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
@@ -104,6 +106,8 @@ import { RealtimeModule } from './realtime/realtime.module';
     GeocodingModule,
     RealtimeModule,
     PanicEventsModule,
+    PresenceModule,
+    EmergencyEventsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

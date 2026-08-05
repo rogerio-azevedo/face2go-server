@@ -20,7 +20,10 @@ import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
-import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
+import {
+  ACCESS_FACIAL_RECORDED,
+  type AccessFacialRecordedPayload,
+} from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
 
 import type { SimulateFaceAccessDto } from '../validation/dto/common.dto';
@@ -80,6 +83,10 @@ export class SimulateService {
       throw new ForbiddenException('Cliente não encontrado ou sem permissão.');
     }
     return row;
+  }
+
+  private emitFacialAccessRecorded(payload: AccessFacialRecordedPayload): void {
+    this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, payload);
   }
 
   private async resolveSimulationReaderContext(
@@ -226,10 +233,13 @@ export class SimulateService {
         snapR2Key: snapKey,
       });
 
-      this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
+      this.emitFacialAccessRecorded({
         accessId: String(doc._id),
         faceId: student.faceId,
         clientId: dto.clientId,
+        companyId: client.companyId,
+        personId: dto.personId,
+        personType: dto.personType,
         personName,
         readerId: simReader.mongoReaderId,
         readerName: simReader.readerName,
@@ -294,10 +304,13 @@ export class SimulateService {
         snapR2Key: snapKey,
       });
 
-      this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
+      this.emitFacialAccessRecorded({
         accessId: String(doc._id),
         faceId: responsible.faceId,
         clientId: dto.clientId,
+        companyId: client.companyId,
+        personId: dto.personId,
+        personType: dto.personType,
         personName,
         readerId: simReader.mongoReaderId,
         readerName: simReader.readerName,
@@ -359,10 +372,13 @@ export class SimulateService {
       snapR2Key: snapKey,
     });
 
-    this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
+    this.emitFacialAccessRecorded({
       accessId: String(doc._id),
       faceId: member.faceId,
       clientId: dto.clientId,
+      companyId: client.companyId,
+      personId: dto.personId,
+      personType: dto.personType,
       personName,
       readerId: simReader.mongoReaderId,
       readerName: simReader.readerName,

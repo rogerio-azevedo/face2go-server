@@ -6,6 +6,7 @@ export type CameraStreamContext = {
   clientName: string;
   companyId: string;
   brand: string;
+  direction: 'in' | 'out' | null;
   host: string;
   username: string;
   passwordPlain: string;

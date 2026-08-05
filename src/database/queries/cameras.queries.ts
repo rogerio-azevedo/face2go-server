@@ -339,6 +339,7 @@ export type CameraEventStreamRow = {
   companyId: string;
   brand: string;
   type: CameraType;
+  direction: 'in' | 'out' | null;
   ip: string;
   port: number;
   username: string;
@@ -440,6 +441,7 @@ export async function listCamerasForEventStream(
       companyId: clients.companyId,
       brand: cameras.brand,
       type: cameras.type,
+      direction: cameras.direction,
       ip: cameras.ip,
       port: cameras.port,
       username: cameras.username,
@@ -476,6 +478,7 @@ export async function listCamerasForEventStream(
       companyId: r.companyId,
       brand: r.brand.trim().toLowerCase(),
       type: r.type ?? 'lpr',
+      direction: r.direction ?? null,
       ip: r.ip,
       port: r.port,
       username: r.username as string,
@@ -496,6 +499,7 @@ export async function getCameraForEventStreamById(
       companyId: clients.companyId,
       brand: cameras.brand,
       type: cameras.type,
+      direction: cameras.direction,
       ip: cameras.ip,
       port: cameras.port,
       username: cameras.username,
@@ -532,6 +536,7 @@ export async function getCameraForEventStreamById(
     companyId: row.companyId,
     brand: row.brand.trim().toLowerCase(),
     type: row.type ?? 'lpr',
+    direction: row.direction ?? null,
     ip: row.ip,
     port: row.port,
     username: row.username,

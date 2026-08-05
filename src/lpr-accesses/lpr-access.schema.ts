@@ -51,6 +51,19 @@ export class LprAccess {
   @Prop({ type: String, default: null })
   direction!: string | null;
 
+  /** Sentido configurado na câmera (`in` = entrada, `out` = saída). */
+  @Prop({ type: String, default: null })
+  cameraDirection!: 'in' | 'out' | null;
+
+  @Prop({ type: String, default: null })
+  personName!: string | null;
+
+  @Prop({ type: String, default: null })
+  personId!: string | null;
+
+  @Prop({ type: String, default: null })
+  personType!: 'student' | 'responsible' | 'member' | null;
+
   @Prop({ type: Number, default: null })
   laneNo!: number | null;
 

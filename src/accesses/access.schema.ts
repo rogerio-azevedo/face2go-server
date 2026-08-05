@@ -27,6 +27,12 @@ export class FacialAccess {
   @Prop({ type: String, default: null })
   personName!: string | null;
 
+  @Prop({ type: String, default: null })
+  personId!: string | null;
+
+  @Prop({ type: String, default: null })
+  personType!: 'student' | 'responsible' | 'member' | 'guest' | null;
+
   @Prop({ type: String, required: true })
   eventCode!: string;
 

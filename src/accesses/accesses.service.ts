@@ -8,12 +8,7 @@ import { Types } from 'mongoose';
 
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
-import * as membersQueries from '../database/queries/members.queries';
-import * as registrationsQueries from '../database/queries/registrations.queries';
-import * as responsiblesQueries from '../database/queries/responsibles.queries';
-import * as studentsQueries from '../database/queries/students.queries';
-import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
-import * as visitorInviteQueries from '../database/queries/client-invites.queries';
+import { resolveAccessPersonByFaceId } from './resolve-access-person';
 import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
 import type { VideoEvent } from '../face-listener/face-listener.types';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -186,101 +181,25 @@ export class AccessesService {
     const snapPath = snapR2Key ? null : snapPathDevice;
 
     let personName: string | null = null;
+    let personId: string | null = null;
+    let personType: 'student' | 'responsible' | 'member' | 'guest' | null =
+      null;
+
     try {
-      personName = await responsiblesQueries
-        .findResponsibleByFaceIdAndClientId(
-          this.database.db,
-          faceIdNum,
-          ctx.clientId,
-        )
-        .then((r) => r?.name ?? null);
+      const resolved = await resolveAccessPersonByFaceId(
+        this.database.db,
+        faceIdNum,
+        ctx.clientId,
+      );
+      if (resolved) {
+        personName = resolved.personName;
+        personId = resolved.personId;
+        personType = resolved.personType;
+      }
     } catch (err: unknown) {
       this.logger.warn(
-        `Lookup responsible personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
+        `Lookup person identity falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
       );
-    }
-
-    if (!personName) {
-      try {
-        personName = await studentsQueries
-          .findStudentByFaceIdAndClientId(
-            this.database.db,
-            faceIdNum,
-            ctx.clientId,
-          )
-          .then((s) => s?.name ?? null);
-      } catch (err: unknown) {
-        this.logger.warn(
-          `Lookup student personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    if (!personName) {
-      try {
-        personName = await membersQueries.findMemberNameByFaceId(
-          this.database.db,
-          ctx.clientId,
-          faceIdNum,
-        );
-      } catch (err: unknown) {
-        this.logger.warn(
-          `Lookup member personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    if (!personName) {
-      try {
-        personName =
-          await registrationsQueries.findApprovedRegistrationNameByFaceId(
-            this.database.db,
-            ctx.clientId,
-            faceIdNum,
-          );
-      } catch (err: unknown) {
-        this.logger.warn(
-          `Lookup personName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    if (!personName) {
-      try {
-        const pickupAuths =
-          await pickupQueries.pickupAuthFindActiveByGuestFaceId(
-            this.database.db,
-            ctx.clientId,
-            faceIdNum,
-          );
-        const guestName = pickupAuths[0]?.guestName?.trim();
-        if (guestName) {
-          personName = guestName;
-        }
-      } catch (err: unknown) {
-        this.logger.warn(
-          `Lookup pickup guestName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    }
-
-    if (!personName) {
-      try {
-        const inviteAuths =
-          await visitorInviteQueries.inviteFindActiveByGuestFaceId(
-            this.database.db,
-            ctx.clientId,
-            faceIdNum,
-          );
-        const guestName = inviteAuths[0]?.guestName?.trim();
-        if (guestName) {
-          personName = guestName;
-        }
-      } catch (err: unknown) {
-        this.logger.warn(
-          `Lookup invite guestName falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
     }
 
     const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);
@@ -293,6 +212,8 @@ export class AccessesService {
       clientName: ctx.clientName,
       userId: faceIdNum,
       personName,
+      personId,
+      personType,
       eventCode: event.code,
       eventAction: String(event.action),
       similarity: similarityNum,
@@ -344,7 +265,10 @@ export class AccessesService {
         accessId: String(doc._id),
         faceId: faceIdNum,
         clientId: ctx.clientId,
+        companyId: ctx.companyId,
         personName,
+        personId,
+        personType,
         readerId: ctx.id,
         readerName: ctx.name,
         readerDirection: ctx.direction ?? null,
