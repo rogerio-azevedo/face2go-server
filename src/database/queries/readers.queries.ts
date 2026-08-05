@@ -330,7 +330,7 @@ export function readerRowToPublic(row: typeof facialReaders.$inferSelect) {
   };
 }
 
-/** Leitores Intelbras ativos com credenciais — conexão snapManager. */
+/** Leitores ativos com credenciais — conexão snapManager. */
 export type ReaderEventStreamRow = {
   id: string;
   name: string;
@@ -531,7 +531,7 @@ export async function listReadersForMonitorReport(
   }));
 }
 
-/** Leitores Intelbras ativos com credencial — envio da face (digest HTTP). */
+/** Leitores ativos com credencial — envio da face (digest HTTP). */
 export type ReaderFaceSyncRow = {
   id: string;
   name: string;

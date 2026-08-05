@@ -158,7 +158,7 @@ export class FaceSyncService {
   }
 
   /**
-   * Envia uma imagem (buffer) para todos os leitores Intelbras ativos do cliente.
+   * Envia uma imagem (buffer) para todos os leitores ativos do cliente.
    * Não persiste status em tabela; o chamador atualiza `device_sync_*`.
    */
   async syncPersonOnReaders(params: {
@@ -346,7 +346,7 @@ export class FaceSyncService {
     }
   }
 
-  /** Remove face_id dos leitores Intelbras ativos do cliente (exclusão de responsável). */
+  /** Remove face_id dos leitores ativos do cliente (exclusão de responsável). */
   async removePersonFromReaders(params: {
     clientId: string;
     faceId: number;
@@ -403,7 +403,7 @@ export class FaceSyncService {
     return result;
   }
 
-  /** Sincroniza um cadastro aprovado (foto no R2) com todos os leitores Intelbras ativos do cliente. */
+  /** Sincroniza um cadastro aprovado (foto no R2) com todos os leitores ativos do cliente. */
   async syncApprovedRegistration(
     registrationId: string,
     clientId: string,
