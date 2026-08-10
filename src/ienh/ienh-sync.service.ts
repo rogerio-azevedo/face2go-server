@@ -8,6 +8,7 @@ import * as bcrypt from 'bcryptjs';
 
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import * as usersQueries from '../database/queries/users.queries';
 import * as responsibleStudentsQueries from '../database/queries/responsible-students.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
@@ -256,6 +257,7 @@ export class IenhSyncService {
       responsiblesCreated: 0,
       responsiblesUpdated: 0,
       accountsCreated: 0,
+      accountsRelinkedByCpf: 0,
       accountsSkippedEmailConflict: 0,
       classesCreated: 0,
       classesMerged: 0,
@@ -801,6 +803,70 @@ export class IenhSyncService {
     }
   }
 
+  private async resolveCanonicalUserIdByCpf(
+    document: string,
+  ): Promise<string | null> {
+    const userByCpf = await usersQueries.findUserByCpf(
+      this.database.db,
+      document,
+    );
+    if (userByCpf) return userByCpf.id;
+
+    const members = await membersQueries.findMembersByDocumentGlobally(
+      this.database.db,
+      document,
+    );
+    const userIds = new Set(
+      members
+        .map((member) => member.userId)
+        .filter((userId): userId is string => userId != null),
+    );
+
+    if (userIds.size === 1) return [...userIds][0]!;
+
+    if (userIds.size > 1) {
+      this.logger.warn(
+        `IENH sync: CPF ${document} com múltiplos user_id em members (${[...userIds].join(', ')}); não reconciliando automaticamente.`,
+      );
+    }
+
+    return null;
+  }
+
+  private async linkResponsibleToUser(args: {
+    responsibleId: string;
+    clientId: string;
+    document: string;
+    userId: string;
+    responsibleCacheKey: string;
+    responsibleCache: Map<string, ResponsibleCacheEntry>;
+  }) {
+    const {
+      responsibleId,
+      clientId,
+      document,
+      userId,
+      responsibleCacheKey,
+      responsibleCache,
+    } = args;
+
+    await responsiblesQueries.linkUserToResponsible(
+      this.database.db,
+      responsibleId,
+      clientId,
+      userId,
+    );
+    await this.personLookup.linkLegacyProfilesByDocument(document, userId);
+    await usersQueries.updateUserCpfIfMissing(
+      this.database.db,
+      userId,
+      document,
+    );
+
+    const entry = responsibleCache.get(responsibleCacheKey);
+    if (entry) entry.userId = userId;
+  }
+
   private async ensureResponsibleAccount(args: {
     record: TotvsIenhRecord;
     clientId: string;
@@ -831,8 +897,6 @@ export class IenhSyncService {
     const emailRaw = isMother ? record.EMAILMAE : record.EMAILPAI;
     const email = emailRaw?.trim().toLowerCase() || null;
 
-    if (knownUserId) return knownUserId;
-
     let inflight = accountCreationInflight.get(responsibleCacheKey);
     if (!inflight) {
       inflight = (async () => {
@@ -841,9 +905,42 @@ export class IenhSyncService {
           responsibleId,
           clientId,
         );
-        if (fresh?.userId) {
+        const currentUserId = fresh?.userId ?? knownUserId ?? null;
+
+        const setLinkedUserId = (linkedUserId: string) => {
           const entry = responsibleCache.get(responsibleCacheKey);
-          if (entry) entry.userId = fresh.userId;
+          if (entry) entry.userId = linkedUserId;
+        };
+
+        const canonicalUserId =
+          await this.resolveCanonicalUserIdByCpf(document);
+
+        if (canonicalUserId) {
+          if (currentUserId !== canonicalUserId) {
+            if (currentUserId) {
+              result.accountsRelinkedByCpf += 1;
+              this.logger.warn(
+                `IENH sync: responsável ${responsibleId} religado de user ${currentUserId} ` +
+                  `para ${canonicalUserId} (CPF ${document})`,
+              );
+            }
+            await this.linkResponsibleToUser({
+              responsibleId,
+              clientId,
+              document,
+              userId: canonicalUserId,
+              responsibleCacheKey,
+              responsibleCache,
+            });
+            return;
+          }
+
+          setLinkedUserId(canonicalUserId);
+          return;
+        }
+
+        if (currentUserId) {
+          setLinkedUserId(currentUserId);
           return;
         }
 
@@ -861,22 +958,15 @@ export class IenhSyncService {
           return;
         }
 
-        const setLinkedUserId = (linkedUserId: string) => {
-          const entry = responsibleCache.get(responsibleCacheKey);
-          if (entry) entry.userId = linkedUserId;
-        };
-
         if (resolved.userId) {
-          await this.personLookup.linkLegacyProfilesByDocument(
+          await this.linkResponsibleToUser({
+            responsibleId,
+            clientId,
             document,
-            resolved.userId,
-          );
-          await usersQueries.updateUserCpfIfMissing(
-            this.database.db,
-            resolved.userId,
-            document,
-          );
-          setLinkedUserId(resolved.userId);
+            userId: resolved.userId,
+            responsibleCacheKey,
+            responsibleCache,
+          });
           return;
         }
 
@@ -893,12 +983,15 @@ export class IenhSyncService {
             role: 'member',
             isActive: true,
           });
-          await this.personLookup.linkLegacyProfilesByDocument(
+          await this.linkResponsibleToUser({
+            responsibleId,
+            clientId,
             document,
-            newUserId,
-          );
+            userId: newUserId,
+            responsibleCacheKey,
+            responsibleCache,
+          });
           result.accountsCreated += 1;
-          setLinkedUserId(newUserId);
         } catch (err: unknown) {
           const afterRace = await responsiblesQueries.getResponsibleById(
             this.database.db,
