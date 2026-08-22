@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { z } from 'zod';
 
 import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import * as clientsQueries from '../database/queries/clients.queries';
@@ -16,13 +15,10 @@ import {
   type PickupGuestFaceSubmittedPayload,
 } from '../notifications/notifications.events';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { parseUploadedImageFile } from '../storage/uploaded-image.util';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { publicPickupRegisterSubmitSchema } from '../validation/pickup-authorizations.schema';
 import { PickupAuthorizationsService } from './pickup-authorizations.service';
-
-const uploadPhotoBodySchema = z.object({
-  imageBase64: z.string().min(100),
-});
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -81,12 +77,7 @@ export class PublicPickupRegisterService {
     };
   }
 
-  async uploadPhoto(code: string, body: unknown) {
-    const parsed = uploadPhotoBodySchema.safeParse(body);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-
+  async uploadPhoto(code: string, file: Express.Multer.File) {
     const row = await this.resolveActiveAuth(code);
     if (row.guestApprovalStatus === 'approved') {
       throw new ConflictException('Esta autorização já foi aprovada.');
@@ -96,34 +87,7 @@ export class PublicPickupRegisterService {
     }
     // rejected → permite novo envio
 
-    let payload = parsed.data.imageBase64.trim();
-    let mime = 'image/jpeg';
-    const dataUrlMatch = /^data:([^;,]+);base64,(.+)$/i.exec(payload);
-    if (dataUrlMatch) {
-      mime = dataUrlMatch[1].trim().toLowerCase();
-      payload = dataUrlMatch[2].replace(/\s/g, '');
-    } else {
-      payload = payload.replace(/\s/g, '');
-    }
-
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(payload, 'base64');
-    } catch {
-      throw new BadRequestException('Imagem inválida.');
-    }
-
-    if (buffer.length < 200) {
-      throw new BadRequestException('Imagem inválida ou muito pequena.');
-    }
-    const maxBytes = 5 * 1024 * 1024;
-    if (buffer.length > maxBytes) {
-      throw new BadRequestException('Imagem maior que 5 MB.');
-    }
-
-    const ext = this.r2.extForImageMime(mime);
-    const contentType =
-      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const { buffer, contentType, ext } = parseUploadedImageFile(file, this.r2);
     const client = await clientsQueries.getClientByIdOnly(
       this.database.db,
       row.clientId,

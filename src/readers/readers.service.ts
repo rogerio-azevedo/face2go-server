@@ -20,6 +20,13 @@ import {
   intelbrasSearchDeviceUsers,
   toPlainReaderCredential,
 } from '../face-sync/intelbras-device.client';
+import {
+  hikvisionDeleteUser,
+  hikvisionGetFaceImage,
+  hikvisionListDeviceUsers,
+  hikvisionSearchDeviceUsers,
+  toHikvisionConnection,
+} from '../integrations/hikvision';
 import { PermissionsService } from '../permissions/permissions.service';
 import {
   createReaderSchema,
@@ -299,9 +306,6 @@ export class ReadersService {
     if (!reader.isActive) {
       throw new BadRequestException('O leitor está inativo.');
     }
-    if (reader.brand !== 'intelbras') {
-      throw new BadRequestException('Marca não suportada para esta operação.');
-    }
     if (!reader.username || !reader.passwordEncrypted) {
       throw new BadRequestException('O leitor não possui credenciais salvas.');
     }
@@ -315,6 +319,7 @@ export class ReadersService {
       {
         id: reader.id,
         name: reader.name,
+        brand: reader.brand ?? 'intelbras',
         ip: reader.ip,
         port: reader.port,
         username: reader.username,
@@ -324,6 +329,44 @@ export class ReadersService {
     );
 
     try {
+      if (reader.brand === 'hikvision') {
+        const connection = toHikvisionConnection(plainReader);
+        const safeLimit = Math.min(Math.max(limit, 1), 500);
+        const safeOffset = Math.max(offset, 0);
+
+        const result = search
+          ? await hikvisionSearchDeviceUsers(
+              connection,
+              search,
+              safeLimit,
+              safeOffset,
+            )
+          : (() => {
+              const allPromise = hikvisionListDeviceUsers(connection);
+              return allPromise.then((all) => {
+                const slice = all.slice(safeOffset, safeOffset + safeLimit);
+                return {
+                  totalCount: all.length,
+                  found: slice.length,
+                  records: slice,
+                };
+              });
+            })();
+
+        const resolved = await result;
+        return {
+          totalCount: resolved.totalCount,
+          found: resolved.found,
+          records: resolved.records.map((r) => ({
+            UserID: r.userId,
+            CardName: r.name,
+            CardNo: r.cardNo ?? r.userId,
+            ValidDateStart: r.validFrom ?? undefined,
+            ValidDateEnd: r.validTo ?? undefined,
+          })),
+        };
+      }
+
       if (search) {
         return await intelbrasSearchDeviceUsers(
           plainReader,
@@ -369,9 +412,6 @@ export class ReadersService {
     if (!reader.isActive) {
       throw new BadRequestException('O leitor está inativo.');
     }
-    if (reader.brand !== 'intelbras') {
-      throw new BadRequestException('Marca não suportada para esta operação.');
-    }
     if (!reader.username || !reader.passwordEncrypted) {
       throw new BadRequestException('O leitor não possui credenciais salvas.');
     }
@@ -385,6 +425,7 @@ export class ReadersService {
       {
         id: reader.id,
         name: reader.name,
+        brand: reader.brand ?? 'intelbras',
         ip: reader.ip,
         port: reader.port,
         username: reader.username,
@@ -394,6 +435,14 @@ export class ReadersService {
     );
 
     try {
+      if (reader.brand === 'hikvision') {
+        const connection = toHikvisionConnection(plainReader);
+        const result = await hikvisionDeleteUser(connection, userId);
+        if (!result.success) {
+          throw new Error(result.error ?? 'Falha ao remover usuário');
+        }
+        return { success: true };
+      }
       await intelbrasRemoveUserFromReader(plainReader, userId);
       return { success: true };
     } catch (e: unknown) {
@@ -432,9 +481,6 @@ export class ReadersService {
     if (!reader.isActive) {
       throw new BadRequestException('O leitor está inativo.');
     }
-    if (reader.brand !== 'intelbras') {
-      throw new BadRequestException('Marca não suportada para esta operação.');
-    }
     if (!reader.username || !reader.passwordEncrypted) {
       throw new BadRequestException('O leitor não possui credenciais salvas.');
     }
@@ -448,6 +494,7 @@ export class ReadersService {
       {
         id: reader.id,
         name: reader.name,
+        brand: reader.brand ?? 'intelbras',
         ip: reader.ip,
         port: reader.port,
         username: reader.username,
@@ -457,6 +504,10 @@ export class ReadersService {
     );
 
     try {
+      if (reader.brand === 'hikvision') {
+        const connection = toHikvisionConnection(plainReader);
+        return await hikvisionGetFaceImage(connection, userId);
+      }
       return await intelbrasGetFaceImage(plainReader, userId);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erro desconhecido';

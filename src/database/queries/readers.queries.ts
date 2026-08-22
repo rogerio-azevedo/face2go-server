@@ -367,7 +367,6 @@ export async function listReadersForEventStream(
     .where(
       and(
         eq(facialReaders.isActive, true),
-        eq(facialReaders.brand, 'intelbras'),
         isNotNull(facialReaders.username),
         isNotNull(facialReaders.passwordEncrypted),
       ),
@@ -423,7 +422,6 @@ export async function getReaderForEventStreamById(
       and(
         eq(facialReaders.id, readerId),
         eq(facialReaders.isActive, true),
-        eq(facialReaders.brand, 'intelbras'),
         isNotNull(facialReaders.username),
         isNotNull(facialReaders.passwordEncrypted),
       ),
@@ -535,6 +533,7 @@ export async function listReadersForMonitorReport(
 export type ReaderFaceSyncRow = {
   id: string;
   name: string;
+  brand: ReaderBrand;
   ip: string;
   port: number;
   username: string;
@@ -549,6 +548,7 @@ export async function listReadersForFaceSyncByClient(
     .select({
       id: facialReaders.id,
       name: facialReaders.name,
+      brand: facialReaders.brand,
       ip: facialReaders.ip,
       port: facialReaders.port,
       username: facialReaders.username,
@@ -559,13 +559,17 @@ export async function listReadersForFaceSyncByClient(
       and(
         eq(facialReaders.clientId, clientId),
         eq(facialReaders.isActive, true),
-        eq(facialReaders.brand, 'intelbras'),
         isNotNull(facialReaders.username),
         isNotNull(facialReaders.passwordEncrypted),
       ),
     );
 
-  return rows.filter(
-    (r) => r.username?.trim() && r.passwordEncrypted?.trim() && r.ip?.trim(),
-  ) as ReaderFaceSyncRow[];
+  return rows
+    .filter(
+      (r) => r.username?.trim() && r.passwordEncrypted?.trim() && r.ip?.trim(),
+    )
+    .map((r) => ({
+      ...r,
+      brand: r.brand ?? 'intelbras',
+    })) as ReaderFaceSyncRow[];
 }

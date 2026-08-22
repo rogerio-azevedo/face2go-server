@@ -1,8 +1,19 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../common/decorators/public.decorator';
 import { PublicRegistrationService } from './public-registration.service';
+
+const UPLOAD_PHOTO_LIMIT_BYTES = 10 * 1024 * 1024;
 
 @ApiTags('public-registration')
 @Controller('register')
@@ -29,12 +40,29 @@ export class PublicRegisterController {
 
   @Public()
   @Post(':code/upload-photo')
-  @ApiOperation({
-    summary:
-      'Enviar foto (base64) pelo servidor para o R2 — preferir em vez do presign no browser',
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: UPLOAD_PHOTO_LIMIT_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file', 'registrationId'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        registrationId: { type: 'string', format: 'uuid' },
+      },
+    },
   })
-  uploadPhoto(@Param('code') code: string, @Body() body: unknown) {
-    return this.publicRegistrationService.uploadPhoto(code, body);
+  @ApiOperation({
+    summary: 'Enviar foto (multipart) pelo servidor para o R2',
+  })
+  uploadPhoto(
+    @Param('code') code: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() body: unknown,
+  ) {
+    return this.publicRegistrationService.uploadPhoto(code, file, body);
   }
 
   @Public()

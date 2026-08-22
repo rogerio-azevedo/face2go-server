@@ -1,8 +1,19 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../common/decorators/public.decorator';
 import { PublicResponsibleRegisterService } from './public-responsible-register.service';
+
+const UPLOAD_PHOTO_LIMIT_BYTES = 10 * 1024 * 1024;
 
 @ApiTags('public-responsible-register')
 @Controller('responsible-register')
@@ -18,9 +29,25 @@ export class PublicResponsibleRegisterController {
 
   @Public()
   @Post(':code/upload-photo')
-  @ApiOperation({ summary: 'Enviar foto do convidado (base64 via servidor)' })
-  uploadPhoto(@Param('code') code: string, @Body() body: unknown) {
-    return this.svc.uploadPhoto(code, body);
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: UPLOAD_PHOTO_LIMIT_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiOperation({ summary: 'Enviar foto do convidado (multipart via servidor)' })
+  uploadPhoto(
+    @Param('code') code: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.svc.uploadPhoto(code, file);
   }
 
   @Public()

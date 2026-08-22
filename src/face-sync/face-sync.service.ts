@@ -17,6 +17,7 @@ import * as readersQueries from '../database/queries/readers.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
+import { aggregateReaderSyncOutcome } from './aggregate-reader-sync-outcome.util';
 import {
   formatReaderFaceSyncError,
   intelbrasRemoveUserFromReader,
@@ -24,6 +25,13 @@ import {
   toPlainReaderCredential,
 } from './intelbras-device.client';
 import { dateToIntelbrasFormat } from './intelbras-valid-date.util';
+import { dateToHikvisionFormat } from '../integrations/hikvision/hikvision-valid-date.util';
+import {
+  formatHikvisionFaceSyncError,
+  hikvisionDeleteUser,
+  hikvisionSyncFace,
+  toHikvisionConnection,
+} from '../integrations/hikvision';
 import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
 import { AccessTimeZoneService } from './access-time-zone.service';
 import {
@@ -110,7 +118,7 @@ export class FaceSyncService {
     return clientId;
   }
 
-  /** Indica se o cliente possui ao menos um leitor facial Intelbras ativo com credenciais. */
+  /** Indica se o cliente possui ao menos um leitor facial ativo com credenciais. */
   async hasActiveFacialReaders(clientId: string): Promise<boolean> {
     const readers = await readersQueries.listReadersForFaceSyncByClient(
       this.database.db,
@@ -208,20 +216,19 @@ export class FaceSyncService {
     });
 
     try {
-      const intelbrasReaders =
-        await readersQueries.listReadersForFaceSyncByClient(
-          this.database.db,
-          clientId,
-        );
+      const readers = await readersQueries.listReadersForFaceSyncByClient(
+        this.database.db,
+        clientId,
+      );
 
       syncLog('syncPersonOnReaders:leitores', {
         clientId,
         faceId,
-        total: intelbrasReaders.length,
-        readers: intelbrasReaders.map((r) => readerLabel(r)),
+        total: readers.length,
+        readers: readers.map((r) => readerLabel(r)),
       });
 
-      if (intelbrasReaders.length === 0) {
+      if (readers.length === 0) {
         syncLog('syncPersonOnReaders:semLeitores', { clientId, faceId });
         return {
           deviceSyncStatus: 'sync_failed',
@@ -230,23 +237,36 @@ export class FaceSyncService {
         };
       }
 
-      let base64: string;
-      try {
-        syncLog('syncPersonOnReaders:compressImage', { clientId, faceId });
-        base64 = await imageBufferToReaderBase64Jpeg(imageBuffer);
-        syncLog('syncPersonOnReaders:compressImageOk', {
+      const hasIntelbras = readers.some((r) => r.brand === 'intelbras');
+      const hasHikvision = readers.some((r) => r.brand === 'hikvision');
+
+      let intelbrasBase64: string | null = null;
+      if (hasIntelbras) {
+        try {
+          syncLog('syncPersonOnReaders:compressImage', { clientId, faceId });
+          intelbrasBase64 = await imageBufferToReaderBase64Jpeg(imageBuffer);
+          syncLog('syncPersonOnReaders:compressImageOk', {
+            clientId,
+            faceId,
+            base64Chars: intelbrasBase64.length,
+          });
+        } catch (e) {
+          syncLogError('syncPersonOnReaders:compressImage', e, {
+            clientId,
+            faceId,
+          });
+          const msg =
+            e instanceof Error ? e.message : 'Falha ao obter/comprimir a foto.';
+          return { deviceSyncStatus: 'sync_failed', deviceSyncError: msg };
+        }
+      }
+
+      if (hasHikvision) {
+        syncLog('syncPersonOnReaders:hikvisionImage', {
           clientId,
           faceId,
-          base64Chars: base64.length,
+          imageBytes: imageBuffer.length,
         });
-      } catch (e) {
-        syncLogError('syncPersonOnReaders:compressImage', e, {
-          clientId,
-          faceId,
-        });
-        const msg =
-          e instanceof Error ? e.message : 'Falha ao obter/comprimir a foto.';
-        return { deviceSyncStatus: 'sync_failed', deviceSyncError: msg };
       }
 
       const cipher = createReaderCredentialsCipher(
@@ -265,35 +285,55 @@ export class FaceSyncService {
       const failures: string[] = [];
 
       const outcomes = await Promise.all(
-        intelbrasReaders.map(async (r) => {
+        readers.map(async (r) => {
           const label = readerLabel(r);
           try {
             syncLog('syncPersonOnReaders:leitorInicio', {
               clientId,
               faceId,
               reader: label,
+              brand: r.brand,
             });
             const plain = toPlainReaderCredential(
               r,
               cipher.decrypt(r.passwordEncrypted),
             );
 
-            // 1) Zona no leitor → 2) Cartão → 3) Foto (ordem exigida pelo firmware)
-            await this.accessTimeZone.ensureZonesOnSingleReader(
-              plain,
-              timeSectionIds,
-              shiftsByZone,
-            );
+            if (r.brand === 'hikvision') {
+              const connection = toHikvisionConnection(plain);
+              await hikvisionSyncFace(connection, {
+                employeeNo: String(faceId),
+                personName: name || 'USUARIO',
+                jpegBuffer: imageBuffer,
+                validDateStart: params.validFrom
+                  ? dateToHikvisionFormat(params.validFrom)
+                  : undefined,
+                validDateEnd: params.validUntil
+                  ? dateToHikvisionFormat(params.validUntil)
+                  : undefined,
+              });
+            } else {
+              if (!intelbrasBase64) {
+                throw new Error('Falha ao preparar imagem para leitor Intelbras.');
+              }
 
-            await intelbrasUpsertFaceOnReader(
-              plain,
-              faceId,
-              name || 'USUARIO',
-              base64,
-              timeSectionIds,
-              validDateStart,
-              validDateEnd,
-            );
+              await this.accessTimeZone.ensureZonesOnSingleReader(
+                plain,
+                timeSectionIds,
+                shiftsByZone,
+              );
+
+              await intelbrasUpsertFaceOnReader(
+                plain,
+                faceId,
+                name || 'USUARIO',
+                intelbrasBase64,
+                timeSectionIds,
+                validDateStart,
+                validDateEnd,
+              );
+            }
+
             syncLog('syncPersonOnReaders:leitorOk', {
               clientId,
               faceId,
@@ -301,7 +341,10 @@ export class FaceSyncService {
             });
             return null;
           } catch (e) {
-            const msg = formatReaderFaceSyncError(r.name, e);
+            const msg =
+              r.brand === 'hikvision'
+                ? formatHikvisionFaceSyncError(r.name, e)
+                : formatReaderFaceSyncError(r.name, e);
             const raw =
               e instanceof Error
                 ? e.message
@@ -323,32 +366,26 @@ export class FaceSyncService {
         if (m !== null) failures.push(m);
       }
 
-      if (failures.length === intelbrasReaders.length) {
-        const failedCount = failures.length;
-        const total = intelbrasReaders.length;
-        const err = `Não foi possível sincronizar com ${failedCount} de ${total} leitor(es).`;
+      const outcome = aggregateReaderSyncOutcome(failures, readers.length);
+
+      if (outcome.deviceSyncStatus === 'sync_failed') {
         syncLog('syncPersonOnReaders:todosFalharam', {
           clientId,
           faceId,
           failures,
         });
-        return { deviceSyncStatus: 'sync_failed', deviceSyncError: err };
+        return outcome;
       }
-
-      const warn =
-        failures.length > 0
-          ? `Sincronizado parcialmente (${intelbrasReaders.length - failures.length} de ${intelbrasReaders.length} leitor(es)).`
-          : null;
 
       syncLog('syncPersonOnReaders:concluido', {
         clientId,
         faceId,
-        synced: intelbrasReaders.length - failures.length,
-        total: intelbrasReaders.length,
+        synced: readers.length - failures.length,
+        total: readers.length,
         partial: failures.length > 0,
       });
 
-      return { deviceSyncStatus: 'synced', deviceSyncError: warn };
+      return outcome;
     } catch (err) {
       syncLogError('syncPersonOnReaders', err, { clientId, faceId });
       throw err;
@@ -364,12 +401,11 @@ export class FaceSyncService {
     requireAll?: boolean;
   }): Promise<{ removed: number; total: number; failures: string[] }> {
     const { clientId, faceId, logContext, requireAll = true } = params;
-    const intelbrasReaders =
-      await readersQueries.listReadersForFaceSyncByClient(
-        this.database.db,
-        clientId,
-      );
-    if (intelbrasReaders.length === 0) {
+    const readers = await readersQueries.listReadersForFaceSyncByClient(
+      this.database.db,
+      clientId,
+    );
+    if (readers.length === 0) {
       return { removed: 0, total: 0, failures: [] };
     }
 
@@ -380,13 +416,24 @@ export class FaceSyncService {
     const failures: string[] = [];
 
     await Promise.all(
-      intelbrasReaders.map(async (r) => {
+      readers.map(async (r) => {
         try {
           const plain = toPlainReaderCredential(
             r,
             cipher.decrypt(r.passwordEncrypted),
           );
-          await intelbrasRemoveUserFromReader(plain, faceId);
+          if (r.brand === 'hikvision') {
+            const connection = toHikvisionConnection(plain);
+            const result = await hikvisionDeleteUser(
+              connection,
+              String(faceId),
+            );
+            if (!result.success) {
+              throw new Error(result.error ?? 'Falha ao remover usuário Hikvision');
+            }
+          } else {
+            await intelbrasRemoveUserFromReader(plain, faceId);
+          }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           failures.push(`${r.name}: ${msg}`);
@@ -398,14 +445,14 @@ export class FaceSyncService {
     );
 
     const result = {
-      removed: intelbrasReaders.length - failures.length,
-      total: intelbrasReaders.length,
+      removed: readers.length - failures.length,
+      total: readers.length,
       failures,
     };
 
     if (failures.length > 0 && requireAll) {
       throw new BadRequestException(
-        `Não foi possível remover a face de todos os leitores (${failures.length} de ${intelbrasReaders.length} falhou). ${failures.join('; ')}`,
+        `Não foi possível remover a face de todos os leitores (${failures.length} de ${readers.length} falhou). ${failures.join('; ')}`,
       );
     }
 

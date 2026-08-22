@@ -1382,7 +1382,7 @@
             "bearer": []
           }
         ],
-        "summary": "Status de monitoramento (conexão stream snapManager / leitores Intelbras)",
+        "summary": "Status de monitoramento (conexão stream / leitores Intelbras e Hikvision)",
         "tags": [
           "readers"
         ]
@@ -2186,12 +2186,36 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "registrationId"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "registrationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
           }
         },
-        "summary": "Enviar foto (base64) pelo servidor para o R2 — preferir em vez do presign no browser",
+        "summary": "Enviar foto (multipart) pelo servidor para o R2",
         "tags": [
           "public-registration"
         ]
@@ -5080,12 +5104,31 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
           }
         },
-        "summary": "Enviar foto do convidado (base64 via servidor)",
+        "summary": "Enviar foto do convidado (multipart via servidor)",
         "tags": [
           "public-pickup-register"
         ]
@@ -5568,12 +5611,31 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
           }
         },
-        "summary": "Enviar foto do visitante (base64 via servidor)",
+        "summary": "Enviar foto do visitante (multipart via servidor)",
         "tags": [
           "public-invite-register"
         ]
@@ -5881,12 +5943,31 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
           }
         },
-        "summary": "Enviar foto do convidado (base64 via servidor)",
+        "summary": "Enviar foto do convidado (multipart via servidor)",
         "tags": [
           "public-responsible-register"
         ]
@@ -7711,6 +7792,257 @@
           "panic-events"
         ]
       }
+    },
+    "/clients/{clientId}/presence": {
+      "get": {
+        "operationId": "PresenceController_getClientPresence",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Presença atual de uma escola/unidade",
+        "tags": [
+          "presence"
+        ]
+      }
+    },
+    "/companies/{companyId}/presence": {
+      "get": {
+        "operationId": "PresenceController_getCompanyPresence",
+        "parameters": [
+          {
+            "name": "companyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Presença agregada da empresa ou de uma escola específica",
+        "tags": [
+          "presence"
+        ]
+      }
+    },
+    "/clients/{clientId}/emergency-events": {
+      "post": {
+        "operationId": "EmergencyEventsController_activate",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEmergencyEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar modo emergência para uma escola",
+        "tags": [
+          "emergency-events"
+        ]
+      }
+    },
+    "/emergency-events/{eventId}": {
+      "get": {
+        "operationId": "EmergencyEventsController_getById",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Detalhe do evento de emergência com chamada",
+        "tags": [
+          "emergency-events"
+        ]
+      }
+    },
+    "/emergency-events/{eventId}/checkins/{checkinId}": {
+      "patch": {
+        "operationId": "EmergencyEventsController_updateCheckin",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkinId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEmergencyCheckinDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar status de uma pessoa na chamada",
+        "tags": [
+          "emergency-events"
+        ]
+      }
+    },
+    "/emergency-events/{eventId}/checkins": {
+      "post": {
+        "operationId": "EmergencyEventsController_addCheckin",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddEmergencyCheckinDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Adicionar pessoa manualmente à chamada",
+        "tags": [
+          "emergency-events"
+        ]
+      }
+    },
+    "/emergency-events/{eventId}/resolve": {
+      "patch": {
+        "operationId": "EmergencyEventsController_resolve",
+        "parameters": [
+          {
+            "name": "eventId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveEmergencyEventDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Encerrar evento de emergência",
+        "tags": [
+          "emergency-events"
+        ]
+      }
     }
   },
   "info": {
@@ -8520,6 +8852,83 @@
         "required": [
           "closingReason"
         ]
+      },
+      "CreateEmergencyEventDto": {
+        "type": "object",
+        "properties": {
+          "srpAction": {
+            "type": "string",
+            "enum": [
+              "hold",
+              "secure",
+              "lockdown",
+              "evacuate",
+              "shelter",
+              "other"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "panicEventId": {
+            "type": "string",
+            "maxLength": 24
+          }
+        }
+      },
+      "UpdateEmergencyCheckinDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "safe",
+              "not_located",
+              "evacuated",
+              "injured"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "AddEmergencyCheckinDto": {
+        "type": "object",
+        "properties": {
+          "personType": {
+            "type": "string",
+            "enum": [
+              "student",
+              "responsible",
+              "member",
+              "guest"
+            ]
+          },
+          "personId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "personType",
+          "personId"
+        ]
+      },
+      "ResolveEmergencyEventDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
       }
     }
   }

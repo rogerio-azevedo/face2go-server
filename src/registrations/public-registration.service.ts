@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { parseUploadedImageFile } from '../storage/uploaded-image.util';
 import { zodFirstMessage } from '../validation/zod-utils';
 
 const presignBodySchema = z.object({
@@ -28,7 +29,6 @@ const submitBodySchema = z.object({
 
 const uploadPhotoBodySchema = z.object({
   registrationId: z.string().uuid(),
-  imageBase64: z.string().min(100),
 });
 
 function escapeRegex(s: string): string {
@@ -138,11 +138,12 @@ export class PublicRegistrationService {
     };
   }
 
-  /**
-   * Envia a foto pelo servidor para o R2 (evita CORS browser → bucket).
-   * Aceita data URL (`data:image/jpeg;base64,...`) ou base64 cru (tratado como JPEG).
-   */
-  async uploadPhoto(code: string, body: unknown) {
+  /** Envia a foto pelo servidor para o R2 (multipart, campo `file`). */
+  async uploadPhoto(
+    code: string,
+    file: Express.Multer.File,
+    body: unknown,
+  ) {
     const parsed = uploadPhotoBodySchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
@@ -157,35 +158,8 @@ export class PublicRegistrationService {
       throw new NotFoundException('Link inválido, expirado ou desativado.');
     }
 
-    const { registrationId, imageBase64 } = parsed.data;
-    let payload = imageBase64.trim();
-    let mime = 'image/jpeg';
-    const dataUrlMatch = /^data:([^;,]+);base64,(.+)$/i.exec(payload);
-    if (dataUrlMatch) {
-      mime = dataUrlMatch[1].trim().toLowerCase();
-      payload = dataUrlMatch[2].replace(/\s/g, '');
-    } else {
-      payload = payload.replace(/\s/g, '');
-    }
-
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(payload, 'base64');
-    } catch {
-      throw new BadRequestException('Imagem inválida.');
-    }
-
-    if (buffer.length < 200) {
-      throw new BadRequestException('Imagem inválida ou muito pequena.');
-    }
-    const maxBytes = 5 * 1024 * 1024;
-    if (buffer.length > maxBytes) {
-      throw new BadRequestException('Imagem maior que 5 MB.');
-    }
-
-    const ext = this.r2.extForImageMime(mime);
-    const contentType =
-      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const { registrationId } = parsed.data;
+    const { buffer, contentType, ext } = parseUploadedImageFile(file, this.r2);
     const key = this.r2.buildFaceDraftKey(
       bundle.client.companyId,
       bundle.client.id,

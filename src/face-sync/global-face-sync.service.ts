@@ -13,6 +13,7 @@ import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { AccessTimeZoneService } from './access-time-zone.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
+import { aggregateReaderSyncOutcome } from './aggregate-reader-sync-outcome.util';
 import {
   batchUpsertUsersOnReader,
   type IntelbrasUserRecord,
@@ -346,19 +347,7 @@ export class GlobalFaceSyncService {
     deviceSyncStatus: 'synced' | 'sync_failed';
     deviceSyncError: string | null;
   } {
-    if (failures.length === totalReaders) {
-      return {
-        deviceSyncStatus: 'sync_failed',
-        deviceSyncError: `Não foi possível sincronizar com ${failures.length} de ${totalReaders} leitor(es).`,
-      };
-    }
-    if (failures.length > 0) {
-      return {
-        deviceSyncStatus: 'synced',
-        deviceSyncError: `Sincronizado parcialmente (${totalReaders - failures.length} de ${totalReaders} leitor(es)).`,
-      };
-    }
-    return { deviceSyncStatus: 'synced', deviceSyncError: null };
+    return aggregateReaderSyncOutcome(failures, totalReaders);
   }
 
   private async loadPhotoBatch(

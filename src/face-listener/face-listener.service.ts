@@ -21,11 +21,22 @@ import type {
   ReaderEventStreamRow,
 } from '../database/queries/readers.queries';
 import * as readersQueries from '../database/queries/readers.queries';
+import {
+  hikvisionAlertStreamUrl,
+  hikvisionEventToVideoEvent,
+  hikvisionIsapiRequest,
+  hikvisionOpenStreamRequest,
+  hikvisionProbeAlertStreamSupported,
+  hikvisionSearchAcsEvents,
+  parseHikvisionAlertStreamPart,
+  toHikvisionConnection,
+} from '../integrations/hikvision';
 import type {
   ReaderListenerStatus,
   ReaderMonitorDeviceRow,
   ReaderMonitorStatusReport,
   ReaderBrandSlug,
+  VideoEvent,
 } from './face-listener.types';
 import {
   createSnapMultipartState,
@@ -39,6 +50,22 @@ import {
   sliceSnapJpeg,
   snapFlatMapToVideoEvent,
 } from './snap-stream.parser';
+import {
+  createMultipartState,
+  extractBoundaryFromContentType,
+  feedMultipartStream,
+  type MultipartAccumState,
+} from './hikvision-multipart-json.parser';
+import {
+  extractHttpStatus,
+  HIKVISION_CONNECT_STAGGER_MS,
+  HIKVISION_POLL_OFFLINE_THRESHOLD,
+  type HikvisionMonitorMode,
+  nextPollFailCountOnError,
+  shouldFallbackAlertStreamToPoll,
+  shouldLogPollFailure,
+  shouldMarkPollOffline,
+} from './face-listener-hikvision-monitor.util';
 
 type FacialSnapEvent = NonNullable<ReturnType<typeof snapFlatMapToVideoEvent>>;
 
@@ -104,16 +131,25 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   private readonly cipher: ReaderCredentialsCipher;
 
   private reconnectTimers = new Map<string, NodeJS.Timeout>();
+  private hikvisionPollTimers = new Map<string, NodeJS.Timeout>();
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
 
   private streamAbortByReader = new Map<string, AbortController>();
   private connectGeneration = new Map<string, number>();
 
   private multipartByReader = new Map<string, SnapMultipartAccumState>();
+  private hikvisionMultipartByReader = new Map<string, MultipartAccumState>();
   private pendingByReader = new Map<string, SnapPending>();
+  private hikvisionLastSerialByReader = new Map<string, number>();
+  private processedHikvisionEventKeys = new Map<string, number>();
+  private hikvisionIntegrationByReader = new Map<string, HikvisionMonitorMode>();
+  private hikvisionPollFailCountByReader = new Map<string, number>();
+  private hikvisionAlertStreamFailCountByReader = new Map<string, number>();
 
   private static readonly REFRESH_INTERVAL_MS = 60_000;
   private static readonly LAST_SEEN_DEBOUNCE_MS = 30_000;
+  private static readonly HIKVISION_POLL_INTERVAL_MS = 3_000;
+  private static readonly HIKVISION_EVENT_DEDUP_MS = 5 * 60_000;
 
   private statuses = new Map<string, ReaderListenerStatus>();
   private lastSeenDebounceTimers = new Map<string, NodeJS.Timeout>();
@@ -157,6 +193,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(timer);
     }
     this.reconnectTimers.clear();
+    for (const timer of this.hikvisionPollTimers.values()) {
+      clearInterval(timer);
+    }
+    this.hikvisionPollTimers.clear();
     for (const timer of this.lastSeenDebounceTimers.values()) {
       clearTimeout(timer);
     }
@@ -184,7 +224,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       const host = hostFromIpPort(d.ip, d.port);
       const existing = this.statuses.get(d.id);
       const streamSupported =
-        d.brand === 'intelbras' && d.hasCredentials && d.isActive;
+        (d.brand === 'intelbras' || d.brand === 'hikvision') &&
+        d.hasCredentials &&
+        d.isActive;
 
       const base: ReaderMonitorDeviceRow = {
         readerId: d.id,
@@ -208,7 +250,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           ...base,
           lastConnectionError: !d.isActive
             ? 'Leitor inativo'
-            : d.brand !== 'intelbras'
+            : d.brand !== 'intelbras' && d.brand !== 'hikvision'
               ? 'Monitoramento de stream ainda não suportado para esta marca'
               : !d.hasCredentials
                 ? 'Credenciais do leitor não configuradas'
@@ -265,9 +307,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.log(
-      `[FaceListener] Iniciando snapManager em ${valid.length} leitor(es) Intelbras...`,
+      `[FaceListener] Iniciando streams em ${valid.length} leitor(es)...`,
     );
 
+    let hikvisionConnectIndex = 0;
     for (const ctx of valid) {
       this.statuses.set(ctx.id, {
         readerId: ctx.id,
@@ -278,6 +321,18 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         connected: false,
         eventsReceived: 0,
       });
+
+      if (ctx.brand === 'hikvision') {
+        const delayMs = hikvisionConnectIndex * HIKVISION_CONNECT_STAGGER_MS;
+        hikvisionConnectIndex += 1;
+        if (delayMs > 0) {
+          setTimeout(() => this.subscribe(ctx), delayMs);
+        } else {
+          this.subscribe(ctx);
+        }
+        continue;
+      }
+
       this.subscribe(ctx);
     }
   }
@@ -300,7 +355,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       if (!validIds.has(id)) {
         this.teardownReader(
           id,
-          'removido ou sem credenciais / inativo / não Intelbras',
+          'removido ou sem credenciais / inativo',
         );
       }
     }
@@ -422,17 +477,37 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private clearHikvisionPollTimer(readerId: string): void {
+    const t = this.hikvisionPollTimers.get(readerId);
+    if (t) clearInterval(t);
+    this.hikvisionPollTimers.delete(readerId);
+  }
+
   private teardownReader(readerId: string, reason: string): void {
     this.logger.log(`[FaceListener] Encerrando stream ${readerId}: ${reason}`);
     this.clearReconnectTimer(readerId);
+    this.clearHikvisionPollTimer(readerId);
     this.bumpConnectGeneration(readerId);
     this.abortStream(readerId);
     this.multipartByReader.delete(readerId);
+    this.hikvisionMultipartByReader.delete(readerId);
     this.pendingByReader.delete(readerId);
+    this.hikvisionLastSerialByReader.delete(readerId);
+    this.hikvisionIntegrationByReader.delete(readerId);
+    this.hikvisionPollFailCountByReader.delete(readerId);
+    this.hikvisionAlertStreamFailCountByReader.delete(readerId);
     const t = this.lastSeenDebounceTimers.get(readerId);
     if (t) clearTimeout(t);
     this.lastSeenDebounceTimers.delete(readerId);
     this.statuses.delete(readerId);
+  }
+
+  private subscribe(ctx: ReaderStreamContext): void {
+    if (ctx.brand === 'hikvision') {
+      void this.subscribeHikvision(ctx);
+      return;
+    }
+    this.subscribeIntelbras(ctx);
   }
 
   private buildSnapUrl(host: string): string {
@@ -442,7 +517,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
-  private subscribe(ctx: ReaderStreamContext): void {
+  private subscribeIntelbras(ctx: ReaderStreamContext): void {
     const gen = this.bumpConnectGeneration(ctx.id);
     this.abortStream(ctx.id);
 
@@ -616,6 +691,377 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         pend.image = part.body;
         this.tryFlushSnapPending(ctx.id, ctx);
       }
+    }
+  }
+
+  private async subscribeHikvision(ctx: ReaderStreamContext): Promise<void> {
+    const gen = this.bumpConnectGeneration(ctx.id);
+    this.abortStream(ctx.id);
+    this.clearHikvisionPollTimer(ctx.id);
+
+    const connection = toHikvisionConnection({
+      id: ctx.id,
+      name: ctx.name,
+      ip: ctx.host.split(':')[0] ?? ctx.host,
+      port: Number(ctx.host.split(':')[1] ?? 80),
+      username: ctx.username,
+      plainPassword: ctx.passwordPlain,
+    });
+
+    const persistedMode = this.hikvisionIntegrationByReader.get(ctx.id);
+    if (persistedMode === 'acsEventPoll') {
+      if (this.connectGeneration.get(ctx.id) !== gen) return;
+      this.subscribeHikvisionPoll(ctx, connection, gen);
+      return;
+    }
+    if (persistedMode === 'alertStream') {
+      if (this.connectGeneration.get(ctx.id) !== gen) return;
+      this.subscribeHikvisionAlertStream(ctx, connection, gen);
+      return;
+    }
+
+    let useAlertStream = false;
+    try {
+      useAlertStream = await hikvisionProbeAlertStreamSupported(connection);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `[FaceListener] Probe alertStream falhou "${ctx.name}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    if (this.connectGeneration.get(ctx.id) !== gen) return;
+
+    if (useAlertStream) {
+      this.hikvisionIntegrationByReader.set(ctx.id, 'alertStream');
+      this.subscribeHikvisionAlertStream(ctx, connection, gen);
+    } else {
+      this.hikvisionIntegrationByReader.set(ctx.id, 'acsEventPoll');
+      this.subscribeHikvisionPoll(ctx, connection, gen);
+    }
+  }
+
+  private fallbackHikvisionToPoll(
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+    gen: number,
+    reason: string,
+  ): void {
+    if (this.connectGeneration.get(ctx.id) !== gen) return;
+
+    this.logger.warn(
+      `[FaceListener] alertStream → acsEventPoll "${ctx.name}": ${reason}`,
+    );
+    this.hikvisionIntegrationByReader.set(ctx.id, 'acsEventPoll');
+    this.hikvisionAlertStreamFailCountByReader.delete(ctx.id);
+    this.clearReconnectTimer(ctx.id);
+    this.abortStream(ctx.id);
+    this.subscribeHikvisionPoll(ctx, connection, gen);
+  }
+
+  private recordAlertStreamFailure(
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+    gen: number,
+    err: unknown,
+  ): void {
+    if (this.connectGeneration.get(ctx.id) !== gen) return;
+
+    const httpStatus = extractHttpStatus(err);
+    const fails =
+      (this.hikvisionAlertStreamFailCountByReader.get(ctx.id) ?? 0) + 1;
+    this.hikvisionAlertStreamFailCountByReader.set(ctx.id, fails);
+
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      shouldFallbackAlertStreamToPoll({
+        httpStatus,
+        consecutiveFailures: fails,
+      })
+    ) {
+      this.fallbackHikvisionToPoll(
+        ctx,
+        connection,
+        gen,
+        httpStatus === 404
+          ? 'alertStream retornou 404'
+          : `${fails} falhas consecutivas (${message})`,
+      );
+      return;
+    }
+
+    this.updateStatus(ctx.id, {
+      connected: false,
+      lastConnectionError: message,
+    });
+    this.scheduleReconnect(ctx.id, httpStatus === 404 ? 5_000 : 10_000);
+  }
+
+  private subscribeHikvisionAlertStream(
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+    gen: number,
+  ): void {
+    const ac = new AbortController();
+    this.streamAbortByReader.set(ctx.id, ac);
+    const url = hikvisionAlertStreamUrl(connection);
+
+    this.updateStatus(ctx.id, {
+      readerName: ctx.name,
+      host: ctx.host,
+      clientName: ctx.clientName,
+    });
+
+    this.logger.log(`[FaceListener] alertStream Hikvision "${ctx.name}" → ${url}`);
+
+    hikvisionOpenStreamRequest(connection, url, ac.signal)
+      .then((response) => {
+        if (this.connectGeneration.get(ctx.id) !== gen) return;
+
+        const contentType = String(
+          response.headers?.['content-type'] ?? '',
+        );
+        const boundary = extractBoundaryFromContentType(contentType);
+        this.hikvisionMultipartByReader.set(
+          ctx.id,
+          createMultipartState(boundary),
+        );
+
+        this.logger.log(
+          `[FaceListener] alertStream conectado "${ctx.name}" — aguardando eventos`,
+        );
+
+        this.updateStatus(ctx.id, {
+          connected: true,
+          connectedSince: new Date(),
+          lastConnectionError: undefined,
+        });
+        this.hikvisionAlertStreamFailCountByReader.set(ctx.id, 0);
+
+        const stream = response.data as Readable;
+        stream.on('data', (chunk: Buffer) => {
+          if (this.connectGeneration.get(ctx.id) !== gen) return;
+          this.processHikvisionAlertChunk(chunk, ctx, connection);
+        });
+
+        stream.on('end', () => {
+          if (this.connectGeneration.get(ctx.id) !== gen) return;
+          this.logger.warn(
+            `[FaceListener] alertStream encerrada: "${ctx.name}". Reconectando em 5s...`,
+          );
+          this.recordAlertStreamFailure(
+            ctx,
+            connection,
+            gen,
+            new Error('Stream encerrada pelo leitor'),
+          );
+        });
+
+        stream.on('error', (err: Error) => {
+          if (this.connectGeneration.get(ctx.id) !== gen) return;
+          this.logger.error(
+            `[FaceListener] Erro alertStream "${ctx.name}": ${err.message}`,
+          );
+          this.recordAlertStreamFailure(ctx, connection, gen, err);
+        });
+      })
+      .catch((err: Error) => {
+        if (this.connectGeneration.get(ctx.id) !== gen) return;
+        if (ac.signal.aborted) return;
+        this.logger.warn(
+          `[FaceListener] alertStream falhou "${ctx.name}": ${err.message}`,
+        );
+        this.recordAlertStreamFailure(ctx, connection, gen, err);
+      });
+  }
+
+  private subscribeHikvisionPoll(
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+    gen: number,
+  ): void {
+    this.logger.log(
+      `[FaceListener] acsEventPoll Hikvision "${ctx.name}" — intervalo ${FaceListenerService.HIKVISION_POLL_INTERVAL_MS}ms`,
+    );
+
+    this.updateStatus(ctx.id, {
+      connected: true,
+      connectedSince: new Date(),
+      lastConnectionError: undefined,
+    });
+    this.hikvisionPollFailCountByReader.set(ctx.id, 0);
+
+    const poll = async (): Promise<void> => {
+      if (this.connectGeneration.get(ctx.id) !== gen) return;
+
+      try {
+        const lastSerial = this.hikvisionLastSerialByReader.get(ctx.id);
+        const events = await hikvisionSearchAcsEvents(connection, {
+          maxResults: 30,
+          lookbackMs: 10 * 60 * 1000,
+          timeReverseOrder: true,
+        });
+
+        this.hikvisionPollFailCountByReader.set(ctx.id, 0);
+        this.updateStatus(ctx.id, {
+          connected: true,
+          lastConnectionError: undefined,
+        });
+
+        if (events.length === 0) return;
+
+        const sorted = [...events].sort(
+          (a, b) => (a.serialNo ?? 0) - (b.serialNo ?? 0),
+        );
+
+        if (lastSerial == null) {
+          const maxInBatch = sorted.reduce(
+            (max, evt) => Math.max(max, evt.serialNo ?? 0),
+            0,
+          );
+          if (maxInBatch > 0) {
+            this.hikvisionLastSerialByReader.set(ctx.id, maxInBatch);
+          }
+          return;
+        }
+
+        let maxSerial = lastSerial;
+        for (const event of sorted) {
+          const serial = event.serialNo;
+          if (serial != null && serial <= lastSerial) {
+            continue;
+          }
+          await this.handleHikvisionAccessEvent(ctx, connection, event);
+          if (serial != null) {
+            maxSerial = Math.max(maxSerial, serial);
+          }
+        }
+
+        if (maxSerial > lastSerial) {
+          this.hikvisionLastSerialByReader.set(ctx.id, maxSerial);
+        }
+      } catch (err: unknown) {
+        const fails = nextPollFailCountOnError(
+          this.hikvisionPollFailCountByReader.get(ctx.id) ?? 0,
+        );
+        this.hikvisionPollFailCountByReader.set(ctx.id, fails);
+        const message =
+          err instanceof Error ? err.message : String(err);
+        if (shouldLogPollFailure(fails)) {
+          this.logger.warn(
+            `[FaceListener] acsEventPoll falhou "${ctx.name}" (${fails}/${HIKVISION_POLL_OFFLINE_THRESHOLD}): ${message}`,
+          );
+        }
+        if (shouldMarkPollOffline(fails)) {
+          this.updateStatus(ctx.id, {
+            connected: false,
+            lastConnectionError: message,
+          });
+        }
+      }
+    };
+
+    void poll();
+    const timer = setInterval(() => {
+      void poll();
+    }, FaceListenerService.HIKVISION_POLL_INTERVAL_MS);
+    this.hikvisionPollTimers.set(ctx.id, timer);
+  }
+
+  private processHikvisionAlertChunk(
+    chunk: Buffer,
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+  ): void {
+    let state = this.hikvisionMultipartByReader.get(ctx.id);
+    if (!state) {
+      state = createMultipartState('myboundary');
+      this.hikvisionMultipartByReader.set(ctx.id, state);
+    }
+
+    const parts = feedMultipartStream(state, chunk);
+    for (const part of parts) {
+      const ct = part.contentType.toLowerCase();
+      if (!ct.includes('json') && !ct.startsWith('text/')) {
+        continue;
+      }
+      const event = parseHikvisionAlertStreamPart(part.body);
+      if (!event) continue;
+      void this.handleHikvisionAccessEvent(ctx, connection, event);
+    }
+  }
+
+  private async handleHikvisionAccessEvent(
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+    event: Parameters<typeof hikvisionEventToVideoEvent>[0],
+  ): Promise<void> {
+    const dedupKey = `${ctx.id}:${event.serialNo ?? event.employeeNoString}:${event.time ?? ''}`;
+    const now = Date.now();
+    const prev = this.processedHikvisionEventKeys.get(dedupKey);
+    if (prev && now - prev < FaceListenerService.HIKVISION_EVENT_DEDUP_MS) {
+      return;
+    }
+    this.processedHikvisionEventKeys.set(dedupKey, now);
+
+    const videoEvent: VideoEvent = hikvisionEventToVideoEvent(event);
+    const data = videoEvent.data;
+    if (!data) return;
+
+    const similarity = data.Similarity;
+    const similarityNum =
+      typeof similarity === 'number'
+        ? similarity
+        : similarity != null && String(similarity).trim() !== ''
+          ? Number(similarity)
+          : NaN;
+    if (!Number.isFinite(similarityNum) || similarityNum <= 0) {
+      return;
+    }
+    if (data.Status != null && data.Status !== 1) {
+      return;
+    }
+
+    let imageJpeg: Buffer | null = null;
+    const pictureUrl =
+      typeof data.SnapPath === 'string' ? data.SnapPath.trim() : '';
+    if (pictureUrl) {
+      const absoluteUrl = pictureUrl.startsWith('http')
+        ? pictureUrl
+        : `${connection.baseUrl}${pictureUrl.startsWith('/') ? '' : '/'}${pictureUrl}`;
+      try {
+        const imageResponse = await hikvisionIsapiRequest(connection, {
+          method: 'GET',
+          url: absoluteUrl,
+          responseType: 'arraybuffer',
+        });
+        const raw = imageResponse.data;
+        if (raw instanceof Buffer) {
+          imageJpeg = raw;
+        } else if (raw instanceof ArrayBuffer) {
+          imageJpeg = Buffer.from(raw);
+        }
+      } catch (err: unknown) {
+        this.logger.debug(
+          `[FaceListener] Snapshot Hikvision falhou: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    try {
+      await this.accessesService.recordSnapManagerAccess(
+        videoEvent,
+        ctx,
+        imageJpeg,
+      );
+      this.updateStatus(ctx.id, {
+        eventsReceived: (this.statuses.get(ctx.id)?.eventsReceived ?? 0) + 1,
+        lastEventAt: new Date(),
+      });
+      this.scheduleLastSeenPersist(ctx.id);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `[FaceListener] Persistência Hikvision falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

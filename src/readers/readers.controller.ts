@@ -45,7 +45,7 @@ export class ReadersController {
   @Get('monitor/status')
   @ApiOperation({
     summary:
-      'Status de monitoramento (conexão stream snapManager / leitores Intelbras)',
+      'Status de monitoramento (conexão stream / leitores Intelbras e Hikvision)',
   })
   monitorStatus(
     @CurrentUser() user: JwtPayload,

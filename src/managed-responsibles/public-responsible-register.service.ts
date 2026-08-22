@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { z } from 'zod';
 
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as invitationQueries from '../database/queries/responsible-invitations.queries';
@@ -15,14 +14,11 @@ import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { parseUploadedImageFile } from '../storage/uploaded-image.util';
 import { publicResponsibleRegisterSubmitSchema } from '../validation/managed-responsibles.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import { ManagedResponsiblesService } from './managed-responsibles.service';
-
-const uploadPhotoBodySchema = z.object({
-  imageBase64: z.string().min(100),
-});
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -82,12 +78,7 @@ export class PublicResponsibleRegisterService {
     };
   }
 
-  async uploadPhoto(code: string, body: unknown) {
-    const parsed = uploadPhotoBodySchema.safeParse(body);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-
+  async uploadPhoto(code: string, file: Express.Multer.File) {
     const row = await this.resolveActiveInvitation(code);
     if (row.status === 'submitted' || row.faceApprovalStatus === 'submitted') {
       throw new ConflictException('O cadastro deste convite já foi enviado.');
@@ -96,34 +87,7 @@ export class PublicResponsibleRegisterService {
       throw new ConflictException('Este convite já foi aprovado.');
     }
 
-    let payload = parsed.data.imageBase64.trim();
-    let mime = 'image/jpeg';
-    const dataUrlMatch = /^data:([^;,]+);base64,(.+)$/i.exec(payload);
-    if (dataUrlMatch) {
-      mime = dataUrlMatch[1].trim().toLowerCase();
-      payload = dataUrlMatch[2].replace(/\s/g, '');
-    } else {
-      payload = payload.replace(/\s/g, '');
-    }
-
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(payload, 'base64');
-    } catch {
-      throw new BadRequestException('Imagem inválida.');
-    }
-
-    if (buffer.length < 200) {
-      throw new BadRequestException('Imagem inválida ou muito pequena.');
-    }
-    const maxBytes = 5 * 1024 * 1024;
-    if (buffer.length > maxBytes) {
-      throw new BadRequestException('Imagem maior que 5 MB.');
-    }
-
-    const ext = this.r2.extForImageMime(mime);
-    const contentType =
-      mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+    const { buffer, contentType, ext } = parseUploadedImageFile(file, this.r2);
     const client = await clientsQueries.getClientByIdOnly(
       this.database.db,
       row.clientId,
