@@ -24,7 +24,9 @@ import { EmergencyEventsService } from './emergency-events.service';
 @ApiBearerAuth()
 @Controller()
 export class EmergencyEventsController {
-  constructor(private readonly emergencyEventsService: EmergencyEventsService) {}
+  constructor(
+    private readonly emergencyEventsService: EmergencyEventsService,
+  ) {}
 
   @Post('clients/:clientId/emergency-events')
   @Roles('company_admin', 'company_operator', 'client_admin')

@@ -822,7 +822,7 @@ export class IenhSyncService {
         .filter((userId): userId is string => userId != null),
     );
 
-    if (userIds.size === 1) return [...userIds][0]!;
+    if (userIds.size === 1) return [...userIds][0];
 
     if (userIds.size > 1) {
       this.logger.warn(

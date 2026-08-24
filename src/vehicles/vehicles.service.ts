@@ -127,18 +127,28 @@ export class VehiclesService {
         vehicleColor: row.color,
         logContext,
       });
-      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr, hasLprCameras);
+      return vehicleRowWithLprSync(
+        row,
+        row.driverName || driverName,
+        lpr,
+        hasLprCameras,
+      );
     } catch (e) {
       this.log.warn(
         `${logContext}: ${e instanceof Error ? e.message : String(e)}`,
       );
-      return vehicleRowWithLprSync(row, row.driverName || driverName, {
-        lprSyncStatus: 'sync_failed',
-        lprSyncError:
-          e instanceof Error
-            ? e.message
-            : 'Falha ao sincronizar placa com LPR.',
-      }, hasLprCameras);
+      return vehicleRowWithLprSync(
+        row,
+        row.driverName || driverName,
+        {
+          lprSyncStatus: 'sync_failed',
+          lprSyncError:
+            e instanceof Error
+              ? e.message
+              : 'Falha ao sincronizar placa com LPR.',
+        },
+        hasLprCameras,
+      );
     }
   }
 
@@ -165,18 +175,28 @@ export class VehiclesService {
         vehicleColor: row.color,
         logContext,
       });
-      return vehicleRowWithLprSync(row, row.driverName || driverName, lpr, hasLprCameras);
+      return vehicleRowWithLprSync(
+        row,
+        row.driverName || driverName,
+        lpr,
+        hasLprCameras,
+      );
     } catch (e) {
       this.log.warn(
         `${logContext}: ${e instanceof Error ? e.message : String(e)}`,
       );
-      return vehicleRowWithLprSync(row, row.driverName || driverName, {
-        lprSyncStatus: 'sync_failed',
-        lprSyncError:
-          e instanceof Error
-            ? e.message
-            : 'Falha ao sincronizar placa com LPR.',
-      }, hasLprCameras);
+      return vehicleRowWithLprSync(
+        row,
+        row.driverName || driverName,
+        {
+          lprSyncStatus: 'sync_failed',
+          lprSyncError:
+            e instanceof Error
+              ? e.message
+              : 'Falha ao sincronizar placa com LPR.',
+        },
+        hasLprCameras,
+      );
     }
   }
 
@@ -809,10 +829,7 @@ export class VehiclesService {
     return attachHasLprCamerasToList(rows, hasLprCameras);
   }
 
-  async createFromMember(
-    user: JwtPayload,
-    body: unknown,
-  ): Promise<VehicleDto> {
+  async createFromMember(user: JwtPayload, body: unknown): Promise<VehicleDto> {
     this.assertMemberJwt(user);
     const parsed = createMemberVehicleSchema.safeParse(body);
     if (!parsed.success) {
@@ -939,10 +956,7 @@ export class VehiclesService {
     }
   }
 
-  async syncForMember(
-    user: JwtPayload,
-    id: string,
-  ): Promise<VehicleDto> {
+  async syncForMember(user: JwtPayload, id: string): Promise<VehicleDto> {
     this.assertMemberJwt(user);
     const row = await vehicleQueries.vehicleGetWithDriver(
       this.database.db,

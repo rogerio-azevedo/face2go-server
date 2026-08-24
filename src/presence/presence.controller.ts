@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -47,7 +41,11 @@ export class PresenceController {
   ) {
     const parsed = listCompanyPresenceQuerySchema.parse(query);
     if (user.companyId !== companyId) {
-      return this.presenceService.getCompanyPresence(user, parsed.clientId, parsed.status ?? 'in');
+      return this.presenceService.getCompanyPresence(
+        user,
+        parsed.clientId,
+        parsed.status ?? 'in',
+      );
     }
     return this.presenceService.getCompanyPresence(
       user,

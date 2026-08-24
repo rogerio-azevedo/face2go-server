@@ -192,9 +192,10 @@ export class PresenceService {
       clientId,
     );
 
-    const activeEmergency = await import(
-      '../database/queries/emergency-events.queries'
-    ).then((m) => m.getActiveEmergencyForClient(this.database.db, clientId));
+    const activeEmergency =
+      await import('../database/queries/emergency-events.queries').then((m) =>
+        m.getActiveEmergencyForClient(this.database.db, clientId),
+      );
 
     return {
       clientId,
@@ -271,14 +272,14 @@ export class PresenceService {
       }
       school.counts.total += 1;
       if (row.personType === 'student') school.counts.students += 1;
-      else if (row.personType === 'responsible') school.counts.responsibles += 1;
+      else if (row.personType === 'responsible')
+        school.counts.responsibles += 1;
       else if (row.personType === 'member') school.counts.members += 1;
       else school.counts.guests += 1;
     }
 
-    const emergencyQueries = await import(
-      '../database/queries/emergency-events.queries'
-    );
+    const emergencyQueries =
+      await import('../database/queries/emergency-events.queries');
     for (const school of schoolsMap.values()) {
       const active = await emergencyQueries.getActiveEmergencyForClient(
         this.database.db,

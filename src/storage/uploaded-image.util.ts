@@ -20,8 +20,7 @@ export function parseUploadedImageFile(
 
   const mime = file.mimetype?.trim() || 'image/jpeg';
   const ext = r2.extForImageMime(mime);
-  const contentType =
-    mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
+  const contentType = mime.split(';')[0]?.trim().toLowerCase() ?? 'image/jpeg';
 
   return { buffer, contentType, ext };
 }

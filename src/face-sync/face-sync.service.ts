@@ -314,7 +314,9 @@ export class FaceSyncService {
               });
             } else {
               if (!intelbrasBase64) {
-                throw new Error('Falha ao preparar imagem para leitor Intelbras.');
+                throw new Error(
+                  'Falha ao preparar imagem para leitor Intelbras.',
+                );
               }
 
               await this.accessTimeZone.ensureZonesOnSingleReader(
@@ -429,7 +431,9 @@ export class FaceSyncService {
               String(faceId),
             );
             if (!result.success) {
-              throw new Error(result.error ?? 'Falha ao remover usuário Hikvision');
+              throw new Error(
+                result.error ?? 'Falha ao remover usuário Hikvision',
+              );
             }
           } else {
             await intelbrasRemoveUserFromReader(plain, faceId);

@@ -141,7 +141,10 @@ export async function getClientDeviceDirectionSummary(
     })
     .from(facialReaders)
     .where(
-      and(eq(facialReaders.clientId, clientId), eq(facialReaders.isActive, true)),
+      and(
+        eq(facialReaders.clientId, clientId),
+        eq(facialReaders.isActive, true),
+      ),
     );
 
   const [cams] = await db
@@ -164,7 +167,8 @@ export async function listStudentClassNamesByStudentIds(
   db: AppDb,
   studentIds: string[],
 ) {
-  if (studentIds.length === 0) return new Map<string, { classId: string; className: string }>();
+  if (studentIds.length === 0)
+    return new Map<string, { classId: string; className: string }>();
 
   const rows = await db
     .select({

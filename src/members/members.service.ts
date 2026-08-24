@@ -296,7 +296,11 @@ export class MembersService {
     ]);
     const data = await Promise.all(
       rows.map(async (row) =>
-        mapMemberRow(row, await this.optionalPhotoUrl(row.photoKey), hasFacialReaders),
+        mapMemberRow(
+          row,
+          await this.optionalPhotoUrl(row.photoKey),
+          hasFacialReaders,
+        ),
       ),
     );
     return buildPaginatedResult(data, total, page, pageSize);
@@ -312,8 +316,13 @@ export class MembersService {
     if (!row) {
       throw new NotFoundException('Membro não encontrado.');
     }
-    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
-    return mapMemberRow(row, await this.optionalPhotoUrl(row.photoKey), hasFacialReaders);
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
+    return mapMemberRow(
+      row,
+      await this.optionalPhotoUrl(row.photoKey),
+      hasFacialReaders,
+    );
   }
 
   async lookupPerson(user: JwtPayload, clientId: string, query: unknown) {

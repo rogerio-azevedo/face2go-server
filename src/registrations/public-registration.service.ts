@@ -139,11 +139,7 @@ export class PublicRegistrationService {
   }
 
   /** Envia a foto pelo servidor para o R2 (multipart, campo `file`). */
-  async uploadPhoto(
-    code: string,
-    file: Express.Multer.File,
-    body: unknown,
-  ) {
+  async uploadPhoto(code: string, file: Express.Multer.File, body: unknown) {
     const parsed = uploadPhotoBodySchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));

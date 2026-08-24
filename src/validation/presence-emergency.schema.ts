@@ -35,7 +35,9 @@ export const addEmergencyCheckinSchema = z.object({
   personId: z.string().uuid(),
 });
 
-export type AddEmergencyCheckinInput = z.infer<typeof addEmergencyCheckinSchema>;
+export type AddEmergencyCheckinInput = z.infer<
+  typeof addEmergencyCheckinSchema
+>;
 
 export const resolveEmergencyEventSchema = z.object({
   note: z.string().trim().max(500).optional(),

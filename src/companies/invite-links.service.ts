@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
 import * as invitesQueries from '../database/queries/invites.queries';
@@ -12,19 +12,27 @@ export class InviteLinksService {
     inviteType: 'company';
     role: 'company_admin' | 'company_operator';
     companyName: string;
-  } | null> {
+  }> {
     const trimmed = code?.trim() ?? '';
-    if (trimmed.length < 4) return null;
+    if (trimmed.length < 4) {
+      throw new NotFoundException('Convite inválido ou expirado.');
+    }
 
     const bundle = await invitesQueries.getInviteByCode(
       this.database.db,
       trimmed,
     );
-    if (!bundle?.invite?.isActive) return null;
+    if (!bundle?.invite?.isActive) {
+      throw new NotFoundException('Convite inválido ou expirado.');
+    }
 
     const { invite, company } = bundle;
-    if (invite.expiresAt && invite.expiresAt < new Date()) return null;
-    if (!company?.isActive) return null;
+    if (invite.expiresAt && invite.expiresAt < new Date()) {
+      throw new NotFoundException('Convite inválido ou expirado.');
+    }
+    if (!company?.isActive) {
+      throw new NotFoundException('Convite inválido ou expirado.');
+    }
 
     return {
       inviteType: 'company',

@@ -53,7 +53,9 @@ export type HikvisionDeviceUsersListResult = {
   records: HikvisionDeviceUser[];
 };
 
-function buildUserInfoBody(params: HikvisionUpsertUserParams): Record<string, unknown> {
+function buildUserInfoBody(
+  params: HikvisionUpsertUserParams,
+): Record<string, unknown> {
   const beginTime = params.validDateStart ?? DEFAULT_HIKVISION_VALID_DATE_START;
   const endTime = params.validDateEnd ?? DEFAULT_HIKVISION_VALID_DATE_END;
 
@@ -194,9 +196,7 @@ async function sendHikvisionFaceMultipart(
     const status = extractResponseStatus(response.data);
     const syntheticError: AxiosLikeError = {
       message:
-        status?.subStatusCode ??
-        status?.statusString ??
-        'Falha ao gravar face',
+        status?.subStatusCode ?? status?.statusString ?? 'Falha ao gravar face',
       response: { data: response.data },
     };
     throw syntheticError;
@@ -714,9 +714,5 @@ export async function hikvisionSyncFace(
     validDateStart: params.validDateStart,
     validDateEnd: params.validDateEnd,
   });
-  await hikvisionUpsertFace(
-    connection,
-    params.employeeNo,
-    params.jpegBuffer,
-  );
+  await hikvisionUpsertFace(connection, params.employeeNo, params.jpegBuffer);
 }

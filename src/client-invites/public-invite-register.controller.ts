@@ -44,7 +44,9 @@ export class PublicInviteRegisterController {
       },
     },
   })
-  @ApiOperation({ summary: 'Enviar foto do visitante (multipart via servidor)' })
+  @ApiOperation({
+    summary: 'Enviar foto do visitante (multipart via servidor)',
+  })
   uploadPhoto(
     @Param('code') code: string,
     @UploadedFile() file: Express.Multer.File,

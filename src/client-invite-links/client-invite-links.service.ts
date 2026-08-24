@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -70,19 +71,25 @@ export class ClientInviteLinksService {
     role: 'client_admin' | 'client_operator';
     clientName: string;
     companyName: string;
-  } | null> {
+  }> {
     const trimmed = code?.trim() ?? '';
-    if (trimmed.length < 4) return null;
+    if (trimmed.length < 4) {
+      throw new NotFoundException('Convite inválido ou expirado.');
+    }
 
     const bundle = await clientInviteLinksQueries.getClientInviteByCode(
       this.database.db,
       trimmed,
     );
-    if (!bundle?.invite?.isActive || !bundle.client?.isActive) return null;
-    if (bundle.invite.expiresAt && bundle.invite.expiresAt < new Date()) {
-      return null;
+    if (!bundle?.invite?.isActive || !bundle.client?.isActive) {
+      throw new NotFoundException('Convite inválido ou expirado.');
     }
-    if (!bundle.company?.isActive) return null;
+    if (bundle.invite.expiresAt && bundle.invite.expiresAt < new Date()) {
+      throw new NotFoundException('Convite inválido ou expirado.');
+    }
+    if (!bundle.company?.isActive) {
+      throw new NotFoundException('Convite inválido ou expirado.');
+    }
 
     return {
       inviteType: 'client',

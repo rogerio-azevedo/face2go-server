@@ -138,8 +138,7 @@ async function normalizeFaceJpegForReader(
   const srcWidth = meta.width ?? beforeDims?.width ?? 0;
   const srcHeight = meta.height ?? beforeDims?.height ?? 0;
 
-  const canDownscale =
-    srcWidth >= target.width && srcHeight >= target.height;
+  const canDownscale = srcWidth >= target.width && srcHeight >= target.height;
 
   const pipeline = canDownscale
     ? rotated.resize(target.width, target.height, {
@@ -156,7 +155,9 @@ async function normalizeFaceJpegForReader(
  * Normaliza foto para upload Hikvision: corrige orientação EXIF, downscale+crop
  * central 720×960 quando a origem permite (nunca amplia), JPEG até 200 KB.
  */
-export async function normalizeHikvisionFaceJpeg(input: Buffer): Promise<Buffer> {
+export async function normalizeHikvisionFaceJpeg(
+  input: Buffer,
+): Promise<Buffer> {
   return normalizeFaceJpegForReader(input, {
     width: HIKVISION_FACE_WIDTH,
     height: HIKVISION_FACE_HEIGHT,

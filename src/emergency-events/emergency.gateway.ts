@@ -143,8 +143,6 @@ export class EmergencyGateway
 
   emitEventSnapshot(eventId: string, payload: EmergencyEventPayload): void {
     if (!this.server) return;
-    this.server
-      .to(this.eventRoom(eventId))
-      .emit('emergency:snapshot', payload);
+    this.server.to(this.eventRoom(eventId)).emit('emergency:snapshot', payload);
   }
 }

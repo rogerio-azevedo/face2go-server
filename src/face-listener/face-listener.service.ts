@@ -142,7 +142,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   private pendingByReader = new Map<string, SnapPending>();
   private hikvisionLastSerialByReader = new Map<string, number>();
   private processedHikvisionEventKeys = new Map<string, number>();
-  private hikvisionIntegrationByReader = new Map<string, HikvisionMonitorMode>();
+  private hikvisionIntegrationByReader = new Map<
+    string,
+    HikvisionMonitorMode
+  >();
   private hikvisionPollFailCountByReader = new Map<string, number>();
   private hikvisionAlertStreamFailCountByReader = new Map<string, number>();
 
@@ -353,10 +356,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
     for (const id of [...this.statuses.keys()]) {
       if (!validIds.has(id)) {
-        this.teardownReader(
-          id,
-          'removido ou sem credenciais / inativo',
-        );
+        this.teardownReader(id, 'removido ou sem credenciais / inativo');
       }
     }
 
@@ -811,15 +811,15 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       clientName: ctx.clientName,
     });
 
-    this.logger.log(`[FaceListener] alertStream Hikvision "${ctx.name}" → ${url}`);
+    this.logger.log(
+      `[FaceListener] alertStream Hikvision "${ctx.name}" → ${url}`,
+    );
 
     hikvisionOpenStreamRequest(connection, url, ac.signal)
       .then((response) => {
         if (this.connectGeneration.get(ctx.id) !== gen) return;
 
-        const contentType = String(
-          response.headers?.['content-type'] ?? '',
-        );
+        const contentType = String(response.headers?.['content-type'] ?? '');
         const boundary = extractBoundaryFromContentType(contentType);
         this.hikvisionMultipartByReader.set(
           ctx.id,
@@ -944,8 +944,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           this.hikvisionPollFailCountByReader.get(ctx.id) ?? 0,
         );
         this.hikvisionPollFailCountByReader.set(ctx.id, fails);
-        const message =
-          err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : String(err);
         if (shouldLogPollFailure(fails)) {
           this.logger.warn(
             `[FaceListener] acsEventPoll falhou "${ctx.name}" (${fails}/${HIKVISION_POLL_OFFLINE_THRESHOLD}): ${message}`,

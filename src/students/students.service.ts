@@ -148,7 +148,8 @@ export class StudentsService {
     }
 
     const withClasses = await this.attachClassesToStudents(rows);
-    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
     const data = await Promise.all(
       withClasses.map(async (row) => ({
         ...(await this.mapStudentWithPhoto(row)),

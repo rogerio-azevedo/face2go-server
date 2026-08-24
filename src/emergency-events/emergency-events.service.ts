@@ -16,10 +16,7 @@ import * as membersQueries from '../database/queries/members.queries';
 import * as presenceQueries from '../database/queries/presence.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
-import {
-  emergencyCheckins,
-  emergencyEvents,
-} from '../database/schema';
+import { emergencyCheckins, emergencyEvents } from '../database/schema';
 import { PermissionsService } from '../permissions/permissions.service';
 import type {
   AddEmergencyCheckinInput,
@@ -157,7 +154,8 @@ export class EmergencyEventsService {
       eventId,
       companyId,
     );
-    if (!event) throw new NotFoundException('Evento de emergência não encontrado.');
+    if (!event)
+      throw new NotFoundException('Evento de emergência não encontrado.');
 
     const client = await clientsQueries.getClientById(
       this.database.db,
@@ -281,7 +279,8 @@ export class EmergencyEventsService {
       eventId,
       companyId,
     );
-    if (!event) throw new NotFoundException('Evento de emergência não encontrado.');
+    if (!event)
+      throw new NotFoundException('Evento de emergência não encontrado.');
 
     if (
       (user.role === 'client_admin' || user.role === 'client_operator') &&
@@ -305,7 +304,8 @@ export class EmergencyEventsService {
       eventId,
       companyId,
     );
-    if (!event) throw new NotFoundException('Evento de emergência não encontrado.');
+    if (!event)
+      throw new NotFoundException('Evento de emergência não encontrado.');
     if (event.status !== 'active') {
       throw new ConflictException('Evento de emergência já encerrado.');
     }
@@ -315,7 +315,8 @@ export class EmergencyEventsService {
       checkinId,
       eventId,
     );
-    if (!checkin) throw new NotFoundException('Pessoa não encontrada na chamada.');
+    if (!checkin)
+      throw new NotFoundException('Pessoa não encontrada na chamada.');
 
     const now = new Date();
     await this.database.db.transaction(async (tx) => {
@@ -364,7 +365,11 @@ export class EmergencyEventsService {
     clientId: string,
     personType: AddEmergencyCheckinInput['personType'],
     personId: string,
-  ): Promise<{ name: string; classId: string | null; className: string | null }> {
+  ): Promise<{
+    name: string;
+    classId: string | null;
+    className: string | null;
+  }> {
     if (personType === 'student') {
       const student = await studentsQueries.getStudentById(
         this.database.db,
@@ -390,7 +395,8 @@ export class EmergencyEventsService {
         personId,
         clientId,
       );
-      if (!responsible) throw new NotFoundException('Responsável não encontrado.');
+      if (!responsible)
+        throw new NotFoundException('Responsável não encontrado.');
       return { name: responsible.name, classId: null, className: null };
     }
 
@@ -418,7 +424,8 @@ export class EmergencyEventsService {
       eventId,
       companyId,
     );
-    if (!event) throw new NotFoundException('Evento de emergência não encontrado.');
+    if (!event)
+      throw new NotFoundException('Evento de emergência não encontrado.');
     if (event.status !== 'active') {
       throw new ConflictException('Evento de emergência já encerrado.');
     }
@@ -468,7 +475,8 @@ export class EmergencyEventsService {
       eventId,
       companyId,
     );
-    if (!event) throw new NotFoundException('Evento de emergência não encontrado.');
+    if (!event)
+      throw new NotFoundException('Evento de emergência não encontrado.');
     if (event.status !== 'active') {
       throw new ConflictException('Evento de emergência já encerrado.');
     }
@@ -484,7 +492,12 @@ export class EmergencyEventsService {
           ? [event.reason, input.note].filter(Boolean).join(' | ')
           : event.reason,
       })
-      .where(and(eq(emergencyEvents.id, eventId), eq(emergencyEvents.companyId, companyId)));
+      .where(
+        and(
+          eq(emergencyEvents.id, eventId),
+          eq(emergencyEvents.companyId, companyId),
+        ),
+      );
 
     const payload = await this.buildEventPayload(eventId, companyId);
     this.emergencyGateway.emitEventSnapshot(eventId, payload);

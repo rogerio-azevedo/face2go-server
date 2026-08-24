@@ -126,7 +126,9 @@ export function normalizeHikvisionAccessEvent(
     | undefined;
   const event =
     (root.AccessControllerEvent as Record<string, unknown> | undefined) ??
-    (nestedAlert?.AccessControllerEvent as Record<string, unknown> | undefined) ??
+    (nestedAlert?.AccessControllerEvent as
+      | Record<string, unknown>
+      | undefined) ??
     nestedAlert ??
     root;
 
@@ -286,8 +288,7 @@ export async function hikvisionProbeAlertStreamSupported(
     await hikvisionOpenStreamRequest(connection, url, ac.signal);
     return true;
   } catch (err: unknown) {
-    const status = (err as { response?: { status?: number } }).response
-      ?.status;
+    const status = (err as { response?: { status?: number } }).response?.status;
     if (status === 404) {
       return false;
     }
@@ -302,9 +303,7 @@ export async function hikvisionProbeAlertStreamSupported(
 }
 
 /** Converte evento Hikvision para VideoEvent (AccessesService). */
-export function hikvisionEventToVideoEvent(
-  event: HikvisionAccessEvent,
-): {
+export function hikvisionEventToVideoEvent(event: HikvisionAccessEvent): {
   code: string;
   action: string;
   index: number;

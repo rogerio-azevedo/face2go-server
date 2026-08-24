@@ -14,11 +14,12 @@ export async function resolveAccessPersonByFaceId(
   clientId: string,
 ): Promise<ResolvedAccessPerson | null> {
   try {
-    const responsible = await responsiblesQueries.findResponsibleByFaceIdAndClientId(
-      db,
-      faceId,
-      clientId,
-    );
+    const responsible =
+      await responsiblesQueries.findResponsibleByFaceIdAndClientId(
+        db,
+        faceId,
+        clientId,
+      );
     if (responsible) {
       return {
         personId: responsible.id,

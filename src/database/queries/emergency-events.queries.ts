@@ -32,13 +32,19 @@ export async function getEmergencyEventById(
     .select()
     .from(emergencyEvents)
     .where(
-      and(eq(emergencyEvents.id, eventId), eq(emergencyEvents.companyId, companyId)),
+      and(
+        eq(emergencyEvents.id, eventId),
+        eq(emergencyEvents.companyId, companyId),
+      ),
     )
     .limit(1);
   return row ?? null;
 }
 
-export async function listEmergencyCheckins(db: AppDb, emergencyEventId: string) {
+export async function listEmergencyCheckins(
+  db: AppDb,
+  emergencyEventId: string,
+) {
   return db
     .select()
     .from(emergencyCheckins)

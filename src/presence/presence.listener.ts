@@ -52,7 +52,9 @@ export class PresenceListener implements OnModuleInit {
   }
 
   @OnEvent(ACCESS_FACIAL_RECORDED)
-  async handleFacialAccess(payload: AccessFacialRecordedPayload): Promise<void> {
+  async handleFacialAccess(
+    payload: AccessFacialRecordedPayload,
+  ): Promise<void> {
     if (!payload.personId || !payload.personType) return;
     if (payload.personType === 'guest') return;
 

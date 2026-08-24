@@ -270,7 +270,8 @@ export class RegistrationsAdminService {
       }
     }
 
-    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
     return this.mapRow(rowOut, hasFacialReaders);
   }
 
@@ -315,7 +316,8 @@ export class RegistrationsAdminService {
         'Cadastro não encontrado ou já foi processado.',
       );
     }
-    const hasFacialReaders = await this.faceSync.hasActiveFacialReaders(clientId);
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
     return this.mapRow(updated, hasFacialReaders);
   }
 }

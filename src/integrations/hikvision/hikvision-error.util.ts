@@ -11,7 +11,9 @@ export const USER_NOT_FOUND_CODES = new Set([
   'EmployeeNoNotExist',
 ]);
 
-export const FACE_ALREADY_EXISTS_CODES = new Set(['deviceUserAlreadyExistFace']);
+export const FACE_ALREADY_EXISTS_CODES = new Set([
+  'deviceUserAlreadyExistFace',
+]);
 
 export const FACE_LIB_NOT_FOUND_CODES = new Set([
   'faceLibNotExist',
@@ -58,10 +60,8 @@ export function extractResponseStatus(
     return null;
   }
   const nested =
-    asRecord(root.ResponseStatus) ??
-    asRecord(root.responseStatus) ??
-    root;
-  return nested as HikvisionResponseStatus;
+    asRecord(root.ResponseStatus) ?? asRecord(root.responseStatus) ?? root;
+  return nested;
 }
 
 export function isHikvisionSuccess(data: unknown): boolean {
