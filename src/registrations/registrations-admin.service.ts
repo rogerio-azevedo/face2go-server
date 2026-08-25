@@ -91,10 +91,26 @@ export class RegistrationsAdminService {
     return clientId;
   }
 
-  private mapRow(
+  private async optionalFaceUrl(
+    faceImageKey: string | null,
+  ): Promise<string | null> {
+    if (!faceImageKey) return null;
+    try {
+      return await this.r2.createPresignedPortraitGetUrl(faceImageKey);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `URL assinada (cadastro/R2): falha para key="${faceImageKey}": ${msg}`,
+      );
+      return null;
+    }
+  }
+
+  private async mapRow(
     row: registrationsQueries.RegistrationRow,
     hasFacialReaders: boolean,
   ) {
+    const faceUrl = await this.optionalFaceUrl(row.faceImageKey);
     return {
       id: row.id,
       clientId: row.clientId,
@@ -110,6 +126,7 @@ export class RegistrationsAdminService {
       rejectionNotes: row.rejectionNotes,
       createdAt: row.createdAt,
       hasFacePhoto: Boolean(row.faceImageKey),
+      faceUrl,
       faceId: row.faceId ?? null,
       deviceSyncStatus: row.deviceSyncStatus ?? null,
       deviceSyncedAt: row.deviceSyncedAt
@@ -138,7 +155,7 @@ export class RegistrationsAdminService {
       ),
       this.faceSync.hasActiveFacialReaders(clientId),
     ]);
-    return rows.map((r) => this.mapRow(r, hasFacialReaders));
+    return Promise.all(rows.map((r) => this.mapRow(r, hasFacialReaders)));
   }
 
   async listForClientTenant(
@@ -158,7 +175,7 @@ export class RegistrationsAdminService {
       ),
       this.faceSync.hasActiveFacialReaders(clientId),
     ]);
-    return rows.map((r) => this.mapRow(r, hasFacialReaders));
+    return Promise.all(rows.map((r) => this.mapRow(r, hasFacialReaders)));
   }
 
   async faceUrlForCompanyUser(
@@ -272,7 +289,7 @@ export class RegistrationsAdminService {
 
     const hasFacialReaders =
       await this.faceSync.hasActiveFacialReaders(clientId);
-    return this.mapRow(rowOut, hasFacialReaders);
+    return await this.mapRow(rowOut, hasFacialReaders);
   }
 
   async rejectForCompanyUser(
@@ -318,6 +335,6 @@ export class RegistrationsAdminService {
     }
     const hasFacialReaders =
       await this.faceSync.hasActiveFacialReaders(clientId);
-    return this.mapRow(updated, hasFacialReaders);
+    return await this.mapRow(updated, hasFacialReaders);
   }
 }

@@ -22,9 +22,8 @@ import {
 } from '../face-sync/intelbras-device.client';
 import {
   hikvisionDeleteUser,
+  hikvisionGetDeviceUsers,
   hikvisionGetFaceImage,
-  hikvisionListDeviceUsers,
-  hikvisionSearchDeviceUsers,
   toHikvisionConnection,
 } from '../integrations/hikvision';
 import { PermissionsService } from '../permissions/permissions.service';
@@ -333,27 +332,15 @@ export class ReadersService {
         const connection = toHikvisionConnection(plainReader);
         const safeLimit = Math.min(Math.max(limit, 1), 500);
         const safeOffset = Math.max(offset, 0);
+        const term = search?.trim();
 
-        const result = search
-          ? await hikvisionSearchDeviceUsers(
-              connection,
-              search,
-              safeLimit,
-              safeOffset,
-            )
-          : (() => {
-              const allPromise = hikvisionListDeviceUsers(connection);
-              return allPromise.then((all) => {
-                const slice = all.slice(safeOffset, safeOffset + safeLimit);
-                return {
-                  totalCount: all.length,
-                  found: slice.length,
-                  records: slice,
-                };
-              });
-            })();
+        const resolved = await hikvisionGetDeviceUsers(
+          connection,
+          safeLimit,
+          safeOffset,
+          term,
+        );
 
-        const resolved = await result;
         return {
           totalCount: resolved.totalCount,
           found: resolved.found,
@@ -363,6 +350,7 @@ export class ReadersService {
             CardNo: r.cardNo ?? r.userId,
             ValidDateStart: r.validFrom ?? undefined,
             ValidDateEnd: r.validTo ?? undefined,
+            HasFace: r.hasFace ?? null,
           })),
         };
       }

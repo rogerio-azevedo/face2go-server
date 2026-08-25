@@ -111,32 +111,54 @@ async function compressJpegToTarget(
   return smallest;
 }
 
+export function detectImageFormat(buffer: Buffer): string {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    return 'jpeg';
+  }
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
+    return 'png';
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'webp';
+  }
+  return 'unknown';
+}
+
 async function normalizeFaceJpegForReader(
   input: Buffer,
   target: FaceJpegReaderTarget,
 ): Promise<Buffer> {
-  if (!isJpegBuffer(input)) {
+  const rotated = sharp(input, { failOn: 'none' }).rotate();
+  const meta = await rotated.metadata();
+
+  if (!meta.width || !meta.height) {
     throw new Error(
-      'Formato de imagem inválido. Envie uma foto JPEG frontal do rosto.',
+      'Formato de imagem inválido. Envie uma foto frontal do rosto (JPEG, PNG ou WebP).',
     );
   }
 
-  const beforeDims = parseJpegDimensions(input);
   if (
-    beforeDims &&
-    (beforeDims.width < target.minDimension ||
-      beforeDims.height < target.minDimension)
+    meta.width < target.minDimension ||
+    meta.height < target.minDimension
   ) {
     throw new Error(
-      `Foto muito pequena (${beforeDims.width}×${beforeDims.height}px). ` +
+      `Foto muito pequena (${meta.width}×${meta.height}px). ` +
         `Use uma imagem com pelo menos ${target.minDimension}×${target.minDimension}px.`,
     );
   }
 
-  const rotated = sharp(input, { failOn: 'none' }).rotate();
-  const meta = await rotated.metadata();
-  const srcWidth = meta.width ?? beforeDims?.width ?? 0;
-  const srcHeight = meta.height ?? beforeDims?.height ?? 0;
+  const srcWidth = meta.width;
+  const srcHeight = meta.height;
 
   const canDownscale = srcWidth >= target.width && srcHeight >= target.height;
 

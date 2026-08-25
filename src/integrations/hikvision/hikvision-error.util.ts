@@ -52,9 +52,51 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+function extractXmlTagValue(xml: string, tag: string): string | undefined {
+  const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'i');
+  const match = xml.match(re);
+  const value = match?.[1]?.trim();
+  return value || undefined;
+}
+
+function parseXmlResponseStatus(xml: string): HikvisionResponseStatus | null {
+  const trimmed = xml.trim();
+  if (!trimmed.startsWith('<')) {
+    return null;
+  }
+
+  const statusCode = extractXmlTagValue(trimmed, 'statusCode');
+  const statusString = extractXmlTagValue(trimmed, 'statusString');
+  const subStatusCode = extractXmlTagValue(trimmed, 'subStatusCode');
+  const errorCode = extractXmlTagValue(trimmed, 'errorCode');
+  const errorMsg = extractXmlTagValue(trimmed, 'errorMsg');
+
+  if (
+    !statusCode &&
+    !statusString &&
+    !subStatusCode &&
+    !errorCode &&
+    !errorMsg
+  ) {
+    return null;
+  }
+
+  return {
+    statusCode,
+    statusString,
+    subStatusCode,
+    errorCode,
+    errorMsg,
+  };
+}
+
 export function extractResponseStatus(
   data: unknown,
 ): HikvisionResponseStatus | null {
+  if (typeof data === 'string') {
+    return parseXmlResponseStatus(data);
+  }
+
   const root = asRecord(data);
   if (!root) {
     return null;
@@ -65,12 +107,41 @@ export function extractResponseStatus(
 }
 
 export function isHikvisionSuccess(data: unknown): boolean {
-  const status = extractResponseStatus(data);
-  if (!status?.statusCode) {
+  if (data == null || data === '') {
     return true;
   }
-  const code = String(status.statusCode);
-  return code === '1' || code === 'OK';
+
+  const status = extractResponseStatus(data);
+  if (!status) {
+    return true;
+  }
+
+  const codeRaw = status.statusCode;
+  if (codeRaw != null && String(codeRaw).trim() !== '') {
+    const code = String(codeRaw);
+    return code === '1' || code === 'OK';
+  }
+
+  const errorCode = status.errorCode;
+  if (errorCode != null && String(errorCode).trim() !== '') {
+    const ec = String(errorCode);
+    if (ec !== '0') {
+      return false;
+    }
+  }
+
+  if (status.subStatusCode && status.subStatusCode.trim() !== '') {
+    const sub = status.subStatusCode;
+    if (
+      USER_NOT_FOUND_CODES.has(sub) ||
+      FACE_MODELING_ERROR_CODES.has(sub) ||
+      FACE_LIB_NOT_FOUND_CODES.has(sub)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function extractSubStatusCode(error: unknown): string | undefined {

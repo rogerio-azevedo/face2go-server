@@ -47,4 +47,22 @@ describe('normalizeHikvisionFaceJpeg', () => {
     expect(dims!.width).toBeLessThanOrEqual(200);
     expect(dims!.height).toBeLessThanOrEqual(200);
   });
+
+  it('aceita PNG e converte para JPEG', async () => {
+    const png = await sharp({
+      create: {
+        width: 400,
+        height: 400,
+        channels: 3,
+        background: { r: 100, g: 150, b: 200 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const out = await normalizeHikvisionFaceJpeg(png);
+    expect(out[0]).toBe(0xff);
+    expect(out[1]).toBe(0xd8);
+    expect(out.length).toBeLessThanOrEqual(HIKVISION_MAX_FACE_IMAGE_BYTES);
+  });
 });
