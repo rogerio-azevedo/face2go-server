@@ -4,8 +4,11 @@
  */
 import 'dotenv/config';
 
+import type { Pool } from 'pg';
+
 import {
   createPostgresClient,
+  endPostgresPool,
   finalizePostgresUrl,
 } from '../database/postgres-connection';
 
@@ -20,13 +23,11 @@ function rewriteDatabaseName(rawUrl: string, databaseName: string): string {
   return out.replace(/^postgresql:\/\//, 'postgres://');
 }
 
-async function databaseExists(
-  adminSql: Awaited<ReturnType<typeof createPostgresClient>>,
-  name: string,
-) {
-  const rows = await adminSql`
-    SELECT 1 FROM pg_database WHERE datname = ${name} LIMIT 1
-  `;
+async function databaseExists(adminSql: Pool, name: string) {
+  const { rows } = await adminSql.query(
+    'SELECT 1 FROM pg_database WHERE datname = $1 LIMIT 1',
+    [name],
+  );
   return rows.length > 0;
 }
 
@@ -76,10 +77,10 @@ async function main() {
       return;
     }
 
-    await adminSql.unsafe(`CREATE DATABASE ${targetDb}`);
+    await adminSql.query(`CREATE DATABASE ${targetDb}`);
     console.info(`Banco "${targetDb}" criado (CREATE DATABASE).`);
   } finally {
-    await adminSql.end({ timeout: 5 });
+    await endPostgresPool(adminSql);
   }
 }
 

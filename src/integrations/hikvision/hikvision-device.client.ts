@@ -15,9 +15,16 @@ import {
   isUserNotFoundError,
   USER_ALREADY_EXISTS_CODES,
 } from './hikvision-error.util';
-import { normalizeHikvisionFaceJpeg, detectImageFormat } from '../../face-sync/hikvision-face-image.util';
+import {
+  normalizeHikvisionFaceJpeg,
+  detectImageFormat,
+} from '../../face-sync/hikvision-face-image.util';
 import { normalizeNameForFacialReader } from '../../face-sync/normalize-name-for-reader';
-import { syncLog, syncLogError, truncateForLog } from '../../face-sync/intelbras-sync-debug.util';
+import {
+  syncLog,
+  syncLogError,
+  truncateForLog,
+} from '../../face-sync/intelbras-sync-debug.util';
 
 export const HIKVISION_FACE_LIB_TYPE = 'blackFD';
 export const HIKVISION_FACE_FDID = '1';
@@ -159,7 +166,9 @@ function parseFdLibList(data: unknown): HikvisionFaceLibRef[] {
   return libs;
 }
 
-export function chooseFaceLib(libs: HikvisionFaceLibRef[]): HikvisionFaceLibRef {
+export function chooseFaceLib(
+  libs: HikvisionFaceLibRef[],
+): HikvisionFaceLibRef {
   const black = libs.find((lib) => lib.faceLibType === 'blackFD');
   if (black) {
     return black;
@@ -535,12 +544,7 @@ export async function hikvisionUpsertFace(
         reason: 'faceAlreadyExists',
         method: 'PUT',
       });
-      await hikvisionPutFaceSetup(
-        connection,
-        employeeNo,
-        normalized,
-        faceLib,
-      );
+      await hikvisionPutFaceSetup(connection, employeeNo, normalized, faceLib);
     } else {
       const subStatusCode = extractSubStatusCode(error);
       if (subStatusCode && FACE_LIB_NOT_FOUND_CODES.has(subStatusCode)) {
@@ -760,7 +764,7 @@ export function parseUserInfoSearchPage(
 
   for (const item of items) {
     if (item && typeof item === 'object') {
-      const mapped = mapHikvisionUserInfo(item as Record<string, unknown>);
+      const mapped = mapHikvisionUserInfo(item);
       if (mapped) {
         records.push(mapped);
       }
@@ -846,9 +850,7 @@ export function buildFuzzySearchCaseVariants(term: string): string[] {
   variants.add(
     trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase(),
   );
-  variants.add(
-    trimmed.replace(/\b\w/g, (char) => char.toUpperCase()),
-  );
+  variants.add(trimmed.replace(/\b\w/g, (char) => char.toUpperCase()));
 
   return [...variants];
 }
@@ -988,9 +990,7 @@ export async function hikvisionVerifyUserHasFace(
     fdSearch: 'miss',
     fdSearchBody: truncateForLog(fdSearch),
   });
-  throw new Error(
-    `Face não gravada no leitor para employeeNo ${employeeNo}.`,
-  );
+  throw new Error(`Face não gravada no leitor para employeeNo ${employeeNo}.`);
 }
 
 export async function hikvisionSearchFace(

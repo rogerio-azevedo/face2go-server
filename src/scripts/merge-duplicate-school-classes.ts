@@ -1,8 +1,11 @@
 import 'dotenv/config';
 
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
 
-import { createPostgresClient } from '../database/postgres-connection';
+import {
+  createPostgresClient,
+  endPostgresPool,
+} from '../database/postgres-connection';
 import type { AppDb } from '../database/database.types';
 import * as schema from '../database/schema';
 import * as schoolClassQueries from '../database/queries/school-classes.queries';
@@ -54,7 +57,7 @@ async function main() {
       : '\nNenhuma turma duplicada encontrada.',
   );
 
-  await sql.end({ timeout: 5 });
+  await endPostgresPool(sql);
 }
 
 main().catch((err) => {

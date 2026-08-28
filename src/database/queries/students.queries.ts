@@ -324,12 +324,7 @@ export type UpsertStudentByEnrollmentInput = {
   name: string;
   birthDate?: Date | null;
   situacaoMatricula?:
-    | 'enrolled'
-    | 'transferred'
-    | 'cancelled'
-    | 'pre_enrolled'
-    | 'locked'
-    | null;
+    'enrolled' | 'transferred' | 'cancelled' | 'pre_enrolled' | 'locked' | null;
   isActive: boolean;
 };
 

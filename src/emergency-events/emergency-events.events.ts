@@ -37,13 +37,7 @@ export type EmergencyEventPayload = {
   clientName: string;
   status: 'active' | 'resolved';
   srpAction:
-    | 'hold'
-    | 'secure'
-    | 'lockdown'
-    | 'evacuate'
-    | 'shelter'
-    | 'other'
-    | null;
+    'hold' | 'secure' | 'lockdown' | 'evacuate' | 'shelter' | 'other' | null;
   reason: string | null;
   startedAt: string;
   resolvedAt: string | null;

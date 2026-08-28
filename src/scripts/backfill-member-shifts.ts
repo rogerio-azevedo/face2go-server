@@ -18,10 +18,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
 
 import { validateEnv } from '../config/env.validation';
-import { createPostgresClient } from '../database/postgres-connection';
+import {
+  createPostgresClient,
+  endPostgresPool,
+} from '../database/postgres-connection';
 import type { AppDb } from '../database/database.types';
 import * as schema from '../database/schema';
 import { DatabaseModule } from '../database/database.module';
@@ -279,7 +282,7 @@ async function main() {
     }
   } finally {
     if (nest) await nest.close();
-    await sql.end({ timeout: 5 });
+    await endPostgresPool(sql);
   }
 }
 

@@ -1,6 +1,9 @@
 import 'dotenv/config';
 
-import { createPostgresClient } from '../database/postgres-connection';
+import {
+  createPostgresClient,
+  endPostgresPool,
+} from '../database/postgres-connection';
 
 /** Confere se a migration 0005 criou as tabelas esperadas (útil quando o log do migrate é silencioso). */
 async function main() {
@@ -18,39 +21,39 @@ async function main() {
   const sql = createPostgresClient(url);
 
   try {
-    const tables = await sql`
+    const tables = await sql.query<{ tablename: string }>(`
     SELECT tablename
     FROM pg_tables
     WHERE schemaname = 'public'
       AND tablename IN ('registration_links', 'registrations')
     ORDER BY tablename
-  `;
+  `);
 
     console.log(
       'Tabelas de cadastro:',
-      tables.length > 0
-        ? tables.map((r: { tablename: string }) => r.tablename).join(', ')
+      tables.rows.length > 0
+        ? tables.rows.map((r) => r.tablename).join(', ')
         : '(nenhuma — rode npm run db:migrate)',
     );
 
-    const drizzleMeta = await sql`
+    const drizzleMeta = await sql.query<{
+      schemaname: string;
+      tablename: string;
+    }>(`
     SELECT schemaname, tablename
     FROM pg_tables
     WHERE tablename LIKE '%drizzle%migration%'
-  `;
-    if (drizzleMeta.length > 0) {
+  `);
+    if (drizzleMeta.rows.length > 0) {
       console.log(
         'Metadado Drizzle:',
-        drizzleMeta
-          .map(
-            (r: { schemaname: string; tablename: string }) =>
-              `${r.schemaname}.${r.tablename}`,
-          )
+        drizzleMeta.rows
+          .map((r) => `${r.schemaname}.${r.tablename}`)
           .join(', '),
       );
     }
   } finally {
-    await sql.end({ timeout: 5 });
+    await endPostgresPool(sql);
   }
 }
 

@@ -1,10 +1,13 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
 
 import { ALL_FEATURES } from '../common/features.constants';
-import { createPostgresClient } from '../database/postgres-connection';
+import {
+  createPostgresClient,
+  endPostgresPool,
+} from '../database/postgres-connection';
 import type { AppDb } from '../database/database.types';
 import * as schema from '../database/schema';
 import { seedLegalDocumentsIfNeeded } from './seed-legal-documents';
@@ -70,7 +73,7 @@ async function main() {
     await seedLegalDocumentsIfNeeded(db);
     console.info('Documentos legais verificados.');
   } finally {
-    await client.end({ timeout: 5 });
+    await endPostgresPool(client);
   }
 }
 

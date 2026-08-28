@@ -5,10 +5,7 @@ import { normalizeVehiclePlate } from './vehicles.schema';
 import { parseWallClockDate } from './pickup-authorizations.schema';
 
 export type StoredVisitorInviteStatus =
-  | 'active'
-  | 'used'
-  | 'expired'
-  | 'cancelled';
+  'active' | 'used' | 'expired' | 'cancelled';
 
 export function computeEffectiveVisitorInviteStatus(row: {
   status: StoredVisitorInviteStatus;

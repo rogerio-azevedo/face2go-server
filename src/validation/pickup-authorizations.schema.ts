@@ -5,10 +5,7 @@ import { normalizeVehiclePlate } from './vehicles.schema';
 import { normalizeCpf } from '../auth/utils/auth-identifiers';
 
 export type StoredPickupAuthorizationStatus =
-  | 'active'
-  | 'used'
-  | 'expired'
-  | 'cancelled';
+  'active' | 'used' | 'expired' | 'cancelled';
 
 export function computeEffectivePickupStatus(row: {
   status: StoredPickupAuthorizationStatus;

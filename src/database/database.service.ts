@@ -1,10 +1,10 @@
 import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
 
 import type { EnvVars } from '../config/env.validation';
 import type { AppDb } from './database.types';
-import { createPostgresClient } from './postgres-connection';
+import { createPostgresClient, endPostgresPool } from './postgres-connection';
 import * as schema from './schema';
 
 @Injectable()
@@ -24,6 +24,6 @@ export class DatabaseService implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.client.end({ timeout: 5 });
+    await endPostgresPool(this.client);
   }
 }

@@ -10,9 +10,12 @@
 import 'dotenv/config';
 
 import { and, eq, isNotNull } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
 
-import { createPostgresClient } from '../database/postgres-connection';
+import {
+  createPostgresClient,
+  endPostgresPool,
+} from '../database/postgres-connection';
 import type { AppDb } from '../database/database.types';
 import * as peopleQueries from '../database/queries/people.queries';
 import * as vehicleQueries from '../database/queries/vehicles.queries';
@@ -220,7 +223,7 @@ async function main() {
     );
   }
 
-  await sql.end({ timeout: 5 });
+  await endPostgresPool(sql);
 }
 
 main().catch((err) => {

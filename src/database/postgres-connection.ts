@@ -1,7 +1,12 @@
-import postgres from 'postgres';
+import { Pool, type PoolConfig } from 'pg';
+
+const DEFAULT_POOL_MAX = 10;
+const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
+const DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
+const DEFAULT_END_TIMEOUT_MS = 5_000;
 
 /**
- * Neon/alguns templates usam `?schema=public` na URI — o postgres.js não trata esse
+ * Neon/alguns templates usam `?schema=public` na URI — o driver não trata esse
  * parâmetro como no libpq nativo e o RDS recusa (“unrecognized configuration parameter schema”).
  */
 export function sanitizePostgresConnectionUrl(
@@ -70,13 +75,56 @@ export function shouldRequirePostgresSsl(connectionString: string): boolean {
   }
 }
 
-/** Cliente postgres.js com RDS / TLS compatível via URI finalizada. */
-export function createPostgresClient(connectionString: string) {
+function readPositiveIntEnv(
+  name: string,
+  fallback: number,
+  cap: number,
+): number {
+  const raw = process.env[name];
+  if (raw == null || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.floor(n), cap);
+}
+
+function poolConfigFromEnv(connectionString: string): PoolConfig {
   const url = finalizePostgresUrl(connectionString);
   /** Redundância: alguns setups ignoram apenas `sslmode` na URI. */
   const ssl = shouldRequirePostgresSsl(connectionString)
-    ? ('require' as const)
+    ? { rejectUnauthorized: false }
     : undefined;
 
-  return postgres(url, ssl ? { ssl } : {});
+  return {
+    connectionString: url,
+    max: readPositiveIntEnv('DATABASE_POOL_MAX', DEFAULT_POOL_MAX, 100),
+    idleTimeoutMillis: readPositiveIntEnv(
+      'DATABASE_POOL_IDLE_TIMEOUT_MS',
+      DEFAULT_IDLE_TIMEOUT_MS,
+      600_000,
+    ),
+    connectionTimeoutMillis: readPositiveIntEnv(
+      'DATABASE_POOL_CONNECTION_TIMEOUT_MS',
+      DEFAULT_CONNECTION_TIMEOUT_MS,
+      60_000,
+    ),
+    ...(ssl ? { ssl } : {}),
+  };
+}
+
+/** Pool `pg` com RDS / TLS compatível via URI finalizada. */
+export function createPostgresClient(connectionString: string): Pool {
+  return new Pool(poolConfigFromEnv(connectionString));
+}
+
+/** Fecha o pool; se travar, desiste após `timeoutMs` (equivalente ao `.end({ timeout })` do postgres.js). */
+export async function endPostgresPool(
+  pool: Pool,
+  timeoutMs = DEFAULT_END_TIMEOUT_MS,
+): Promise<void> {
+  await Promise.race([
+    pool.end(),
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, timeoutMs);
+    }),
+  ]);
 }

@@ -85,12 +85,7 @@ export type UpsertStudentClassLinkInput = {
   studentId: string;
   classId: string;
   situacaoMatricula?:
-    | 'enrolled'
-    | 'transferred'
-    | 'cancelled'
-    | 'pre_enrolled'
-    | 'locked'
-    | null;
+    'enrolled' | 'transferred' | 'cancelled' | 'pre_enrolled' | 'locked' | null;
   isActive: boolean;
 };
 

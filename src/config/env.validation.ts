@@ -3,6 +3,20 @@ import { z } from 'zod';
 export const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DATABASE_URL_UNPOOLED: z.string().optional(),
+  /** Tamanho máximo do pool `pg` (default 10, alinhado ao postgres.js). */
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  DATABASE_POOL_IDLE_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(600_000)
+    .default(30_000),
+  DATABASE_POOL_CONNECTION_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(60_000)
+    .default(10_000),
   /** MongoDB (histórico de acessos faciais). */
   MONGODB_URI: z.string().min(1),
   /**

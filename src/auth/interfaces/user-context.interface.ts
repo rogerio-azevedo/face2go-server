@@ -1,10 +1,5 @@
 export type UserContextType =
-  | 'super_admin'
-  | 'company'
-  | 'client'
-  | 'responsible'
-  | 'member'
-  | 'face_user';
+  'super_admin' | 'company' | 'client' | 'responsible' | 'member' | 'face_user';
 
 export type TenantBranding = {
   logoUrl: string | null;

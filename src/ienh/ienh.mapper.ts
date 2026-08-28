@@ -13,11 +13,7 @@ const FILIAL_BY_BRANCH_NAME: Record<string, number> = {
 };
 
 export type SituacaoMatricula =
-  | 'enrolled'
-  | 'transferred'
-  | 'cancelled'
-  | 'pre_enrolled'
-  | 'locked';
+  'enrolled' | 'transferred' | 'cancelled' | 'pre_enrolled' | 'locked';
 
 export function normalizeDocument(
   raw: string | number | null | undefined,

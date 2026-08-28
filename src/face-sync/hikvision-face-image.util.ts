@@ -147,10 +147,7 @@ async function normalizeFaceJpegForReader(
     );
   }
 
-  if (
-    meta.width < target.minDimension ||
-    meta.height < target.minDimension
-  ) {
+  if (meta.width < target.minDimension || meta.height < target.minDimension) {
     throw new Error(
       `Foto muito pequena (${meta.width}×${meta.height}px). ` +
         `Use uma imagem com pelo menos ${target.minDimension}×${target.minDimension}px.`,

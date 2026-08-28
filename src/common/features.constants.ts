@@ -17,10 +17,7 @@ export const PREMIUM_FEATURE_SLUGS: PremiumFeatureSlug[] = [
 ];
 
 export type PermissionAction =
-  | 'can_read'
-  | 'can_create'
-  | 'can_update'
-  | 'can_delete';
+  'can_read' | 'can_create' | 'can_update' | 'can_delete';
 
 export interface FeatureDefinition {
   slug: FeatureSlug;

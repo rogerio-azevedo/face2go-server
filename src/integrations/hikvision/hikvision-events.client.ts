@@ -122,13 +122,11 @@ export function normalizeHikvisionAccessEvent(
 
   const root = payload as Record<string, unknown>;
   const nestedAlert = root.EventNotificationAlert as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   const event =
     (root.AccessControllerEvent as Record<string, unknown> | undefined) ??
     (nestedAlert?.AccessControllerEvent as
-      | Record<string, unknown>
-      | undefined) ??
+      Record<string, unknown> | undefined) ??
     nestedAlert ??
     root;
 
