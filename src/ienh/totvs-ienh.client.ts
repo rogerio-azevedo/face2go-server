@@ -106,7 +106,7 @@ export class TotvsIenhClient {
       return (body as { data: TotvsIenhRecord[] }).data;
     }
     throw new BadGatewayException(
-      'TOTVS IENH: resposta JSON em formato inesperado (esperado array).',
+      'TOTVS IENH: resposta JSON em formato inesperado (esperado: array).',
     );
   }
 }
