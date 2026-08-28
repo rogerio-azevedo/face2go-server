@@ -8,13 +8,11 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import * as membersQueries from '../database/queries/members.queries';
 import { DatabaseService } from '../database/database.service';
 import { ResponsibleDashboardService } from '../responsible-dashboard/responsible-dashboard.service';
-import { R2StorageService } from '../storage/r2-storage.service';
 
 @Injectable()
 export class MemberPortalService {
   constructor(
     private readonly database: DatabaseService,
-    private readonly r2Storage: R2StorageService,
     private readonly responsibleDashboard: ResponsibleDashboardService,
   ) {}
 
@@ -39,17 +37,6 @@ export class MemberPortalService {
       throw new NotFoundException('Membro não encontrado.');
     }
 
-    let photoUrl: string | null = null;
-    if (row.photoKey) {
-      try {
-        photoUrl = await this.r2Storage.createPresignedPortraitGetUrl(
-          row.photoKey,
-        );
-      } catch {
-        photoUrl = null;
-      }
-    }
-
     return {
       id: row.id,
       clientId: row.clientId,
@@ -62,7 +49,7 @@ export class MemberPortalService {
       phone: row.phone,
       document: row.document,
       birthDate: row.birthDate,
-      photoUrl,
+      photoUrl: null,
       faceId: row.faceId,
       deviceSyncStatus: row.deviceSyncStatus,
       deviceSyncedAt: row.deviceSyncedAt
