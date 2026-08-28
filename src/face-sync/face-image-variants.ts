@@ -4,11 +4,17 @@ import { normalizeHikvisionFaceJpeg } from './hikvision-face-image.util';
 
 export type ReaderFaceBrand = 'intelbras' | 'hikvision';
 
+/** Bump da variante Intelbras invalida o cache R2 de 400×534. */
+const READER_VARIANT_VERSION: Record<ReaderFaceBrand, string> = {
+  intelbras: 'v2',
+  hikvision: 'v1',
+};
+
 export function readerFaceVariantKey(
   masterKey: string,
   brand: ReaderFaceBrand,
 ): string {
-  return `${masterKey}.${brand}.jpg`;
+  return `${masterKey}.${brand}.${READER_VARIANT_VERSION[brand]}.jpg`;
 }
 
 async function normalizeForBrand(

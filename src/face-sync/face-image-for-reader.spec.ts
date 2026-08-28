@@ -1,6 +1,9 @@
 import sharp from 'sharp';
 
-import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
+import {
+  FACIAL_READER_MAX_BYTES,
+  imageBufferToReaderBase64Jpeg,
+} from './face-image-for-reader';
 import { readerFaceVariantKey } from './face-image-variants';
 import { normalizeHikvisionFaceJpeg } from './hikvision-face-image.util';
 
@@ -18,23 +21,33 @@ async function makeJpeg(width: number, height: number): Promise<Buffer> {
 }
 
 describe('imageBufferToReaderBase64Jpeg', () => {
-  it('devolve JPEG base64 abaixo de 100KB', async () => {
-    const large = await makeJpeg(1200, 1600);
+  it('rejeita imagem abaixo do mínimo documentado', async () => {
+    const tiny = await makeJpeg(100, 200);
+    await expect(imageBufferToReaderBase64Jpeg(tiny)).rejects.toThrow(
+      /muito pequena/i,
+    );
+  });
+
+  it('gera JPEG ≤100KB dentro de 600x800', async () => {
+    const large = await makeJpeg(720, 960);
     const b64 = await imageBufferToReaderBase64Jpeg(large);
     const out = Buffer.from(b64, 'base64');
-    expect(out.length).toBeLessThanOrEqual(100 * 1024);
-    expect(out[0]).toBe(0xff);
-    expect(out[1]).toBe(0xd8);
+    const meta = await sharp(out).metadata();
+
+    expect(out.length).toBeLessThanOrEqual(FACIAL_READER_MAX_BYTES);
+    expect(meta.width).toBeLessThanOrEqual(600);
+    expect(meta.height).toBeLessThanOrEqual(800);
+    expect((meta.width ?? 0) * 2).toBeGreaterThanOrEqual(meta.height ?? 0);
   });
 });
 
 describe('readerFaceVariantKey', () => {
-  it('sufixa a marca no master key', () => {
+  it('sufixa a marca e a versão no master key', () => {
     expect(readerFaceVariantKey('a/b/face.jpg', 'intelbras')).toBe(
-      'a/b/face.jpg.intelbras.jpg',
+      'a/b/face.jpg.intelbras.v2.jpg',
     );
     expect(readerFaceVariantKey('a/b/face.jpg', 'hikvision')).toBe(
-      'a/b/face.jpg.hikvision.jpg',
+      'a/b/face.jpg.hikvision.v1.jpg',
     );
   });
 });

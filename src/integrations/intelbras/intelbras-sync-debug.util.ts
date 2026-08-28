@@ -14,14 +14,22 @@ export function syncLogError(
   err: unknown,
   details?: Record<string, unknown>,
 ): void {
+  const http = extractHttpError(err);
   console.error(TAG, step, 'ERRO', {
     ...details,
     message: err instanceof Error ? err.message : String(err),
-    http: extractHttpError(err),
+    http: http
+      ? { status: http.status, data: truncateForLog(http.data) }
+      : undefined,
   });
 }
 
-function extractHttpError(err: unknown): Record<string, unknown> | undefined {
+export function extractHttpError(err: unknown):
+  | {
+      status?: number;
+      data?: unknown;
+    }
+  | undefined {
   let node: unknown = err;
   for (let i = 0; i < 6 && node; i++) {
     if (node && typeof node === 'object' && 'response' in node) {
@@ -30,7 +38,7 @@ function extractHttpError(err: unknown): Record<string, unknown> | undefined {
       if (resp) {
         return {
           status: resp.status,
-          data: truncateForLog(resp.data),
+          data: resp.data,
         };
       }
     }
@@ -50,6 +58,16 @@ export function truncateForLog(data: unknown, max = 600): unknown {
   }
   if (Buffer.isBuffer(data)) {
     return `<Buffer ${data.length} bytes>`;
+  }
+  if (data !== null && typeof data === 'object') {
+    try {
+      const json = JSON.stringify(data);
+      return json.length > max
+        ? `${json.slice(0, max)}…(${json.length} chars)`
+        : json;
+    } catch {
+      return '[unserializable object]';
+    }
   }
   return data;
 }

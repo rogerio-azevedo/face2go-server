@@ -1,4 +1,4 @@
-import sharp, { type Sharp } from 'sharp';
+import sharp from 'sharp';
 
 export type JpegDimensions = { width: number; height: number };
 
@@ -72,17 +72,14 @@ export function isJpegBuffer(buffer: Buffer): boolean {
 }
 
 async function compressJpegToTarget(
-  pipeline: Sharp,
+  pipeline: sharp.Sharp,
   maxBytes: number,
   minBytes?: number,
 ): Promise<Buffer> {
   let bestUnderMax: Buffer | null = null;
 
   for (const quality of JPEG_QUALITY_STEPS) {
-    const output = await pipeline
-      .clone()
-      .jpeg({ quality })
-      .toBuffer();
+    const output = await pipeline.clone().jpeg({ quality }).toBuffer();
 
     if (output.length <= maxBytes) {
       if (minBytes && output.length >= minBytes) {
@@ -97,10 +94,7 @@ async function compressJpegToTarget(
     return bestUnderMax;
   }
 
-  const smallest = await pipeline
-    .clone()
-    .jpeg({ quality: 52 })
-    .toBuffer();
+  const smallest = await pipeline.clone().jpeg({ quality: 52 }).toBuffer();
 
   if (smallest.length > maxBytes) {
     throw new Error(
@@ -112,7 +106,7 @@ async function compressJpegToTarget(
 }
 
 export function detectImageFormat(buffer: Buffer): string {
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+  if (isJpegBuffer(buffer)) {
     return 'jpeg';
   }
   if (
@@ -149,7 +143,7 @@ async function normalizeFaceJpegForReader(
 
   if (meta.width < target.minDimension || meta.height < target.minDimension) {
     throw new Error(
-      `Foto muito pequena (${meta.width}×${meta.height}px). ` +
+      `Foto muito pequena (${meta.width}x${meta.height}px). ` +
         `Use uma imagem com pelo menos ${target.minDimension}×${target.minDimension}px.`,
     );
   }

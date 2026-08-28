@@ -14,11 +14,13 @@ import {
 } from './intelbras-time-schedule.util';
 import { normalizeNameForFacialReader } from '../../face-sync/normalize-name-for-reader';
 import {
+  extractHttpError,
   readerLabel,
   syncLog,
   syncLogError,
   truncateForLog,
 } from './intelbras-sync-debug.util';
+import { describeIntelbrasFacialHttpError } from './intelbras-error-codes.util';
 
 export type PlainReaderCredential = {
   id: string;
@@ -171,6 +173,25 @@ const INTELBRAS_ERR_MSG = {
   },
 } satisfies Record<IntelbrasHttpMessaging, Record<string, string>>;
 
+export class ReaderSyncStepError extends Error {
+  readonly step: string;
+
+  constructor(step: string, message: string, cause?: unknown) {
+    super(`${step}: ${message}`);
+    this.name = 'ReaderSyncStepError';
+    this.step = step;
+    if (cause !== undefined) {
+      this.cause = cause;
+    }
+  }
+}
+
+function facialDeviceErrorFromHttp(err: unknown): string | null {
+  const http = extractHttpError(err);
+  if (!http || http.data === undefined) return null;
+  return describeIntelbrasFacialHttpError(http.data);
+}
+
 /**
  * Converte erro bruto da comunicação com o leitor ou câmera (rede / HTTP CGI) em mensagem amigável.
  * Não inclui o nome do equipamento — use `formatReaderFaceSyncError` no agregador.
@@ -228,6 +249,10 @@ export function mapReaderError(
 
   const http = httpStatusFromError(err);
   if (http === 400) {
+    if (messaging === 'facial') {
+      const deviceMsg = facialDeviceErrorFromHttp(err);
+      if (deviceMsg) return deviceMsg;
+    }
     return msgs.bad400;
   }
 
@@ -237,6 +262,10 @@ export function mapReaderError(
     (/\bstatus(?:\s+code)?\D{0,5}400\b/i.test(rawMsg) ||
       /\b400\b.*status\b/i.test(lower))
   ) {
+    if (messaging === 'facial') {
+      const deviceMsg = facialDeviceErrorFromHttp(err);
+      if (deviceMsg) return deviceMsg;
+    }
     return msgs.bad400;
   }
 
@@ -270,6 +299,9 @@ export function formatReaderFaceSyncError(
   readerName: string,
   err: unknown,
 ): string {
+  if (err instanceof ReaderSyncStepError) {
+    return `${readerName}: ${err.message}`;
+  }
   return `${readerName}: ${mapReaderError(err)}`;
 }
 
@@ -292,10 +324,10 @@ async function digestRequest(
   },
 ): Promise<ApiDigestResponse> {
   try {
-    const response = (await auth.request({
+    const response = await auth.request({
       ...init,
       timeout: READER_HTTP_TIMEOUT_MS,
-    })) as ApiDigestResponse;
+    });
 
     syncLog('digestRequest:ok', {
       method: init.method,
@@ -856,11 +888,7 @@ export async function intelbrasUpsertFaceOnReader(
 function attachReaderSyncStepError(err: unknown, step: string): Error {
   const msg =
     step === 'cartão de acesso' ? mapReaderCardError(err) : mapReaderError(err);
-  const wrapped = new Error(`${step}: ${msg}`);
-  if (err instanceof Error) {
-    wrapped.cause = err;
-  }
-  return wrapped;
+  return new ReaderSyncStepError(step, msg, err);
 }
 
 /** HTTP 400 no recordUpdater — parâmetros do cartão, não foto facial. */
