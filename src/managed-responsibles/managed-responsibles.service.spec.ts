@@ -50,7 +50,7 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
   let service: ManagedResponsiblesService;
   let faceSync: {
     removePersonFromReaders: jest.Mock;
-    syncPersonOnReaders: jest.Mock;
+    enqueuePersonSync: jest.Mock;
   };
   let lprPlateSync: { removePlateFromAllLprCameras: jest.Mock };
   let accessTimeZone: { resolveResponsibleTimeSections: jest.Mock };
@@ -65,8 +65,8 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
 
     faceSync = {
       removePersonFromReaders: jest.fn().mockResolvedValue(undefined),
-      syncPersonOnReaders: jest.fn().mockResolvedValue({
-        deviceSyncStatus: 'synced',
+      enqueuePersonSync: jest.fn().mockReturnValue({
+        deviceSyncStatus: 'pending_sync',
         deviceSyncError: null,
       }),
     };
@@ -96,6 +96,10 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
       accessTimeZone as never,
       lprPlateSync as never,
       { emit: jest.fn() } as unknown as EventEmitter2,
+      {
+        applySharedFaceFromSameClient: jest.fn(),
+        propagateFaceToSiblings: jest.fn(),
+      } as never,
     );
 
     jest
@@ -208,7 +212,7 @@ describe('ManagedResponsiblesService.deleteManagedResponsible', () => {
     expect(faceSync.removePersonFromReaders).not.toHaveBeenCalled();
     expect(lprPlateSync.removePlateFromAllLprCameras).not.toHaveBeenCalled();
     expect(responsiblesQueries.updateResponsible).not.toHaveBeenCalled();
-    expect(faceSync.syncPersonOnReaders).toHaveBeenCalled();
+    expect(faceSync.enqueuePersonSync).toHaveBeenCalled();
   });
 
   it('falha no unlink parcial quando não há vínculos com meus alunos', async () => {

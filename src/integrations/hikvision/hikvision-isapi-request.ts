@@ -18,21 +18,47 @@ type AxiosLikeError = {
   response?: { status?: number };
 };
 
-/**
- * Requisição ISAPI Hikvision: Digest (uri com query) e fallback Basic Auth.
- */
-export async function hikvisionIsapiRequest(
-  connection: Pick<HikvisionReaderConnection, 'username' | 'password'>,
-  opts: AxiosRequestConfig,
-  forStream = false,
-): Promise<AxiosResponse> {
-  const timeoutMs = forStream ? 0 : readerHttpTimeoutMs();
+type CachedHikvisionClient = {
+  digest: HikvisionDigestAuth;
+  axiosInst: ReturnType<typeof createHikvisionAxios>;
+};
+
+const hikvisionClientCache = new Map<string, CachedHikvisionClient>();
+
+function hikvisionClient(
+  connection: Pick<
+    HikvisionReaderConnection,
+    'username' | 'password' | 'baseUrl'
+  >,
+  timeoutMs: number,
+): CachedHikvisionClient {
+  const key = `${connection.baseUrl}\0${connection.username}\0${timeoutMs}`;
+  const cached = hikvisionClientCache.get(key);
+  if (cached) return cached;
   const axiosInst = createHikvisionAxios(timeoutMs);
   const digest = new HikvisionDigestAuth(
     axiosInst,
     connection.username,
     connection.password,
   );
+  const created = { digest, axiosInst };
+  hikvisionClientCache.set(key, created);
+  return created;
+}
+
+/**
+ * Requisição ISAPI Hikvision: Digest (uri com query) e fallback Basic Auth.
+ */
+export async function hikvisionIsapiRequest(
+  connection: Pick<
+    HikvisionReaderConnection,
+    'username' | 'password' | 'baseUrl'
+  >,
+  opts: AxiosRequestConfig,
+  forStream = false,
+): Promise<AxiosResponse> {
+  const timeoutMs = forStream ? 0 : readerHttpTimeoutMs();
+  const { digest, axiosInst } = hikvisionClient(connection, timeoutMs);
 
   try {
     return await digest.request(opts);
@@ -57,16 +83,14 @@ export async function hikvisionIsapiRequest(
 
 /** Abre alertStream ISAPI (Digest com query no uri; fallback Basic Auth). */
 export async function hikvisionOpenStreamRequest(
-  connection: Pick<HikvisionReaderConnection, 'username' | 'password'>,
+  connection: Pick<
+    HikvisionReaderConnection,
+    'username' | 'password' | 'baseUrl'
+  >,
   url: string,
   signal?: AbortSignal,
 ): Promise<AxiosResponse> {
-  const axiosInst = createHikvisionAxios(0);
-  const digest = new HikvisionDigestAuth(
-    axiosInst,
-    connection.username,
-    connection.password,
-  );
+  const { digest, axiosInst } = hikvisionClient(connection, 0);
   const opts: AxiosRequestConfig = {
     method: 'GET',
     url,

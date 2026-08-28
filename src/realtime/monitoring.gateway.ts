@@ -10,17 +10,26 @@ import type { Namespace, Socket } from 'socket.io';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PermissionsService } from '../permissions/permissions.service';
+import type { ReaderOfflineDetectedEvent } from '../face-listener/face-listener.events';
 import type {
   PanicCreatedEvent,
   PanicEventPayload,
   PanicUpdatedEvent,
 } from '../panic-events/panic-events.events';
 
+type MonitoringAccess = {
+  companyId: string;
+  clientId: string | null;
+  room: string;
+};
+
 type MonitoringSocketData = {
   userId: string;
   companyId: string;
+  clientId: string | null;
   name: string;
   role: string;
+  room: string;
 };
 
 @WebSocketGateway({
@@ -59,12 +68,29 @@ export class MonitoringGateway
     return `company:${companyId}`;
   }
 
+  private clientRoom(clientId: string): string {
+    return `client:${clientId}`;
+  }
+
   private async assertMonitoringAccess(
     payload: JwtPayload,
-  ): Promise<string | null> {
+  ): Promise<MonitoringAccess | null> {
     const companyId = payload.companyId ?? null;
+
+    if (payload.role === 'client_admin' || payload.role === 'client_operator') {
+      const clientId = payload.clientId ?? null;
+      if (!clientId || !companyId) return null;
+      return {
+        companyId,
+        clientId,
+        room: this.clientRoom(clientId),
+      };
+    }
+
     if (!companyId) return null;
-    if (payload.role === 'company_admin') return companyId;
+    if (payload.role === 'company_admin') {
+      return { companyId, clientId: null, room: this.companyRoom(companyId) };
+    }
     if (payload.role === 'company_operator') {
       const ok = await this.permissionsService.evaluateCompanyFeatureAction(
         payload.role,
@@ -72,7 +98,9 @@ export class MonitoringGateway
         'monitoring',
         'can_read',
       );
-      return ok ? companyId : null;
+      return ok
+        ? { companyId, clientId: null, room: this.companyRoom(companyId) }
+        : null;
     }
     return null;
   }
@@ -86,23 +114,28 @@ export class MonitoringGateway
       }
 
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
-      const companyId = await this.assertMonitoringAccess(payload);
-      if (!companyId) {
+      const access = await this.assertMonitoringAccess(payload);
+      if (!access) {
         client.disconnect(true);
         return;
       }
 
       const data: MonitoringSocketData = {
         userId: payload.sub,
-        companyId,
+        companyId: access.companyId,
+        clientId: access.clientId,
         name: payload.name ?? payload.email,
         role: payload.role,
+        room: access.room,
       };
       client.data = data;
-      await client.join(this.companyRoom(companyId));
-      this.broadcastPresence(companyId);
+      await client.join(access.room);
+      if (!access.clientId) {
+        this.broadcastPresence(access.companyId);
+      }
       this.logger.log(
-        `Operador conectado user=${data.userId} company=${companyId}`,
+        `Operador conectado user=${data.userId} company=${access.companyId}` +
+          (access.clientId ? ` client=${access.clientId}` : ''),
       );
     } catch {
       client.disconnect(true);
@@ -111,7 +144,8 @@ export class MonitoringGateway
 
   handleDisconnect(client: Socket): void {
     const data = client.data as MonitoringSocketData | undefined;
-    if (data?.companyId) {
+    if (!data?.companyId) return;
+    if (!data.clientId) {
       try {
         this.broadcastPresence(data.companyId);
       } catch (err) {
@@ -121,10 +155,11 @@ export class MonitoringGateway
           }`,
         );
       }
-      this.logger.log(
-        `Operador desconectado user=${data.userId} company=${data.companyId}`,
-      );
     }
+    this.logger.log(
+      `Operador desconectado user=${data.userId} company=${data.companyId}` +
+        (data.clientId ? ` client=${data.clientId}` : ''),
+    );
   }
 
   private broadcastPresence(companyId: string): void {
@@ -150,6 +185,13 @@ export class MonitoringGateway
 
   emitPanicUpdated(payload: PanicUpdatedEvent): void {
     this.emitToCompany(payload.event.companyId, 'panic:updated', payload);
+  }
+
+  emitReaderOffline(payload: ReaderOfflineDetectedEvent): void {
+    if (!this.server) return;
+    this.server
+      .to(this.clientRoom(payload.clientId))
+      .emit('reader:offline', payload);
   }
 }
 

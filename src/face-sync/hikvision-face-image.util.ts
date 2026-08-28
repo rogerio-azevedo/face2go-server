@@ -10,7 +10,7 @@ export type FaceJpegReaderTarget = {
   minDimension: number;
 };
 
-const JPEG_QUALITY_STEPS = [95, 88, 82, 76, 70, 64, 58, 52];
+const JPEG_QUALITY_STEPS = [90, 82, 74, 66, 58, 52];
 
 /** Limite Hikvision para FaceDataRecord (200 KB). */
 export const HIKVISION_MAX_FACE_IMAGE_BYTES = 200 * 1024;
@@ -81,7 +81,7 @@ async function compressJpegToTarget(
   for (const quality of JPEG_QUALITY_STEPS) {
     const output = await pipeline
       .clone()
-      .jpeg({ quality, mozjpeg: true })
+      .jpeg({ quality })
       .toBuffer();
 
     if (output.length <= maxBytes) {
@@ -99,7 +99,7 @@ async function compressJpegToTarget(
 
   const smallest = await pipeline
     .clone()
-    .jpeg({ quality: 52, mozjpeg: true })
+    .jpeg({ quality: 52 })
     .toBuffer();
 
   if (smallest.length > maxBytes) {

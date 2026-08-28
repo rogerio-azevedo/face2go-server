@@ -12,6 +12,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
 
@@ -94,38 +95,42 @@ export class PersonProfileService {
             target.id,
           );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId: shared.faceId,
       name: target.name,
       imageBuffer: buffer,
+      photoKey: shared.photoKey,
       timeSectionIds,
       logContext,
-    });
+      persistResult: async (sync) => {
+        await this.writeFaceToBond(clientId, target, {
+          faceId: shared.faceId,
+          photoKey: shared.photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        });
 
-    await this.writeFaceToBond(clientId, target, {
-      faceId: shared.faceId,
-      photoKey: shared.photoKey,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-      deviceSyncError: sync.deviceSyncError,
+        await this.propagateFaceToSiblings(
+          userId,
+          clientId,
+          {
+            faceId: shared.faceId,
+            photoKey: shared.photoKey,
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+          {
+            responsibleId: target.type === 'responsible' ? target.id : undefined,
+            memberId: target.type === 'member' ? target.id : undefined,
+          },
+        );
+      },
     });
-
-    await this.propagateFaceToSiblings(
-      userId,
-      clientId,
-      {
-        faceId: shared.faceId,
-        photoKey: shared.photoKey,
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
-      },
-      {
-        responsibleId: target.type === 'responsible' ? target.id : undefined,
-        memberId: target.type === 'member' ? target.id : undefined,
-      },
-    );
 
     return true;
   }
@@ -176,6 +181,7 @@ export class PersonProfileService {
         : `members/${clientId}/${target.id}/face.jpg`;
 
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
+    void storeReaderFaceVariants(this.r2, photoKey, buffer);
 
     await this.writeFaceToBond(clientId, target, {
       faceId,
@@ -196,38 +202,43 @@ export class PersonProfileService {
             target.id,
           );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId,
       name: target.name,
       imageBuffer: buffer,
+      photoKey,
       timeSectionIds,
       logContext: `${logContext}-face-copy`,
-    });
+      persistResult: async (sync) => {
+        await this.writeFaceToBond(clientId, target, {
+          faceId,
+          photoKey,
+          deviceSyncStatus: sync.deviceSyncStatus,
+          deviceSyncedAt:
+            sync.deviceSyncStatus === 'synced' ? new Date() : null,
+          deviceSyncError: sync.deviceSyncError,
+        });
 
-    await this.writeFaceToBond(clientId, target, {
-      faceId,
-      photoKey,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-      deviceSyncError: sync.deviceSyncError,
+        await this.propagateFaceToSiblings(
+          userId,
+          clientId,
+          {
+            faceId,
+            photoKey,
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+          {
+            responsibleId:
+              target.type === 'responsible' ? target.id : undefined,
+            memberId: target.type === 'member' ? target.id : undefined,
+          },
+        );
+      },
     });
-
-    await this.propagateFaceToSiblings(
-      userId,
-      clientId,
-      {
-        faceId,
-        photoKey,
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
-      },
-      {
-        responsibleId: target.type === 'responsible' ? target.id : undefined,
-        memberId: target.type === 'member' ? target.id : undefined,
-      },
-    );
 
     return true;
   }

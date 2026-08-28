@@ -661,48 +661,50 @@ export class MembersService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId: row.faceId,
       name: row.name,
       imageBuffer: buffer,
+      photoKey: row.photoKey ?? undefined,
       timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
         clientId,
         memberId,
       ),
       logContext: `member-sync=${memberId}`,
+      persistResult: async (sync) => {
+        await membersQueries.updateMemberFace(
+          this.database.db,
+          memberId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
+        if (row.userId && row.faceId != null && row.photoKey) {
+          await this.personProfile.propagateFaceToSiblings(
+            row.userId,
+            clientId,
+            {
+              faceId: row.faceId,
+              photoKey: row.photoKey,
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+            { memberId },
+          );
+        }
+      },
     });
 
-    await membersQueries.updateMemberFace(
-      this.database.db,
-      memberId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
-      },
-    );
-
-    if (row.userId) {
-      await this.personProfile.propagateFaceToSiblings(
-        row.userId,
-        clientId,
-        {
-          faceId: row.faceId,
-          photoKey: row.photoKey,
-          deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt:
-            sync.deviceSyncStatus === 'synced' ? new Date() : null,
-          deviceSyncError: sync.deviceSyncError,
-        },
-        { memberId },
-      );
-    }
-
     return {
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
+      deviceSyncStatus: 'pending_sync' as const,
+      deviceSyncError: null,
     };
   }
 

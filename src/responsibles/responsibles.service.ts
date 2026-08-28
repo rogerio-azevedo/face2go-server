@@ -597,48 +597,50 @@ export class ResponsiblesService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId: row.faceId,
       name: responsible.name,
       imageBuffer: buffer,
+      photoKey: row.photoKey ?? undefined,
       timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
         clientId,
         responsibleId,
       ),
       logContext: `responsible-sync=${responsibleId}`,
+      persistResult: async (sync) => {
+        await responsiblesQueries.updateResponsibleFace(
+          this.database.db,
+          responsibleId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
+        if (responsible.userId && row.faceId != null && row.photoKey) {
+          await this.personProfile.propagateFaceToSiblings(
+            responsible.userId,
+            clientId,
+            {
+              faceId: row.faceId,
+              photoKey: row.photoKey,
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+            { responsibleId },
+          );
+        }
+      },
     });
 
-    await responsiblesQueries.updateResponsibleFace(
-      this.database.db,
-      responsibleId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
-      },
-    );
-
-    if (responsible.userId) {
-      await this.personProfile.propagateFaceToSiblings(
-        responsible.userId,
-        clientId,
-        {
-          faceId: row.faceId,
-          photoKey: row.photoKey,
-          deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt:
-            sync.deviceSyncStatus === 'synced' ? new Date() : null,
-          deviceSyncError: sync.deviceSyncError,
-        },
-        { responsibleId },
-      );
-    }
-
     return {
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
     };
   }
 

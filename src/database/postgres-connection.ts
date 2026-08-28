@@ -107,6 +107,11 @@ function poolConfigFromEnv(connectionString: string): PoolConfig {
       DEFAULT_CONNECTION_TIMEOUT_MS,
       60_000,
     ),
+    statement_timeout: readPositiveIntEnv(
+      'DATABASE_STATEMENT_TIMEOUT_MS',
+      15_000,
+      120_000,
+    ),
     ...(ssl ? { ssl } : {}),
   };
 }

@@ -33,6 +33,35 @@ export async function listClientUsers(
     .orderBy(asc(users.name));
 }
 
+export type ClientAdminEmailRow = {
+  userId: string;
+  email: string;
+  name: string | null;
+};
+
+export async function listActiveClientAdminEmails(
+  db: AppDb,
+  clientId: string,
+): Promise<ClientAdminEmailRow[]> {
+  return db
+    .select({
+      userId: users.id,
+      email: users.email,
+      name: users.name,
+    })
+    .from(clientUsers)
+    .innerJoin(users, eq(clientUsers.userId, users.id))
+    .where(
+      and(
+        eq(clientUsers.clientId, clientId),
+        eq(clientUsers.role, 'client_admin'),
+        eq(clientUsers.isActive, true),
+        eq(users.isActive, true),
+      ),
+    )
+    .orderBy(asc(users.name));
+}
+
 export async function getClientUserLink(
   db: AppDb,
   userId: string,

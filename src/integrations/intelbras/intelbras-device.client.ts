@@ -1,6 +1,8 @@
-import AxiosDigestAuth from '@mhoc/axios-digest-auth';
-
 import type { ReaderFaceSyncRow } from '../../database/queries/readers.queries';
+import {
+  digestAuthForReader,
+  type IntelbrasDigestAuth,
+} from './intelbras-digest-auth';
 import type { ShiftScheduleJson } from '../../database/schema/shifts';
 import {
   DEFAULT_INTELBRAS_VALID_DATE_END,
@@ -281,7 +283,7 @@ function stripDataUriBase64(raw: string): string {
 }
 
 async function digestRequest(
-  auth: AxiosDigestAuth,
+  auth: IntelbrasDigestAuth,
   init: {
     method: 'GET' | 'POST';
     url: string;
@@ -293,7 +295,7 @@ async function digestRequest(
     const response = (await auth.request({
       ...init,
       timeout: READER_HTTP_TIMEOUT_MS,
-    } as Parameters<AxiosDigestAuth['request']>[0])) as ApiDigestResponse;
+    })) as ApiDigestResponse;
 
     syncLog('digestRequest:ok', {
       method: init.method,
@@ -313,9 +315,101 @@ async function digestRequest(
   }
 }
 
+/** Firmware ignora filtro por UserID; páginas menores reduzem o download até achar. */
+const FIND_CARD_PAGE_SIZE = 50;
+const DEVICE_USERS_MAX_PAGES = 200;
+
+export type IntelbrasAccessUser = {
+  UserID: string;
+  UserName?: string;
+  timeSectionIndices: number[];
+  ValidFrom?: string;
+  ValidTo?: string;
+};
+
+/**
+ * Parse de `AccessUser.cgi?action=list`. RecNo não vem neste CGI —
+ * só UserID, nome, zonas e validade.
+ */
+export function parseAccessUserListText(
+  text: string,
+): IntelbrasAccessUser | null {
+  const fields: Record<string, string> = {};
+  const sections: number[] = [];
+  for (const line of text.split('\n')) {
+    const m = /^Users\[\d+\]\.(\S+)=(.*)$/.exec(line.trim());
+    if (!m) continue;
+    const key = m[1];
+    const value = m[2] ?? '';
+    const ts = /^TimeSections\[(\d+)\]$/.exec(key);
+    if (ts) {
+      const zone = parseInt(value, 10);
+      if (Number.isFinite(zone)) sections.push(zone);
+      continue;
+    }
+    fields[key] = value;
+  }
+  const userId = fields.UserID?.trim();
+  if (!userId) return null;
+  return {
+    UserID: userId,
+    UserName: fields.UserName,
+    timeSectionIndices: [...new Set(sections)].sort((a, b) => a - b),
+    ValidFrom: fields.ValidFrom,
+    ValidTo: fields.ValidTo,
+  };
+}
+
+/**
+ * Busca O(1) por UserID via AccessUser.cgi (não varrer AccessControlCard).
+ * HTTP 400 / FailCodes = usuário inexistente. Não devolve RecNo.
+ */
+export async function intelbrasFindAccessUserByUserId(
+  reader: PlainReaderCredential,
+  userId: string,
+): Promise<IntelbrasAccessUser | null> {
+  const label = readerLabel(reader);
+  const auth = digestAuthForReader(reader);
+  const base = deviceUrl(reader);
+  const url = `${base}/cgi-bin/AccessUser.cgi?action=list&UserIDList[0]=${encodeURIComponent(userId)}`;
+
+  syncLog('findAccessUser:inicio', { reader: label, userId });
+  try {
+    const response = await digestRequest(auth, { method: 'GET', url });
+    if (typeof response.data !== 'string') {
+      syncLog('findAccessUser:respostaNaoTexto', { reader: label, userId });
+      return null;
+    }
+    const parsed = parseAccessUserListText(response.data);
+    if (!parsed || parsed.UserID !== userId) {
+      syncLog('findAccessUser:naoEncontrado', { reader: label, userId });
+      return null;
+    }
+    syncLog('findAccessUser:encontrado', {
+      reader: label,
+      userId,
+      name: parsed.UserName,
+      timeSectionIndices: parsed.timeSectionIndices,
+    });
+    return parsed;
+  } catch (err) {
+    if (httpStatusFromError(err) === 400) {
+      syncLog('findAccessUser:naoEncontrado', { reader: label, userId });
+      return null;
+    }
+    syncLogError('findAccessUser', err, { reader: label, userId });
+    throw err;
+  }
+}
+
+function firstRecNo(records: DeviceUser[]): string | undefined {
+  return records[0]?.RecNo;
+}
+
 /**
  * Localiza RecNo do cartão AccessControlCard pelo UserID (face_id numérico).
- * Pagina o recordFinder — usuários além dos primeiros 500 também são encontrados.
+ * O recordFinder não filtra por UserID neste firmware — pagina em blocos
+ * pequenos e para ao encontrar, página vazia ou página repetida.
  */
 export async function intelbrasFindCardByUserId(
   reader: PlainReaderCredential,
@@ -325,18 +419,17 @@ export async function intelbrasFindCardByUserId(
   syncLog('findCardByUserId:inicio', { reader: label, userId });
 
   try {
-    const pageSize = 500;
     let offset = 0;
-    let totalFound = Number.POSITIVE_INFINITY;
+    let previousFirst: string | undefined;
+    let pages = 0;
 
-    while (offset < totalFound) {
-      const { found, records, totalCount } = await intelbrasGetDeviceUsers(
+    while (pages < DEVICE_USERS_MAX_PAGES) {
+      const { records } = await fetchDeviceUsersPage(
         reader,
-        pageSize,
+        FIND_CARD_PAGE_SIZE,
         offset,
       );
-      const total = totalCount > 0 ? totalCount : found;
-      totalFound = total;
+      pages += 1;
 
       const match = records.find((r) => r.UserID === userId);
       if (match?.RecNo) {
@@ -348,17 +441,32 @@ export async function intelbrasFindCardByUserId(
             recNo,
             cardName: match.CardName,
             timeSectionIndices: match.timeSectionIndices,
+            pages,
           });
           return match;
         }
       }
 
       if (records.length === 0) break;
+      const head = firstRecNo(records);
+      if (head && head === previousFirst) {
+        syncLog('findCardByUserId:paginaRepetida', {
+          reader: label,
+          userId,
+          offset,
+        });
+        break;
+      }
+      previousFirst = head;
       offset += records.length;
-      if (offset >= total) break;
+      if (records.length < FIND_CARD_PAGE_SIZE) break;
     }
 
-    syncLog('findCardByUserId:naoEncontrado', { reader: label, userId });
+    syncLog('findCardByUserId:naoEncontrado', {
+      reader: label,
+      userId,
+      pages,
+    });
     return null;
   } catch (err) {
     syncLogError('findCardByUserId', err, { reader: label, userId });
@@ -443,10 +551,7 @@ export async function intelbrasSetTimeScheduleZone(
   syncLog('setTimeScheduleZone:inicio', { reader: label, zoneIndex, zoneName });
 
   try {
-    const auth = new AxiosDigestAuth({
-      username: reader.username,
-      password: reader.plainPassword,
-    });
+    const auth = digestAuthForReader(reader);
     const base = deviceUrl(reader);
     const query = buildAccessTimeScheduleQueryString(
       schedule,
@@ -502,9 +607,13 @@ function buildAccessCardInsertParams(args: {
   );
 }
 
-/** Doc Intelbras: update usa recno (minúsculo) e não altera UserID/CardNo. */
+/**
+ * Update exige recno. UserID extra é aceito junto com recno (HTTP 200 no
+ * firmware testado); sozinho devolve 400 — não serve como critério.
+ */
 function buildAccessCardUpdateParams(args: {
   recNo: number;
+  faceId: string;
   normalizedName: string;
   timeSectionIds: number[];
   validDateStart?: string;
@@ -523,6 +632,7 @@ function buildAccessCardUpdateParams(args: {
 
   return (
     `action=update&name=AccessControlCard&recno=${args.recNo}` +
+    `&UserID=${encodeURIComponent(args.faceId)}` +
     `&CardName=${cardName}` +
     `&CardStatus=0` +
     `&CardType=0` +
@@ -538,6 +648,11 @@ function buildAccessCardUpdateParams(args: {
  * Pré-requisito: AccessTimeSchedule[n] já configurada no leitor quando timeSectionIds ≠ [255]
  * (use AccessTimeZoneService.ensureZonesOnSingleReader antes desta chamada).
  */
+export type IntelbrasUpsertFaceOptions = {
+  /** Só troca a foto — pula busca/update do cartão (validado no leitor real). */
+  photoOnly?: boolean;
+};
+
 export async function intelbrasUpsertFaceOnReader(
   reader: PlainReaderCredential,
   faceIdNumeric: number,
@@ -546,6 +661,7 @@ export async function intelbrasUpsertFaceOnReader(
   timeSectionIds: number[] = [255],
   validDateStart?: string,
   validDateEnd?: string,
+  options?: IntelbrasUpsertFaceOptions,
 ): Promise<void> {
   const label = readerLabel(reader);
   const normalizedName =
@@ -569,77 +685,90 @@ export async function intelbrasUpsertFaceOnReader(
       );
     }
 
-    const auth = new AxiosDigestAuth({
-      username: reader.username,
-      password: reader.plainPassword,
-    });
+    const auth = digestAuthForReader(reader);
     const base = deviceUrl(reader);
 
-    let existingCard: DeviceUser | null;
-    try {
-      existingCard = await intelbrasFindCardByUserId(reader, faceId);
-    } catch (err) {
-      syncLogError('upsertFace:findCardByUserId', err, {
-        reader: label,
-        faceId,
-      });
-      throw err;
-    }
-
-    const recNo =
-      existingCard?.RecNo != null
-        ? parseInt(existingCard.RecNo, 10)
-        : Number.NaN;
-    const hasExisting = Number.isFinite(recNo) && recNo > 0;
-
-    const cardParams = hasExisting
-      ? buildAccessCardUpdateParams({
-          recNo,
-          normalizedName,
-          timeSectionIds,
-          validDateStart,
-          validDateEnd,
-        })
-      : buildAccessCardInsertParams({
+    if (!options?.photoOnly) {
+      let existingCard: DeviceUser | null = null;
+      try {
+        const accessUser = await intelbrasFindAccessUserByUserId(
+          reader,
           faceId,
-          normalizedName,
-          timeSectionIds,
-          validDateStart,
-          validDateEnd,
+        );
+        if (accessUser) {
+          existingCard = await intelbrasFindCardByUserId(reader, faceId);
+        } else {
+          syncLog('upsertFace:accessUserAusente', {
+            reader: label,
+            faceId,
+          });
+        }
+      } catch (err) {
+        syncLogError('upsertFace:findUser', err, {
+          reader: label,
+          faceId,
         });
-    const cardUrl = `${base}/cgi-bin/recordUpdater.cgi?${cardParams}`;
-    const cardAction = hasExisting ? 'update' : 'insert';
+        throw err;
+      }
 
-    syncLog('upsertFace:cardSync:inicio', {
-      reader: label,
-      faceId,
-      cardAction,
-      recNo: hasExisting ? recNo : undefined,
-      cardUrl,
-    });
+      const recNo =
+        existingCard?.RecNo != null
+          ? parseInt(existingCard.RecNo, 10)
+          : Number.NaN;
+      const hasExisting = Number.isFinite(recNo) && recNo > 0;
 
-    try {
-      const cardResp = await digestRequest(auth, {
-        method: 'GET',
-        url: cardUrl,
-      });
-      syncLog('upsertFace:cardSync:ok', {
-        reader: label,
-        faceId,
-        cardAction,
-        recNo: hasExisting ? recNo : undefined,
-        status: cardResp.status,
-        body: truncateForLog(cardResp.data),
-      });
-    } catch (err) {
-      syncLogError('upsertFace:cardSync', err, {
+      const cardParams = hasExisting
+        ? buildAccessCardUpdateParams({
+            recNo,
+            faceId,
+            normalizedName,
+            timeSectionIds,
+            validDateStart,
+            validDateEnd,
+          })
+        : buildAccessCardInsertParams({
+            faceId,
+            normalizedName,
+            timeSectionIds,
+            validDateStart,
+            validDateEnd,
+          });
+      const cardUrl = `${base}/cgi-bin/recordUpdater.cgi?${cardParams}`;
+      const cardAction = hasExisting ? 'update' : 'insert';
+
+      syncLog('upsertFace:cardSync:inicio', {
         reader: label,
         faceId,
         cardAction,
         recNo: hasExisting ? recNo : undefined,
         cardUrl,
       });
-      throw attachReaderSyncStepError(err, 'cartão de acesso');
+
+      try {
+        const cardResp = await digestRequest(auth, {
+          method: 'GET',
+          url: cardUrl,
+        });
+        syncLog('upsertFace:cardSync:ok', {
+          reader: label,
+          faceId,
+          cardAction,
+          recNo: hasExisting ? recNo : undefined,
+          status: cardResp.status,
+          body: truncateForLog(cardResp.data),
+        });
+      } catch (err) {
+        syncLogError('upsertFace:cardSync', err, {
+          reader: label,
+          faceId,
+          cardAction,
+          recNo: hasExisting ? recNo : undefined,
+          cardUrl,
+        });
+        throw attachReaderSyncStepError(err, 'cartão de acesso');
+      }
+    } else {
+      syncLog('upsertFace:photoOnly', { reader: label, faceId });
     }
 
     const checkFaceUrl = `${base}/cgi-bin/FaceInfoManager.cgi?action=startFind&Condition.UserID=${faceId}`;
@@ -747,10 +876,7 @@ export async function intelbrasRemoveUserFromReader(
   reader: PlainReaderCredential,
   faceIdParam: number | string,
 ): Promise<void> {
-  const auth = new AxiosDigestAuth({
-    username: reader.username,
-    password: reader.plainPassword,
-  });
+  const auth = digestAuthForReader(reader);
   const faceId = String(faceIdParam);
   const base = deviceUrl(reader);
   const url = `${base}/cgi-bin/AccessUser.cgi?action=removeMulti&UserIDList[0]=${faceId}`;
@@ -775,7 +901,6 @@ export type DeviceUsersListResult = {
 };
 
 const ACCESS_CONTROL_CARD_NAME = 'AccessControlCard';
-const ACCESS_USER_INFO_NAME = 'AccessUserInfo';
 const DEVICE_USERS_BATCH_SIZE = 500;
 
 function parseQuerySizeFromText(text: string): number {
@@ -806,12 +931,9 @@ function normalizeCardNameSearch(term: string): string {
 export async function intelbrasGetDeviceUserCount(
   reader: PlainReaderCredential,
 ): Promise<number | null> {
-  const auth = new AxiosDigestAuth({
-    username: reader.username,
-    password: reader.plainPassword,
-  });
+  const auth = digestAuthForReader(reader);
   const base = deviceUrl(reader);
-  const url = `${base}/cgi-bin/recordFinder.cgi?action=getQuerySize&name=${ACCESS_USER_INFO_NAME}`;
+  const url = `${base}/cgi-bin/recordFinder.cgi?action=getQuerySize&name=${ACCESS_CONTROL_CARD_NAME}`;
 
   try {
     const r = await digestRequest(auth, { method: 'GET', url });
@@ -832,10 +954,7 @@ async function fetchDeviceUsersPage(
   const safeCount = Math.min(Math.max(count, 1), DEVICE_USERS_BATCH_SIZE);
   const safeOffset = Math.max(offset, 0);
 
-  const auth = new AxiosDigestAuth({
-    username: reader.username,
-    password: reader.plainPassword,
-  });
+  const auth = digestAuthForReader(reader);
   const base = deviceUrl(reader);
   const url = `${base}/cgi-bin/recordFinder.cgi?action=doSeekFind&name=${ACCESS_CONTROL_CARD_NAME}&count=${safeCount}&offset=${safeOffset}`;
 
@@ -872,19 +991,23 @@ async function fetchAllDeviceUsers(
 ): Promise<DeviceUser[]> {
   const all: DeviceUser[] = [];
   let offset = 0;
+  let previousFirst: string | undefined;
+  let pages = 0;
 
-  while (true) {
+  while (pages < DEVICE_USERS_MAX_PAGES) {
     const page = await fetchDeviceUsersPage(
       reader,
       DEVICE_USERS_BATCH_SIZE,
       offset,
     );
+    pages += 1;
+    if (page.records.length === 0) break;
+    const head = firstRecNo(page.records);
+    if (head && head === previousFirst) break;
+    previousFirst = head;
     all.push(...page.records);
     if (page.records.length < DEVICE_USERS_BATCH_SIZE) break;
-    offset += DEVICE_USERS_BATCH_SIZE;
-    const cap =
-      page.totalCount > 0 ? page.totalCount : offset + page.records.length;
-    if (offset >= cap) break;
+    offset += page.records.length;
   }
 
   return all;
@@ -900,10 +1023,9 @@ export async function intelbrasGetDeviceUsers(
   const safeOffset = Math.max(offset, 0);
 
   try {
-    const [page, sizeFromQuery] = await Promise.all([
-      fetchDeviceUsersPage(reader, safeCount, safeOffset),
-      intelbrasGetDeviceUserCount(reader),
-    ]);
+    const page = await fetchDeviceUsersPage(reader, safeCount, safeOffset);
+    const sizeFromQuery =
+      safeOffset === 0 ? await intelbrasGetDeviceUserCount(reader) : null;
 
     const totalCount = resolveDeviceUsersTotalCount(
       page,
@@ -967,10 +1089,7 @@ export async function intelbrasGetFaceImage(
   reader: PlainReaderCredential,
   userId: string,
 ): Promise<{ photoBase64: string | null }> {
-  const auth = new AxiosDigestAuth({
-    username: reader.username,
-    password: reader.plainPassword,
-  });
+  const auth = digestAuthForReader(reader);
   const base = deviceUrl(reader);
   const url = `${base}/cgi-bin/AccessFace.cgi?action=list&UserIDList[0]=${userId}`;
   const response = await digestRequest(auth, { method: 'GET', url });

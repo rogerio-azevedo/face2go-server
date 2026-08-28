@@ -13,6 +13,7 @@ import * as invitationQueries from '../database/queries/responsible-invitations.
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
+import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { parseUploadedImageFile } from '../storage/uploaded-image.util';
 import { publicResponsibleRegisterSubmitSchema } from '../validation/managed-responsibles.schema';
@@ -103,6 +104,7 @@ export class PublicResponsibleRegisterService {
       ext,
     );
     await this.r2.putObject(key, buffer, contentType);
+    void storeReaderFaceVariants(this.r2, key, buffer);
     return { faceImageKey: key };
   }
 

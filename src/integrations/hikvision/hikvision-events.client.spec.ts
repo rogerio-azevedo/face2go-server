@@ -51,8 +51,11 @@ describe('hikvisionProbeAlertStreamSupported', () => {
 
   it('retorna true quando alertStream conecta', async () => {
     jest.mocked(hikvisionOpenStreamRequest).mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
       headers: { 'content-type': 'multipart/mixed; boundary=xyz' },
       data: {},
+      config: {} as never,
     });
 
     const supported = await hikvisionProbeAlertStreamSupported(connection);

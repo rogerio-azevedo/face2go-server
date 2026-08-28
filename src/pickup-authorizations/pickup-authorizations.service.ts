@@ -19,6 +19,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import * as studentsQueries from '../database/queries/students.queries';
 import { DatabaseService } from '../database/database.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { ALWAYS_TIME_ZONE_INDEX } from '../face-sync/intelbras-time-zone.constants';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
@@ -721,11 +722,12 @@ export class PickupAuthorizationsService {
 
     const { buffer } = await this.r2.getObjectBytes(row.guestFaceImageKey);
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId,
       name: guestName,
       imageBuffer: buffer,
+      photoKey: row.guestFaceImageKey,
       timeSectionIds: [ALWAYS_TIME_ZONE_INDEX],
       logContext: `pickup-guest=${id}`,
       validFrom:
@@ -736,6 +738,26 @@ export class PickupAuthorizationsService {
         row.validUntil instanceof Date
           ? row.validUntil
           : new Date(String(row.validUntil)),
+      persistResult: async (sync) => {
+        await pickupQueries.pickupAuthUpdateGuestApproval(
+          this.database.db,
+          id,
+          clientId,
+          {
+            guestFaceSyncStatus: sync.deviceSyncStatus,
+            guestFaceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            guestFaceSyncError: sync.deviceSyncError,
+          },
+        );
+        this.eventEmitter.emit(PICKUP_GUEST_FACE_SYNCED, {
+          authorizationId: id,
+          clientId,
+          requestedByResponsibleId: row.requestedByResponsibleId,
+          guestName,
+          syncStatus: sync.deviceSyncStatus,
+        } satisfies PickupGuestFaceSyncedPayload);
+      },
     });
 
     let lprResult: {
@@ -757,10 +779,6 @@ export class PickupAuthorizationsService {
       id,
       clientId,
       {
-        guestFaceSyncStatus: sync.deviceSyncStatus,
-        guestFaceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        guestFaceSyncError: sync.deviceSyncError,
         ...(lprResult
           ? {
               guestVehicleLprSyncStatus: lprResult.lprSyncStatus,
@@ -776,7 +794,7 @@ export class PickupAuthorizationsService {
     }
 
     return {
-      syncStatus: sync.deviceSyncStatus,
+      syncStatus: 'pending_sync' as const,
       row: updated,
     };
   }
@@ -841,18 +859,12 @@ export class PickupAuthorizationsService {
         return;
       }
 
-      const { syncStatus } = await this.performGuestFaceSync(
+      await this.performGuestFaceSync(
         row,
         payload.authorizationId,
         payload.clientId,
         row.guestFaceId,
       );
-
-      const syncedPayload: PickupGuestFaceSyncedPayload = {
-        ...payload,
-        syncStatus,
-      };
-      this.eventEmitter.emit(PICKUP_GUEST_FACE_SYNCED, syncedPayload);
     } catch (err: unknown) {
       this.logger.warn(
         `Sync pickup guest face falhou (${payload.authorizationId}): ${
@@ -944,6 +956,7 @@ export class PickupAuthorizationsService {
       ext,
     );
     await this.r2.putObject(key, buffer, contentType);
+    void storeReaderFaceVariants(this.r2, key, buffer);
 
     const submitted = await pickupQueries.pickupAuthUpdateGuestFaceSubmitted(
       this.database.db,

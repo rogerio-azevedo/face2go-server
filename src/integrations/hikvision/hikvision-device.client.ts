@@ -491,6 +491,7 @@ export async function hikvisionUpsertFace(
   connection: HikvisionReaderConnection,
   employeeNo: string,
   jpegBuffer: Buffer,
+  options?: { alreadyNormalized?: boolean },
 ): Promise<void> {
   const inputFormat = detectImageFormat(jpegBuffer);
   syncLog('hikvision:normalizeFaceInput', {
@@ -500,15 +501,19 @@ export async function hikvisionUpsertFace(
   });
 
   let normalized: Buffer;
-  try {
-    normalized = await normalizeHikvisionFaceJpeg(jpegBuffer);
-  } catch (error) {
-    syncLogError('hikvision:normalizeFace', error, {
-      employeeNo,
-      inputFormat,
-      inputBytes: jpegBuffer.length,
-    });
-    throw error;
+  if (options?.alreadyNormalized) {
+    normalized = jpegBuffer;
+  } else {
+    try {
+      normalized = await normalizeHikvisionFaceJpeg(jpegBuffer);
+    } catch (error) {
+      syncLogError('hikvision:normalizeFace', error, {
+        employeeNo,
+        inputFormat,
+        inputBytes: jpegBuffer.length,
+      });
+      throw error;
+    }
   }
 
   syncLog('hikvision:normalizeFaceOk', {
@@ -1129,6 +1134,7 @@ export async function hikvisionSyncFace(
     jpegBuffer: Buffer;
     validDateStart?: string;
     validDateEnd?: string;
+    alreadyNormalized?: boolean;
   },
 ): Promise<void> {
   const normalizedName =
@@ -1147,7 +1153,9 @@ export async function hikvisionSyncFace(
     syncLog('hikvision:upsertUserOk', { employeeNo });
 
     syncLog('hikvision:upsertFace', { employeeNo });
-    await hikvisionUpsertFace(connection, employeeNo, params.jpegBuffer);
+    await hikvisionUpsertFace(connection, employeeNo, params.jpegBuffer, {
+      alreadyNormalized: params.alreadyNormalized,
+    });
     syncLog('hikvision:verifyFaceOk', { employeeNo });
   } catch (error) {
     syncLogError('hikvision:syncFace', error, { employeeNo });

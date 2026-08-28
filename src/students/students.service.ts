@@ -465,32 +465,35 @@ export class StudentsService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId: student.faceId,
       name: student.name,
       imageBuffer: buffer,
+      photoKey: student.photoKey ?? undefined,
       timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
         clientId,
         studentId,
       ),
       logContext: `student-sync=${studentId}`,
+      persistResult: async (sync) => {
+        await studentsQueries.updateStudentFace(
+          this.database.db,
+          studentId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
+      },
     });
 
-    await studentsQueries.updateStudentFace(
-      this.database.db,
-      studentId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
-      },
-    );
-
     return {
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
     };
   }
 

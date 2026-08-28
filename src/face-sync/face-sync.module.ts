@@ -11,6 +11,7 @@ import {
 import { AccessTimeZoneService } from './access-time-zone.service';
 import { FaceSyncService } from './face-sync.service';
 import { GlobalFaceSyncService } from './global-face-sync.service';
+import { FaceSyncListener } from './face-sync.listener';
 
 @Module({
   imports: [
@@ -20,7 +21,12 @@ import { GlobalFaceSyncService } from './global-face-sync.service';
     SchoolAccessModule,
   ],
   controllers: [CompanyFaceSyncController, ClientFaceSyncController],
-  providers: [FaceSyncService, AccessTimeZoneService, GlobalFaceSyncService],
+  providers: [
+    FaceSyncService,
+    AccessTimeZoneService,
+    GlobalFaceSyncService,
+    FaceSyncListener,
+  ],
   exports: [FaceSyncService, AccessTimeZoneService, GlobalFaceSyncService],
 })
 export class FaceSyncModule {}

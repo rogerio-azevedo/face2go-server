@@ -19,6 +19,7 @@ import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { DatabaseService } from '../database/database.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { ALWAYS_TIME_ZONE_INDEX } from '../face-sync/intelbras-time-zone.constants';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { SchoolAccessService } from '../school-access/school-access.service';
@@ -440,11 +441,12 @@ export class InvitesService {
 
     const { buffer } = await this.r2.getObjectBytes(row.guestFaceImageKey);
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId,
       name: guestName,
       imageBuffer: buffer,
+      photoKey: row.guestFaceImageKey,
       timeSectionIds: [ALWAYS_TIME_ZONE_INDEX],
       logContext: `invite-guest=${id}`,
       validFrom:
@@ -455,6 +457,26 @@ export class InvitesService {
         row.validUntil instanceof Date
           ? row.validUntil
           : new Date(String(row.validUntil)),
+      persistResult: async (sync) => {
+        await inviteQueries.inviteUpdateGuestApproval(
+          this.database.db,
+          id,
+          clientId,
+          {
+            guestFaceSyncStatus: sync.deviceSyncStatus,
+            guestFaceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            guestFaceSyncError: sync.deviceSyncError,
+          },
+        );
+        this.eventEmitter.emit(INVITE_GUEST_FACE_SYNCED, {
+          inviteId: id,
+          clientId,
+          requestedByMemberId: row.requestedByMemberId,
+          guestName,
+          syncStatus: sync.deviceSyncStatus,
+        } satisfies InviteGuestFaceSyncedPayload);
+      },
     });
 
     let lprResult: {
@@ -476,10 +498,6 @@ export class InvitesService {
       id,
       clientId,
       {
-        guestFaceSyncStatus: sync.deviceSyncStatus,
-        guestFaceSyncedAt:
-          sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        guestFaceSyncError: sync.deviceSyncError,
         ...(lprResult
           ? {
               guestVehicleLprSyncStatus: lprResult.lprSyncStatus,
@@ -495,7 +513,7 @@ export class InvitesService {
     }
 
     return {
-      syncStatus: sync.deviceSyncStatus,
+      syncStatus: 'pending_sync' as const,
       row: updated,
     };
   }
@@ -553,18 +571,12 @@ export class InvitesService {
         return;
       }
 
-      const { syncStatus } = await this.performGuestFaceSync(
+      await this.performGuestFaceSync(
         row,
         payload.inviteId,
         payload.clientId,
         row.guestFaceId,
       );
-
-      const syncedPayload: InviteGuestFaceSyncedPayload = {
-        ...payload,
-        syncStatus,
-      };
-      this.eventEmitter.emit(INVITE_GUEST_FACE_SYNCED, syncedPayload);
     } catch (err: unknown) {
       this.logger.warn(
         `Sync invite guest face falhou (${payload.inviteId}): ${
@@ -647,6 +659,7 @@ export class InvitesService {
       ext,
     );
     await this.r2.putObject(key, buffer, contentType);
+    void storeReaderFaceVariants(this.r2, key, buffer);
 
     const submitted = await inviteQueries.inviteUpdateGuestFaceSubmitted(
       this.database.db,

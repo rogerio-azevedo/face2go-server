@@ -85,4 +85,67 @@ Equipe Face2Go`;
     await this.sender.send({ to, subject, text, html });
     this.logger.log(`E-mail de redefinição de senha enviado para ${to}`);
   }
+
+  async sendReaderOfflineEmail(
+    to: string,
+    adminName: string | null,
+    readerName: string,
+    clientName: string,
+    detectedAt: Date,
+  ): Promise<void> {
+    const greeting = adminName?.trim() ? `Olá, ${adminName.trim()}` : 'Olá';
+    const when = detectedAt.toLocaleString('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'America/Sao_Paulo',
+    });
+    const dashboardUrl = `${this.frontendUrl}/client/dashboard`;
+
+    if (!this.sender.isConfigured()) {
+      this.logger.warn(
+        `[${this.sender.provider.toUpperCase()} desabilitado] Leitor "${readerName}" offline em ${clientName} — destinatário ${to}`,
+      );
+      return;
+    }
+
+    const subject = `Face2Go — leitor "${readerName}" está offline`;
+    const text = `${greeting},
+
+O leitor facial "${readerName}" do cliente ${clientName} ficou offline.
+
+Detectado em: ${when}
+
+Acesse o painel para acompanhar o status:
+${dashboardUrl}
+
+Equipe Face2Go`;
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a2e;">
+  <p>${greeting},</p>
+  <p>O leitor facial <strong>${escapeHtml(readerName)}</strong> do cliente <strong>${escapeHtml(clientName)}</strong> ficou offline.</p>
+  <p style="font-size:14px;color:#666;">Detectado em: ${escapeHtml(when)}</p>
+  <p>
+    <a href="${dashboardUrl}" style="display:inline-block;padding:12px 24px;background:#00c7b7;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">
+      Abrir painel
+    </a>
+  </p>
+  <p>Equipe Face2Go</p>
+</body>
+</html>`;
+
+    await this.sender.send({ to, subject, text, html });
+    this.logger.log(
+      `E-mail de leitor offline enviado para ${to} (leitor="${readerName}")`,
+    );
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }

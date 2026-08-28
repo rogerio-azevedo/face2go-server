@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { PermissionsService } from './permissions.service';
+import { CompanyFeaturesService } from '../company-features/company-features.service';
 import { DatabaseService } from '../database/database.service';
+import { PermissionsService } from './permissions.service';
 
 describe('PermissionsService', () => {
   let service: PermissionsService;
@@ -13,6 +14,10 @@ describe('PermissionsService', () => {
         {
           provide: DatabaseService,
           useValue: { db: {} },
+        },
+        {
+          provide: CompanyFeaturesService,
+          useValue: { isEnabled: jest.fn(), assertEnabled: jest.fn() },
         },
       ],
     }).compile();

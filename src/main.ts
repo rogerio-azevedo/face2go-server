@@ -10,6 +10,10 @@ import { cleanupOpenApiDoc, ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AppLogger } from './common/logging/app-logger.service';
+import sharp from 'sharp';
+
+sharp.concurrency(1);
+sharp.cache({ memory: 32, files: 0, items: 50 });
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {

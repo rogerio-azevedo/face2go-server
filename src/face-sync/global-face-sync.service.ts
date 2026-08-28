@@ -12,7 +12,9 @@ import * as studentsQueries from '../database/queries/students.queries';
 import { SchoolAccessService } from '../school-access/school-access.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { AccessTimeZoneService } from './access-time-zone.service';
-import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
+import { mapWithConcurrency } from '../common/concurrency/map-with-concurrency';
+import { mapReadersWithSyncGate } from '../common/concurrency/reader-sync-gate';
+import { loadOrCreateReaderFaceVariant } from './face-image-variants';
 import { aggregateReaderSyncOutcome } from './aggregate-reader-sync-outcome.util';
 import {
   batchUpsertUsersOnReader,
@@ -215,8 +217,10 @@ export class GlobalFaceSyncService {
       zones: [...allZoneIndices],
     });
 
-    await Promise.all(
-      plainReaders.map(async (reader) => {
+    await mapReadersWithSyncGate(
+      plainReaders,
+      (reader) => reader.id,
+      async (reader) => {
         try {
           await this.accessTimeZone.ensureZonesOnSingleReader(
             reader,
@@ -228,7 +232,7 @@ export class GlobalFaceSyncService {
             `Sync global ${logLabel}: falha ao garantir zonas no leitor ${reader.name}: ${e instanceof Error ? e.message : String(e)}`,
           );
         }
-      }),
+      },
     );
 
     let processed = 0;
@@ -241,12 +245,20 @@ export class GlobalFaceSyncService {
       for (let i = 0; i < entities.length; i += BATCH_SIZE) {
         const batch = entities.slice(i, i + BATCH_SIZE);
         const photos = await this.loadPhotoBatch(batch);
+        const intelbrasJpeg = await this.compressIntelbrasBatch(batch, photos);
         const failuresByEntity = new Map<string, string[]>();
 
-        await Promise.all(
-          plainReaders.map((reader) =>
-            this.syncBatchOnReader(reader, batch, photos, failuresByEntity),
-          ),
+        await mapReadersWithSyncGate(
+          plainReaders,
+          (reader) => reader.id,
+          (reader) =>
+            this.syncBatchOnReader(
+              reader,
+              batch,
+              photos,
+              intelbrasJpeg,
+              failuresByEntity,
+            ),
         );
 
         for (const entity of batch) {
@@ -298,6 +310,7 @@ export class GlobalFaceSyncService {
     reader: PlainReaderCredential,
     batch: SyncEntity[],
     photos: Map<string, Buffer>,
+    intelbrasJpeg: Map<string, string>,
     failuresByEntity: Map<string, string[]>,
   ): Promise<void> {
     const eligible = batch.filter((e) => photos.has(e.id));
@@ -320,10 +333,9 @@ export class GlobalFaceSyncService {
       eligible,
       FACE_UPLOAD_CONCURRENCY,
       async (entity) => {
-        const photo = photos.get(entity.id);
-        if (!photo) return;
+        const base64 = intelbrasJpeg.get(entity.id);
+        if (!base64) return;
         try {
-          const base64 = await imageBufferToReaderBase64Jpeg(photo);
           await intelbrasUpsertFaceOnReader(
             reader,
             entity.faceId,
@@ -350,6 +362,32 @@ export class GlobalFaceSyncService {
     return aggregateReaderSyncOutcome(failures, totalReaders);
   }
 
+  private async compressIntelbrasBatch(
+    batch: SyncEntity[],
+    photos: Map<string, Buffer>,
+  ): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    await mapWithConcurrency(batch, FACE_UPLOAD_CONCURRENCY, async (entity) => {
+      const photo = photos.get(entity.id);
+      if (!photo) return;
+      try {
+        const buf = await loadOrCreateReaderFaceVariant(
+          this.r2,
+          entity.photoKey,
+          photo,
+          'intelbras',
+        );
+        result.set(entity.id, buf.toString('base64'));
+      } catch (e) {
+        syncLogError('globalSync:compressIntelbras', e, {
+          entityId: entity.id,
+          photoKey: entity.photoKey,
+        });
+      }
+    });
+    return result;
+  }
+
   private async loadPhotoBatch(
     batch: SyncEntity[],
   ): Promise<Map<string, Buffer>> {
@@ -371,23 +409,4 @@ export class GlobalFaceSyncService {
     );
     return result;
   }
-}
-
-async function mapWithConcurrency<T>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<void>,
-): Promise<void> {
-  if (items.length === 0) return;
-  let index = 0;
-  const workers = Math.min(concurrency, items.length);
-
-  async function worker() {
-    while (index < items.length) {
-      const i = index++;
-      await fn(items[i]);
-    }
-  }
-
-  await Promise.all(Array.from({ length: workers }, () => worker()));
 }

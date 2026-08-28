@@ -342,6 +342,24 @@ export async function listApprovedRegistrationsPendingDeviceSync(
     .orderBy(desc(registrations.submittedAt));
 }
 
+/** Clientes com cadastros aprovados presos em pending_sync (reconciliação pós-restart). */
+export async function listClientIdsWithPendingDeviceSync(
+  db: AppDb,
+): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ clientId: registrations.clientId })
+    .from(registrations)
+    .where(
+      and(
+        eq(registrations.status, 'approved'),
+        eq(registrations.deviceSyncStatus, 'pending_sync'),
+        isNotNull(registrations.faceImageKey),
+        isNotNull(registrations.faceId),
+      ),
+    );
+  return rows.map((r) => r.clientId);
+}
+
 /** Nome do cadastro aprovado associado ao face_id do leitor (por cliente). */
 export async function findApprovedRegistrationNameByFaceId(
   db: AppDb,

@@ -24,6 +24,7 @@ import * as vehicleQueries from '../database/queries/vehicles.queries';
 import { DatabaseService } from '../database/database.service';
 import { users } from '../database/schema';
 import { FaceSyncService } from '../face-sync/face-sync.service';
+import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import {
@@ -196,6 +197,10 @@ export class ManagedResponsiblesService {
     name: string;
     imageBuffer: Buffer;
     logContext: string;
+    onFaceSyncResult?: (outcome: {
+      deviceSyncStatus: 'synced' | 'sync_failed';
+      deviceSyncError: string | null;
+    }) => Promise<void>;
   }) {
     const faceId = await registrationsQueries.bumpClientFaceCounter(
       this.database.db,
@@ -203,6 +208,7 @@ export class ManagedResponsiblesService {
     );
     const photoKey = `responsibles/${params.clientId}/${params.responsibleId}/face.jpg`;
     await this.r2.putObject(photoKey, params.imageBuffer, 'image/jpeg');
+    void storeReaderFaceVariants(this.r2, photoKey, params.imageBuffer);
 
     await responsiblesQueries.updateResponsibleFace(
       this.database.db,
@@ -217,31 +223,37 @@ export class ManagedResponsiblesService {
       },
     );
 
-    const faceSync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId: params.clientId,
       faceId,
       name: params.name,
       imageBuffer: params.imageBuffer,
+      photoKey,
       timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
         params.clientId,
         params.responsibleId,
       ),
       logContext: params.logContext,
+      persistResult: async (faceSync) => {
+        await responsiblesQueries.updateResponsibleFace(
+          this.database.db,
+          params.responsibleId,
+          params.clientId,
+          {
+            deviceSyncStatus: faceSync.deviceSyncStatus,
+            deviceSyncedAt:
+              faceSync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: faceSync.deviceSyncError,
+          },
+        );
+        await params.onFaceSyncResult?.(faceSync);
+      },
     });
 
-    await responsiblesQueries.updateResponsibleFace(
-      this.database.db,
-      params.responsibleId,
-      params.clientId,
-      {
-        deviceSyncStatus: faceSync.deviceSyncStatus,
-        deviceSyncedAt:
-          faceSync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: faceSync.deviceSyncError,
-      },
-    );
-
-    return faceSync;
+    return {
+      deviceSyncStatus: 'pending_sync' as const,
+      deviceSyncError: null,
+    };
   }
 
   private async createResponsibleFromInvitation(
@@ -334,7 +346,10 @@ export class ManagedResponsiblesService {
       throw new BadRequestException('Foto inválida para sincronização.');
     }
 
-    let faceSync: Awaited<ReturnType<typeof this.syncResponsibleFace>>;
+    let faceSync: {
+      deviceSyncStatus: 'pending_sync' | 'sync_failed';
+      deviceSyncError: string | null;
+    };
     try {
       faceSync = await this.syncResponsibleFace({
         clientId: row.clientId,
@@ -342,6 +357,19 @@ export class ManagedResponsiblesService {
         name: row.submittedName,
         imageBuffer: buffer,
         logContext: `responsible-invitation=${row.id}`,
+        onFaceSyncResult: async (outcome) => {
+          await invitationQueries.invitationUpdate(
+            this.database.db,
+            row.id,
+            row.clientId,
+            {
+              faceSyncStatus: outcome.deviceSyncStatus,
+              faceSyncedAt:
+                outcome.deviceSyncStatus === 'synced' ? new Date() : null,
+              faceSyncError: outcome.deviceSyncError,
+            },
+          );
+        },
       });
     } catch (err: unknown) {
       faceSync = {
@@ -394,8 +422,7 @@ export class ManagedResponsiblesService {
         status: 'approved',
         createdResponsibleId: responsible.id,
         faceSyncStatus: faceSync.deviceSyncStatus,
-        faceSyncedAt:
-          faceSync.deviceSyncStatus === 'synced' ? new Date() : null,
+        faceSyncedAt: null,
         faceSyncError: faceSync.deviceSyncError,
         ...(plateLprResult
           ? {
@@ -828,28 +855,31 @@ export class ManagedResponsiblesService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId: params.clientId,
       faceId: row.faceId,
       name: params.name,
       imageBuffer: buffer,
+      photoKey: row.photoKey ?? undefined,
       timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
         params.clientId,
         params.responsibleId,
       ),
       logContext: params.logContext,
-    });
-
-    await responsiblesQueries.updateResponsibleFace(
-      this.database.db,
-      params.responsibleId,
-      params.clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
+      persistResult: async (sync) => {
+        await responsiblesQueries.updateResponsibleFace(
+          this.database.db,
+          params.responsibleId,
+          params.clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
       },
-    );
+    });
   }
 
   async createInvitation(user: JwtPayload, body: unknown) {

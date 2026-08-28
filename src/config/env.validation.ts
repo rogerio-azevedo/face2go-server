@@ -30,6 +30,13 @@ export const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   /** Quantidade máxima de zonas AccessTimeSchedule customizadas por leitor (exclui 255). */
   READER_MAX_TIME_ZONES: z.coerce.number().int().min(1).max(254).default(32),
+  /** Debounce (ms) antes de notificar admin do cliente que o leitor ficou offline. */
+  READER_OFFLINE_NOTIFY_DEBOUNCE_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(600_000)
+    .default(90_000),
   /** Chave AES-256 para credenciais de leitores (64 hex = 32 bytes). */
   READER_ENCRYPTION_KEY: z
     .string()

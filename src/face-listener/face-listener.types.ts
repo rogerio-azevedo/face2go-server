@@ -13,7 +13,9 @@ export interface VideoEvent {
 export type ReaderListenerStatus = {
   readerId: string;
   readerName: string;
+  clientId: string;
   clientName: string;
+  companyId: string;
   brand: ReaderBrandSlug;
   host: string;
   connected: boolean;

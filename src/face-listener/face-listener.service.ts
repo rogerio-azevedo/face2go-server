@@ -5,6 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import AxiosDigestAuth from '@mhoc/axios-digest-auth';
 import { Readable } from 'node:stream';
 
@@ -66,6 +67,12 @@ import {
   shouldLogPollFailure,
   shouldMarkPollOffline,
 } from './face-listener-hikvision-monitor.util';
+import { READER_OFFLINE_DETECTED } from './face-listener.events';
+import {
+  decideOfflineNotifyAction,
+  DEFAULT_READER_OFFLINE_NOTIFY_DEBOUNCE_MS,
+  shouldEmitOfflineNotification,
+} from './face-listener-offline-notifier.util';
 
 type FacialSnapEvent = NonNullable<ReturnType<typeof snapFlatMapToVideoEvent>>;
 
@@ -148,6 +155,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   >();
   private hikvisionPollFailCountByReader = new Map<string, number>();
   private hikvisionAlertStreamFailCountByReader = new Map<string, number>();
+  private offlineNotifyTimers = new Map<string, NodeJS.Timeout>();
+  private offlineNotifiedAt = new Map<string, Date>();
+  private readonly offlineNotifyDebounceMs: number;
 
   private static readonly REFRESH_INTERVAL_MS = 60_000;
   private static readonly LAST_SEEN_DEBOUNCE_MS = 30_000;
@@ -161,12 +171,17 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     private readonly database: DatabaseService,
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly accessesService: AccessesService,
+    private readonly eventEmitter: EventEmitter2,
   ) {
     const key = this.configService.get('READER_ENCRYPTION_KEY', {
       infer: true,
     });
 
     this.cipher = createReaderCredentialsCipher(key);
+    this.offlineNotifyDebounceMs =
+      this.configService.get('READER_OFFLINE_NOTIFY_DEBOUNCE_MS', {
+        infer: true,
+      }) ?? DEFAULT_READER_OFFLINE_NOTIFY_DEBOUNCE_MS;
   }
 
   async onModuleInit(): Promise<void> {
@@ -204,6 +219,11 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(timer);
     }
     this.lastSeenDebounceTimers.clear();
+    for (const timer of this.offlineNotifyTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.offlineNotifyTimers.clear();
+    this.offlineNotifiedAt.clear();
     for (const id of this.streamAbortByReader.keys()) {
       this.streamAbortByReader.get(id)?.abort();
     }
@@ -318,7 +338,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       this.statuses.set(ctx.id, {
         readerId: ctx.id,
         readerName: ctx.name,
+        clientId: ctx.clientId,
         clientName: ctx.clientName,
+        companyId: ctx.companyId,
         brand: toBrandSlug(ctx.brand),
         host: ctx.host,
         connected: false,
@@ -368,7 +390,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         this.statuses.set(ctx.id, {
           readerId: ctx.id,
           readerName: ctx.name,
+          clientId: ctx.clientId,
           clientName: ctx.clientName,
+          companyId: ctx.companyId,
           brand: toBrandSlug(ctx.brand),
           host: dbHost,
           connected: false,
@@ -452,7 +476,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       this.statuses.set(readerId, {
         readerId: row.id,
         readerName: row.name,
+        clientId: row.clientId,
         clientName: row.clientName,
+        companyId: row.companyId,
         brand: toBrandSlug(row.brand),
         host: ctx.host,
         connected: false,
@@ -499,6 +525,8 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     const t = this.lastSeenDebounceTimers.get(readerId);
     if (t) clearTimeout(t);
     this.lastSeenDebounceTimers.delete(readerId);
+    this.clearOfflineNotifyTimer(readerId);
+    this.offlineNotifiedAt.delete(readerId);
     this.statuses.delete(readerId);
   }
 
@@ -1088,8 +1116,71 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     partial: Partial<ReaderListenerStatus>,
   ): void {
     const current = this.statuses.get(readerId);
-    if (current) {
-      this.statuses.set(readerId, { ...current, ...partial });
+    if (!current) return;
+
+    const next: ReaderListenerStatus = { ...current, ...partial };
+    this.statuses.set(readerId, next);
+
+    if (partial.connected === undefined) return;
+
+    const action = decideOfflineNotifyAction({
+      previousConnected: current.connected,
+      nextConnected: next.connected,
+      alreadyNotified: this.offlineNotifiedAt.has(readerId),
+      hasPendingTimer: this.offlineNotifyTimers.has(readerId),
+    });
+
+    if (action === 'cancel') {
+      this.clearOfflineNotifyTimer(readerId);
+      this.offlineNotifiedAt.delete(readerId);
+      return;
     }
+
+    if (action === 'schedule') {
+      this.scheduleOfflineNotify(readerId);
+    }
+  }
+
+  private clearOfflineNotifyTimer(readerId: string): void {
+    const timer = this.offlineNotifyTimers.get(readerId);
+    if (timer) clearTimeout(timer);
+    this.offlineNotifyTimers.delete(readerId);
+  }
+
+  private scheduleOfflineNotify(readerId: string): void {
+    this.clearOfflineNotifyTimer(readerId);
+    const timer = setTimeout(() => {
+      this.offlineNotifyTimers.delete(readerId);
+      this.emitOfflineIfStillDown(readerId);
+    }, this.offlineNotifyDebounceMs);
+    this.offlineNotifyTimers.set(readerId, timer);
+  }
+
+  private emitOfflineIfStillDown(readerId: string): void {
+    const status = this.statuses.get(readerId);
+    if (!status) return;
+    if (
+      !shouldEmitOfflineNotification({
+        currentlyConnected: status.connected,
+        alreadyNotified: this.offlineNotifiedAt.has(readerId),
+      })
+    ) {
+      return;
+    }
+
+    this.offlineNotifiedAt.set(readerId, new Date());
+    this.eventEmitter.emit(READER_OFFLINE_DETECTED, {
+      readerId,
+      readerName: status.readerName,
+      clientId: status.clientId,
+      clientName: status.clientName,
+      companyId: status.companyId,
+      brand: status.brand,
+      lastConnectionError: status.lastConnectionError,
+      detectedAt: new Date(),
+    });
+    this.logger.warn(
+      `[FaceListener] Leitor offline persistente: "${status.readerName}" (${readerId}) client=${status.clientName}`,
+    );
   }
 }

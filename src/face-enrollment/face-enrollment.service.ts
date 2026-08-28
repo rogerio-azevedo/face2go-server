@@ -21,6 +21,7 @@ import {
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 
 export type FaceEnrollmentStatusDto = {
   photoUrl: string | null;
@@ -235,6 +236,9 @@ export class FaceEnrollmentService {
 
     const photoKey = `responsibles/${clientId}/${responsibleId}/face.jpg`;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
+    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+
+    const photoOnly = responsible.deviceSyncStatus === 'synced';
 
     let faceId = await this.personProfile.resolveSharedFaceIdForEnrollment(
       responsible.userId,
@@ -262,54 +266,56 @@ export class FaceEnrollmentService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId,
       name: responsible.name,
       imageBuffer: buffer,
+      photoKey,
       timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
         clientId,
         responsibleId,
       ),
       logContext: `responsible=${responsibleId}`,
-    });
-
-    await responsiblesQueries.updateResponsibleFace(
-      this.database.db,
-      responsibleId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
+      photoOnly,
+      persistResult: async (sync) => {
+        await responsiblesQueries.updateResponsibleFace(
+          this.database.db,
+          responsibleId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
+        if (responsible.userId) {
+          await this.personProfile.propagateFaceToSiblings(
+            responsible.userId,
+            clientId,
+            {
+              faceId,
+              photoKey,
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+            { responsibleId },
+          );
+        }
       },
-    );
-
-    if (responsible.userId) {
-      await this.personProfile.propagateFaceToSiblings(
-        responsible.userId,
-        clientId,
-        {
-          faceId,
-          photoKey,
-          deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt:
-            sync.deviceSyncStatus === 'synced' ? new Date() : null,
-          deviceSyncError: sync.deviceSyncError,
-        },
-        { responsibleId },
-      );
-    }
+    });
 
     const hasFacialReaders = await this.clientHasFacialReaders(clientId);
 
     return {
       photoUrl: await this.optionalPhotoUrl(photoKey),
       faceId,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
-      deviceSyncedAt:
-        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
+      deviceSyncedAt: null,
       hasFacialReaders,
     };
   }
@@ -388,6 +394,9 @@ export class FaceEnrollmentService {
 
     const photoKey = `students/${clientId}/${studentId}/face.jpg`;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
+    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+
+    const photoOnly = student.deviceSyncStatus === 'synced';
 
     let faceId = student.faceId ?? null;
     if (faceId == null) {
@@ -410,28 +419,32 @@ export class FaceEnrollmentService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId,
       name: student.name,
       imageBuffer: buffer,
+      photoKey,
       timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
         clientId,
         studentId,
       ),
       logContext: `student=${studentId}`,
-    });
-
-    await studentsQueries.updateStudentFace(
-      this.database.db,
-      studentId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
+      photoOnly,
+      persistResult: async (sync) => {
+        await studentsQueries.updateStudentFace(
+          this.database.db,
+          studentId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
       },
-    );
+    });
 
     const hasFacialReaders = await this.clientHasFacialReaders(clientId);
 
@@ -440,10 +453,9 @@ export class FaceEnrollmentService {
       name: student.name,
       photoUrl: await this.optionalPhotoUrl(photoKey),
       faceId,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
-      deviceSyncedAt:
-        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
+      deviceSyncedAt: null,
       hasFacialReaders,
     };
   }
@@ -499,54 +511,55 @@ export class FaceEnrollmentService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId: row.faceId,
       name: responsible.name,
       imageBuffer: buffer,
+      photoKey: row.photoKey ?? undefined,
       timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
         clientId,
         responsibleId,
       ),
       logContext: `responsible=${responsibleId}`,
-    });
-
-    await responsiblesQueries.updateResponsibleFace(
-      this.database.db,
-      responsibleId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
+      persistResult: async (sync) => {
+        await responsiblesQueries.updateResponsibleFace(
+          this.database.db,
+          responsibleId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
+        if (responsible.userId && row.photoKey && row.faceId != null) {
+          await this.personProfile.propagateFaceToSiblings(
+            responsible.userId,
+            clientId,
+            {
+              faceId: row.faceId,
+              photoKey: row.photoKey,
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+            { responsibleId },
+          );
+        }
       },
-    );
-
-    if (responsible.userId && row.photoKey) {
-      await this.personProfile.propagateFaceToSiblings(
-        responsible.userId,
-        clientId,
-        {
-          faceId: row.faceId,
-          photoKey: row.photoKey,
-          deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt:
-            sync.deviceSyncStatus === 'synced' ? new Date() : null,
-          deviceSyncError: sync.deviceSyncError,
-        },
-        { responsibleId },
-      );
-    }
+    });
 
     const hasFacialReaders = await this.clientHasFacialReaders(clientId);
 
     return {
       photoUrl: await this.optionalPhotoUrl(row.photoKey),
       faceId: row.faceId,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
-      deviceSyncedAt:
-        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
+      deviceSyncedAt: null,
       hasFacialReaders,
     };
   }
@@ -593,28 +606,31 @@ export class FaceEnrollmentService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId: student.faceId,
       name: student.name,
       imageBuffer: buffer,
+      photoKey: student.photoKey ?? undefined,
       timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
         clientId,
         studentId,
       ),
       logContext: `student=${studentId}`,
-    });
-
-    await studentsQueries.updateStudentFace(
-      this.database.db,
-      studentId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
+      persistResult: async (sync) => {
+        await studentsQueries.updateStudentFace(
+          this.database.db,
+          studentId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
       },
-    );
+    });
 
     const hasFacialReaders = await this.clientHasFacialReaders(clientId);
 
@@ -623,10 +639,9 @@ export class FaceEnrollmentService {
       name: student.name,
       photoUrl: await this.optionalPhotoUrl(student.photoKey),
       faceId: student.faceId,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
-      deviceSyncedAt:
-        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
+      deviceSyncedAt: null,
       hasFacialReaders,
     };
   }
@@ -911,6 +926,9 @@ export class FaceEnrollmentService {
 
     const photoKey = `members/${clientId}/${memberId}/face.jpg`;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
+    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+
+    const photoOnly = member.deviceSyncStatus === 'synced';
 
     let faceId = await this.personProfile.resolveSharedFaceIdForEnrollment(
       member.userId,
@@ -938,54 +956,56 @@ export class FaceEnrollmentService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId,
       name: member.name,
       imageBuffer: buffer,
+      photoKey,
       timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
         clientId,
         memberId,
       ),
       logContext: `member=${memberId}`,
-    });
-
-    await membersQueries.updateMemberFace(
-      this.database.db,
-      memberId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
+      photoOnly,
+      persistResult: async (sync) => {
+        await membersQueries.updateMemberFace(
+          this.database.db,
+          memberId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
+        if (member.userId) {
+          await this.personProfile.propagateFaceToSiblings(
+            member.userId,
+            clientId,
+            {
+              faceId,
+              photoKey,
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+            { memberId },
+          );
+        }
       },
-    );
-
-    if (member.userId) {
-      await this.personProfile.propagateFaceToSiblings(
-        member.userId,
-        clientId,
-        {
-          faceId,
-          photoKey,
-          deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt:
-            sync.deviceSyncStatus === 'synced' ? new Date() : null,
-          deviceSyncError: sync.deviceSyncError,
-        },
-        { memberId },
-      );
-    }
+    });
 
     const hasFacialReaders = await this.clientHasFacialReaders(clientId);
 
     return {
       photoUrl: await this.optionalPhotoUrl(photoKey),
       faceId,
-      deviceSyncStatus: sync.deviceSyncStatus,
-      deviceSyncError: sync.deviceSyncError,
-      deviceSyncedAt:
-        sync.deviceSyncStatus === 'synced' ? new Date().toISOString() : null,
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
+      deviceSyncedAt: null,
       hasFacialReaders,
     };
   }
@@ -1022,44 +1042,46 @@ export class FaceEnrollmentService {
       },
     );
 
-    const sync = await this.faceSync.syncPersonOnReaders({
+    this.faceSync.enqueuePersonSync({
       clientId,
       faceId: member.faceId,
       name: member.name,
       imageBuffer: buffer,
+      photoKey: member.photoKey ?? undefined,
       timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
         clientId,
         memberId,
       ),
       logContext: `member-resync=${memberId}`,
-    });
-
-    await membersQueries.updateMemberFace(
-      this.database.db,
-      memberId,
-      clientId,
-      {
-        deviceSyncStatus: sync.deviceSyncStatus,
-        deviceSyncedAt: sync.deviceSyncStatus === 'synced' ? new Date() : null,
-        deviceSyncError: sync.deviceSyncError,
+      persistResult: async (sync) => {
+        await membersQueries.updateMemberFace(
+          this.database.db,
+          memberId,
+          clientId,
+          {
+            deviceSyncStatus: sync.deviceSyncStatus,
+            deviceSyncedAt:
+              sync.deviceSyncStatus === 'synced' ? new Date() : null,
+            deviceSyncError: sync.deviceSyncError,
+          },
+        );
+        if (member.userId && member.photoKey && member.faceId != null) {
+          await this.personProfile.propagateFaceToSiblings(
+            member.userId,
+            clientId,
+            {
+              faceId: member.faceId,
+              photoKey: member.photoKey,
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+            { memberId },
+          );
+        }
       },
-    );
-
-    if (member.userId && member.photoKey) {
-      await this.personProfile.propagateFaceToSiblings(
-        member.userId,
-        clientId,
-        {
-          faceId: member.faceId,
-          photoKey: member.photoKey,
-          deviceSyncStatus: sync.deviceSyncStatus,
-          deviceSyncedAt:
-            sync.deviceSyncStatus === 'synced' ? new Date() : null,
-          deviceSyncError: sync.deviceSyncError,
-        },
-        { memberId },
-      );
-    }
+    });
 
     return this.memberFaceStatusDto(memberId, clientId);
   }

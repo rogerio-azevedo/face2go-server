@@ -14,6 +14,7 @@ import {
   PICKUP_GUEST_FACE_SUBMITTED,
   type PickupGuestFaceSubmittedPayload,
 } from '../notifications/notifications.events';
+import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { parseUploadedImageFile } from '../storage/uploaded-image.util';
 import { zodFirstMessage } from '../validation/zod-utils';
@@ -103,6 +104,7 @@ export class PublicPickupRegisterService {
       ext,
     );
     await this.r2.putObject(key, buffer, contentType);
+    void storeReaderFaceVariants(this.r2, key, buffer);
     return { faceImageKey: key };
   }
 

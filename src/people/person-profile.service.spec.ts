@@ -27,7 +27,7 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
 
   let service: PersonProfileService;
   let r2: { getObjectBytes: jest.Mock };
-  let faceSync: { syncPersonOnReaders: jest.Mock };
+  let faceSync: { enqueuePersonSync: jest.Mock };
   let accessTimeZone: { resolveMemberTimeSections: jest.Mock };
 
   beforeEach(async () => {
@@ -39,8 +39,8 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
         .mockResolvedValue({ buffer: imageBuffer, contentType: 'image/jpeg' }),
     };
     faceSync = {
-      syncPersonOnReaders: jest.fn().mockResolvedValue({
-        deviceSyncStatus: 'synced',
+      enqueuePersonSync: jest.fn().mockReturnValue({
+        deviceSyncStatus: 'pending_sync',
         deviceSyncError: null,
       }),
     };
@@ -63,13 +63,13 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
     jest
       .spyOn(peopleQueries, 'findSharedFaceByUserIdAndClient')
       .mockResolvedValue(sharedFace);
-    jest.spyOn(membersQueries, 'updateMemberFace').mockResolvedValue(undefined);
+    jest.spyOn(membersQueries, 'updateMemberFace').mockResolvedValue(undefined as never);
     jest
       .spyOn(peopleQueries, 'listSiblingBondsByUserIdAndClient')
       .mockResolvedValue({ responsibleIds: ['resp-1'], memberIds: [] });
     jest
       .spyOn(responsiblesQueries, 'updateResponsibleFace')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue(undefined as never);
   });
 
   it('retorna false quando não há face compartilhada na mesma escola', async () => {
@@ -85,7 +85,7 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
 
     expect(result).toBe(false);
     expect(r2.getObjectBytes).not.toHaveBeenCalled();
-    expect(faceSync.syncPersonOnReaders).not.toHaveBeenCalled();
+    expect(faceSync.enqueuePersonSync).not.toHaveBeenCalled();
   });
 
   it('sincroniza no leitor e persiste status real (não apenas copia do irmão)', async () => {
@@ -103,16 +103,19 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
       clientId,
       'member-1',
     );
-    expect(faceSync.syncPersonOnReaders).toHaveBeenCalledWith({
-      clientId,
-      faceId: sharedFace.faceId,
-      name: 'Rogerio',
-      imageBuffer,
-      timeSectionIds: [255],
-      logContext: 'same-client-member=member-1',
-    });
+    expect(faceSync.enqueuePersonSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId,
+        faceId: sharedFace.faceId,
+        name: 'Rogerio',
+        imageBuffer,
+        photoKey: sharedFace.photoKey,
+        timeSectionIds: [255],
+        logContext: 'same-client-member=member-1',
+      }),
+    );
 
-    expect(membersQueries.updateMemberFace).toHaveBeenCalledTimes(2);
+    expect(membersQueries.updateMemberFace).toHaveBeenCalledTimes(1);
     expect(membersQueries.updateMemberFace).toHaveBeenNthCalledWith(
       1,
       expect.anything(),
@@ -125,6 +128,15 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
         deviceSyncError: null,
       }),
     );
+
+    const persist = faceSync.enqueuePersonSync.mock.calls[0][0]
+      .persistResult as (r: {
+      deviceSyncStatus: 'synced' | 'sync_failed';
+      deviceSyncError: string | null;
+    }) => Promise<void>;
+    await persist({ deviceSyncStatus: 'synced', deviceSyncError: null });
+
+    expect(membersQueries.updateMemberFace).toHaveBeenCalledTimes(2);
     expect(membersQueries.updateMemberFace).toHaveBeenNthCalledWith(
       2,
       expect.anything(),
@@ -159,16 +171,11 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
     );
 
     expect(result).toBe(false);
-    expect(faceSync.syncPersonOnReaders).not.toHaveBeenCalled();
+    expect(faceSync.enqueuePersonSync).not.toHaveBeenCalled();
     expect(membersQueries.updateMemberFace).not.toHaveBeenCalled();
   });
 
   it('persiste sync_failed e propaga erro aos irmãos', async () => {
-    faceSync.syncPersonOnReaders.mockResolvedValue({
-      deviceSyncStatus: 'sync_failed',
-      deviceSyncError: 'Leitor offline',
-    });
-
     const result = await service.applySharedFaceFromSameClient(
       userId,
       clientId,
@@ -176,6 +183,15 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
     );
 
     expect(result).toBe(true);
+    const persist = faceSync.enqueuePersonSync.mock.calls[0][0]
+      .persistResult as (r: {
+      deviceSyncStatus: 'synced' | 'sync_failed';
+      deviceSyncError: string | null;
+    }) => Promise<void>;
+    await persist({
+      deviceSyncStatus: 'sync_failed',
+      deviceSyncError: 'Leitor offline',
+    });
     expect(membersQueries.updateMemberFace).toHaveBeenLastCalledWith(
       expect.anything(),
       'member-1',

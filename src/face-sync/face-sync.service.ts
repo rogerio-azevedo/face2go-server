@@ -5,9 +5,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { mapReadersWithSyncGate } from '../common/concurrency/reader-sync-gate';
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
@@ -17,7 +19,12 @@ import * as readersQueries from '../database/queries/readers.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
+import { loadOrCreateReaderFaceVariant } from './face-image-variants';
 import { aggregateReaderSyncOutcome } from './aggregate-reader-sync-outcome.util';
+import {
+  FACE_SYNC_REQUESTED,
+  type FaceSyncRequestedPayload,
+} from './face-sync.events';
 import {
   formatReaderFaceSyncError,
   intelbrasRemoveUserFromReader,
@@ -26,6 +33,7 @@ import {
 } from './intelbras-device.client';
 import { dateToIntelbrasFormat } from './intelbras-valid-date.util';
 import { dateToHikvisionFormat } from '../integrations/hikvision/hikvision-valid-date.util';
+import { normalizeHikvisionFaceJpeg } from './hikvision-face-image.util';
 import {
   formatHikvisionFaceSyncError,
   hikvisionDeleteUser,
@@ -62,6 +70,7 @@ export class FaceSyncService {
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly permissionsService: PermissionsService,
     private readonly accessTimeZone: AccessTimeZoneService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -183,15 +192,19 @@ export class FaceSyncService {
     faceId: number;
     name: string;
     imageBuffer: Buffer;
+    photoKey?: string;
     timeSectionIds?: number[];
     logContext?: string;
     validFrom?: Date;
     validUntil?: Date;
+    photoOnly?: boolean;
   }): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed';
     deviceSyncError: string | null;
   }> {
-    const { clientId, faceId, name, imageBuffer, logContext } = params;
+    const { clientId, faceId, name, imageBuffer, logContext, photoKey } =
+      params;
+    const photoOnly = params.photoOnly === true;
     const timeSectionIds =
       params.timeSectionIds && params.timeSectionIds.length > 0
         ? params.timeSectionIds
@@ -244,7 +257,18 @@ export class FaceSyncService {
       if (hasIntelbras) {
         try {
           syncLog('syncPersonOnReaders:compressImage', { clientId, faceId });
-          intelbrasBase64 = await imageBufferToReaderBase64Jpeg(imageBuffer);
+          const intelbrasBuf = photoKey
+            ? await loadOrCreateReaderFaceVariant(
+                this.r2,
+                photoKey,
+                imageBuffer,
+                'intelbras',
+              )
+            : Buffer.from(
+                await imageBufferToReaderBase64Jpeg(imageBuffer),
+                'base64',
+              );
+          intelbrasBase64 = intelbrasBuf.toString('base64');
           syncLog('syncPersonOnReaders:compressImageOk', {
             clientId,
             faceId,
@@ -261,12 +285,31 @@ export class FaceSyncService {
         }
       }
 
+      let hikvisionJpeg: Buffer | null = null;
       if (hasHikvision) {
-        syncLog('syncPersonOnReaders:hikvisionImage', {
-          clientId,
-          faceId,
-          imageBytes: imageBuffer.length,
-        });
+        try {
+          syncLog('syncPersonOnReaders:hikvisionImage', {
+            clientId,
+            faceId,
+            imageBytes: imageBuffer.length,
+          });
+          hikvisionJpeg = photoKey
+            ? await loadOrCreateReaderFaceVariant(
+                this.r2,
+                photoKey,
+                imageBuffer,
+                'hikvision',
+              )
+            : await normalizeHikvisionFaceJpeg(imageBuffer);
+        } catch (e) {
+          syncLogError('syncPersonOnReaders:hikvisionImage', e, {
+            clientId,
+            faceId,
+          });
+          const msg =
+            e instanceof Error ? e.message : 'Falha ao obter/comprimir a foto.';
+          return { deviceSyncStatus: 'sync_failed', deviceSyncError: msg };
+        }
       }
 
       const cipher = createReaderCredentialsCipher(
@@ -280,12 +323,15 @@ export class FaceSyncService {
         clientId,
         faceId,
         zonas: [...shiftsByZone.keys()],
+        photoOnly,
       });
 
       const failures: string[] = [];
 
-      const outcomes = await Promise.all(
-        readers.map(async (r) => {
+      const outcomes = await mapReadersWithSyncGate(
+        readers,
+        (r) => r.id,
+        async (r) => {
           const label = readerLabel(r);
           try {
             syncLog('syncPersonOnReaders:leitorInicio', {
@@ -293,6 +339,7 @@ export class FaceSyncService {
               faceId,
               reader: label,
               brand: r.brand,
+              photoOnly,
             });
             const plain = toPlainReaderCredential(
               r,
@@ -300,11 +347,17 @@ export class FaceSyncService {
             );
 
             if (r.brand === 'hikvision') {
+              if (!hikvisionJpeg) {
+                throw new Error(
+                  'Falha ao preparar imagem para leitor Hikvision.',
+                );
+              }
               const connection = toHikvisionConnection(plain);
               await hikvisionSyncFace(connection, {
                 employeeNo: String(faceId),
                 personName: name || 'USUARIO',
-                jpegBuffer: imageBuffer,
+                jpegBuffer: hikvisionJpeg,
+                alreadyNormalized: true,
                 validDateStart: params.validFrom
                   ? dateToHikvisionFormat(params.validFrom)
                   : undefined,
@@ -319,11 +372,13 @@ export class FaceSyncService {
                 );
               }
 
-              await this.accessTimeZone.ensureZonesOnSingleReader(
-                plain,
-                timeSectionIds,
-                shiftsByZone,
-              );
+              if (!photoOnly) {
+                await this.accessTimeZone.ensureZonesOnSingleReader(
+                  plain,
+                  timeSectionIds,
+                  shiftsByZone,
+                );
+              }
 
               await intelbrasUpsertFaceOnReader(
                 plain,
@@ -333,6 +388,7 @@ export class FaceSyncService {
                 timeSectionIds,
                 validDateStart,
                 validDateEnd,
+                { photoOnly },
               );
             }
 
@@ -361,7 +417,7 @@ export class FaceSyncService {
             this.log.warn(`Sync face ${logPrefix}reader=${r.name}: ${raw}`);
             return msg;
           }
-        }),
+        },
       );
 
       for (const m of outcomes) {
@@ -519,6 +575,7 @@ export class FaceSyncService {
         faceId: row.faceId,
         name: row.name ?? 'USUARIO',
         imageBuffer: buffer,
+        photoKey: row.faceImageKey,
         logContext: `reg=${registrationId}`,
       });
 
@@ -543,6 +600,18 @@ export class FaceSyncService {
   ) {
     await this.ensureCompanyCanAccessClient(user, clientId);
     return this.syncAllPending(clientId, emit);
+  }
+
+  /**
+   * Agenda o sync fora da request HTTP. O status `pending_sync` já deve ter
+   * sido gravado pelo chamador.
+   */
+  enqueuePersonSync(payload: FaceSyncRequestedPayload): {
+    deviceSyncStatus: 'pending_sync';
+    deviceSyncError: null;
+  } {
+    this.eventEmitter.emit(FACE_SYNC_REQUESTED, payload);
+    return { deviceSyncStatus: 'pending_sync', deviceSyncError: null };
   }
 
   async syncAllPendingForClientTenant(
