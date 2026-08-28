@@ -5,7 +5,7 @@ phases:
     runtime-versions:
       nodejs: 24
     commands:
-      - npm install -g pnpm@8
+      - npm install -g pnpm@11.24.0
   build:
     commands:
       - echo "${CODEBUILD_RESOLVED_SOURCE_VERSION:-unknown}" > deploy-commit.txt

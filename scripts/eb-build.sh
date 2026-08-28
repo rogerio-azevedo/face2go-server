@@ -8,9 +8,8 @@ cd "$ROOT"
 export NODE_ENV=development
 export CI=true
 
-if ! command -v pnpm >/dev/null 2>&1; then
-  npm install -g pnpm@8
-fi
+# Força pnpm 11: instâncias EB podem ter a v8 de deploys antigos.
+npm install -g pnpm@11.24.0
 
 pnpm install --frozen-lockfile --prod=false
 pnpm run build
