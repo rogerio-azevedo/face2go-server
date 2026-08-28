@@ -21,10 +21,25 @@ const optionalSearch = z
   .optional()
   .transform((value) => (value ? value : undefined));
 
+const optionalBoolQuery = z.preprocess(
+  (value) => {
+    if (value === true || value === 'true') return 'true';
+    if (value === false || value === 'false') return 'false';
+    if (value === undefined || value === null || value === '') return undefined;
+    return value;
+  },
+  z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true')),
+);
+
 export const enrollmentReportQuerySchema = z.object({
   group: enrollmentGroupSchema,
   classId: optionalUuid,
   search: optionalSearch,
+  hasFace: optionalBoolQuery,
+  hasVehicle: optionalBoolQuery,
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });

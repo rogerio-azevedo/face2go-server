@@ -12,6 +12,7 @@ import {
   parseListPaginationParams,
   buildPaginatedResult,
 } from '../common/pagination';
+import type { EnrollmentReportFilters } from '../database/queries/reports.queries';
 import { ClientsRepository } from '../database/repositories/clients.repository';
 import { ReportsRepository } from '../database/repositories/reports.repository';
 import { PermissionsService } from '../permissions/permissions.service';
@@ -91,7 +92,7 @@ export class ReportsService {
     query: EnrollmentReportQuery & { clientId?: string },
   ) {
     const client = await this.resolveClient(user, query.clientId);
-    const filters = this.filtersFor(client.id, query);
+    const filters = this.filtersFor(client.id, query, true);
     const { page, pageSize, offset } = parseListPaginationParams(
       query.page !== undefined ? String(query.page) : undefined,
       query.pageSize !== undefined ? String(query.pageSize) : undefined,
@@ -121,7 +122,7 @@ export class ReportsService {
     query: EnrollmentReportQuery & { clientId?: string },
   ): Promise<StreamableFile> {
     const client = await this.resolveClient(user, query.clientId);
-    const filters = this.filtersFor(client.id, query);
+    const filters = this.filtersFor(client.id, query, true);
     const rows = await this.reports.listEnrollment(filters);
     const csv = buildEnrollmentCsv(query.group, rows);
     const filename = enrollmentExportFilename(query.group);
@@ -134,17 +135,20 @@ export class ReportsService {
   private filtersFor(
     clientId: string,
     query: EnrollmentReportQuery,
-  ): {
-    clientId: string;
-    group: EnrollmentGroup;
-    classId?: string;
-    search?: string;
-  } {
+    includeStatusFilters = false,
+  ): EnrollmentReportFilters {
     return {
       clientId,
       group: query.group,
       classId: query.group === 'students' ? query.classId : undefined,
       search: query.search,
+      ...(includeStatusFilters
+        ? {
+            hasFace: query.hasFace,
+            hasVehicle:
+              query.group === 'students' ? undefined : query.hasVehicle,
+          }
+        : {}),
     };
   }
 

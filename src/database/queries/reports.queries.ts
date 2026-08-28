@@ -1,4 +1,4 @@
-import { and, asc, count, eq, exists, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, exists, not, sql, type SQL } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
@@ -20,6 +20,8 @@ export type EnrollmentReportFilters = {
   group: EnrollmentGroup;
   classId?: string;
   search?: string;
+  hasFace?: boolean;
+  hasVehicle?: boolean;
 };
 
 export type EnrollmentSummaryCounts = {
@@ -103,6 +105,11 @@ function memberHasVehicle() {
   )`;
 }
 
+function matchBool(condition: SQL, value?: boolean): SQL | undefined {
+  if (value === undefined) return undefined;
+  return value ? condition : not(condition);
+}
+
 function studentWhere(
   db: AppDb,
   filters: EnrollmentReportFilters,
@@ -116,6 +123,11 @@ function studentWhere(
   if (filters.classId) {
     conditions.push(studentClassExists(db, students.id, filters.classId));
   }
+  const faceCond = matchBool(
+    hasCompleteFaceSql(students.faceId, students.photoKey),
+    filters.hasFace,
+  );
+  if (faceCond) conditions.push(faceCond);
   return and(...conditions);
 }
 
@@ -126,6 +138,13 @@ function responsibleWhere(filters: EnrollmentReportFilters): SQL | undefined {
   ];
   const searchCond = nameSearch(responsibles.name, filters.search);
   if (searchCond) conditions.push(searchCond);
+  const faceCond = matchBool(
+    hasCompleteFaceSql(responsibles.faceId, responsibles.photoKey),
+    filters.hasFace,
+  );
+  if (faceCond) conditions.push(faceCond);
+  const vehicleCond = matchBool(responsibleHasVehicle(), filters.hasVehicle);
+  if (vehicleCond) conditions.push(vehicleCond);
   return and(...conditions);
 }
 
@@ -136,6 +155,13 @@ function memberWhere(filters: EnrollmentReportFilters): SQL | undefined {
   ];
   const searchCond = nameSearch(clientMembers.name, filters.search);
   if (searchCond) conditions.push(searchCond);
+  const faceCond = matchBool(
+    hasCompleteFaceSql(clientMembers.faceId, clientMembers.photoKey),
+    filters.hasFace,
+  );
+  if (faceCond) conditions.push(faceCond);
+  const vehicleCond = matchBool(memberHasVehicle(), filters.hasVehicle);
+  if (vehicleCond) conditions.push(vehicleCond);
   return and(...conditions);
 }
 
