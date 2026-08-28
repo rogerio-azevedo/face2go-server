@@ -41,6 +41,12 @@ export {
   PatchPickupAuthorizationDto,
 } from './pickup-authorizations.dto';
 export { CreateReaderDto, PatchReaderDto } from './readers.dto';
+export {
+  CompanyEnrollmentReportQueryDto,
+  EnrollmentListItemDto,
+  EnrollmentReportQueryDto,
+  EnrollmentSummaryDto,
+} from './reports.dto';
 export { CreateRegistrationLinkDto } from './registrations.dto';
 export { CreateResponsibleDto, PatchResponsibleDto } from './responsibles.dto';
 export { CreateShiftDto, PatchShiftDto } from './shifts.dto';

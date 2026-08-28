@@ -40,6 +40,7 @@ import { PermissionsModule } from './permissions/permissions.module';
 import { PickupAuthorizationsModule } from './pickup-authorizations/pickup-authorizations.module';
 import { ReadersModule } from './readers/readers.module';
 import { RegistrationsModule } from './registrations/registrations.module';
+import { ReportsModule } from './reports/reports.module';
 import { SchoolClassesModule } from './school-classes/school-classes.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { StorageModule } from './storage/storage.module';
@@ -80,6 +81,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ReadersModule,
     CamerasModule,
     RegistrationsModule,
+    ReportsModule,
     CompanyUsersModule,
     SchoolClassesModule,
     ShiftsModule,
