@@ -20,7 +20,11 @@ import {
   syncLogError,
   truncateForLog,
 } from './intelbras-sync-debug.util';
-import { describeIntelbrasFacialHttpError } from './intelbras-error-codes.util';
+import {
+  describeIntelbrasFacialHttpError,
+  isDuplicateFaceEnrollmentError,
+} from './intelbras-error-codes.util';
+import { buildEnableRepFaceFiltSetConfigQuery } from './intelbras-rep-face-filt.util';
 
 export type PlainReaderCredential = {
   id: string;
@@ -345,6 +349,17 @@ async function digestRequest(
     });
     throw err;
   }
+}
+
+async function setRepFaceFilt(
+  auth: IntelbrasDigestAuth,
+  base: string,
+  label: string,
+  enable: boolean,
+): Promise<void> {
+  const url = `${base}/cgi-bin/configManager.cgi?${buildEnableRepFaceFiltSetConfigQuery(enable)}`;
+  syncLog('repFaceFilt:setConfig', { reader: label, enable, url });
+  await digestRequest(auth, { method: 'GET', url });
 }
 
 /** Firmware ignora filtro por UserID; páginas menores reduzem o download até achar. */
@@ -840,6 +855,9 @@ export async function intelbrasUpsertFaceOnReader(
 
     const action = faceExists ? 'updateMulti' : 'insertMulti';
     const faceUrl = `${base}/cgi-bin/AccessFace.cgi?action=${action}`;
+    const facePayload = {
+      FaceList: [{ UserID: faceId, PhotoData: [cleanBase64] }],
+    };
 
     syncLog('upsertFace:faceSync:inicio', {
       reader: label,
@@ -848,15 +866,16 @@ export async function intelbrasUpsertFaceOnReader(
       faceUrl,
     });
 
-    try {
-      const faceSyncResp = await digestRequest(auth, {
+    const postFace = async () =>
+      digestRequest(auth, {
         method: 'POST',
         url: faceUrl,
-        data: {
-          FaceList: [{ UserID: faceId, PhotoData: [cleanBase64] }],
-        },
+        data: facePayload,
         headers: { 'Content-Type': 'application/json' },
       });
+
+    try {
+      const faceSyncResp = await postFace();
       syncLog('upsertFace:faceSync:ok', {
         reader: label,
         faceId,
@@ -871,7 +890,51 @@ export async function intelbrasUpsertFaceOnReader(
         action,
         faceUrl,
       });
-      throw attachReaderSyncStepError(err, 'foto facial');
+      if (!isDuplicateFaceEnrollmentError(err)) {
+        throw attachReaderSyncStepError(err, 'foto facial');
+      }
+
+      syncLog('upsertFace:faceSync:duplicata', {
+        reader: label,
+        faceId,
+        action,
+      });
+      try {
+        await setRepFaceFilt(auth, base, label, false);
+      } catch (disableErr) {
+        syncLogError('upsertFace:repFaceFiltOff', disableErr, {
+          reader: label,
+          faceId,
+        });
+        throw attachReaderSyncStepError(err, 'foto facial');
+      }
+
+      try {
+        const retryResp = await postFace();
+        syncLog('upsertFace:faceSync:okAposFiltro', {
+          reader: label,
+          faceId,
+          action,
+          status: retryResp.status,
+          body: truncateForLog(retryResp.data),
+        });
+      } catch (retryErr) {
+        syncLogError('upsertFace:faceSyncRetry', retryErr, {
+          reader: label,
+          faceId,
+          action,
+        });
+        throw attachReaderSyncStepError(retryErr, 'foto facial');
+      } finally {
+        try {
+          await setRepFaceFilt(auth, base, label, true);
+        } catch (restoreErr) {
+          syncLogError('upsertFace:repFaceFiltOn', restoreErr, {
+            reader: label,
+            faceId,
+          });
+        }
+      }
     }
 
     syncLog('upsertFace:concluido', { reader: label, faceId });

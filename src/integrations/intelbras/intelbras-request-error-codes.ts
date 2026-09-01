@@ -200,6 +200,132 @@ export const INTELBRAS_REQUEST_ERROR_CODES: Record<
     code: 'businessCommonErrorDeviceUnavailable',
     description: 'Unable to get device status information',
   },
+  '288686080': {
+    code: 'faceInfoManagerErrorOtherError',
+    description: 'Other errors',
+  },
+  '288686081': {
+    code: 'faceInfoManagerErrorPhotoSizeExceedsLimit',
+    description: 'Image size exceeds the limit',
+  },
+  '288686082': {
+    code: 'faceInfoManagerErrorUserNotExist',
+    description:
+      'User ID does not exist; user data must be sent before the photo',
+  },
+  '288686083': {
+    code: 'faceInfoManagerErrorExtractFeatureFailed',
+    description: 'Failed to extract image features',
+  },
+  '288686084': {
+    code: 'faceInfoManagerErrorPhotoExist',
+    description: 'Image already exists; an update is required',
+  },
+  '288686085': {
+    code: 'faceInfoManagerErrorPhotoOverFlow',
+    description: 'Number of images exceeded the maximum limit',
+  },
+  '288686086': {
+    code: 'faceInfoManagerErrorPhotoFormat',
+    description: 'Invalid image format',
+  },
+  '288686087': {
+    code: 'faceInfoManagerErrorDetectFaceNumZero',
+    description: 'No face detected',
+  },
+  '288686088': {
+    code: 'faceInfoManagerErrorDetectFaceNumMutil',
+    description: 'Multiple faces detected; cannot return features',
+  },
+  '288686089': {
+    code: 'faceInfoManagerErrorPicDec',
+    description: 'Error decoding the image',
+  },
+  '288686090': {
+    code: 'faceInfoManagerErrorPicLowerQuailty',
+    description: 'Image quality too low',
+  },
+  '288686091': {
+    code: 'faceInfoManagerErrorResultNotRecommended',
+    description: 'Result not recommended (e.g. low algorithm confidence)',
+  },
+  '288686092': {
+    code: 'faceInfoManagerErrorFaceFeaturesExist',
+    description: 'Face features already exist',
+  },
+  '288686093': {
+    code: 'faceInfoManagerErrorOverAngleThreshold',
+    description: 'Face angle exceeds the configured limit',
+  },
+  '288686094': {
+    code: 'faceInfoManagerErrorFaceRatioOOR',
+    description:
+      'Face ratio outside the recommended range (between 1/3 and 2/3)',
+  },
+  '288686095': {
+    code: 'FaceInfoManagerErrorFaceOverExposure',
+    description: 'Face overexposed',
+  },
+  '288686096': {
+    code: 'FaceInfoManagerErrorFaceUnderExposure',
+    description: 'Face underexposed',
+  },
+  '288686097': {
+    code: 'FaceInfoManagerErrorFaceLuminanceImbalance',
+    description: 'Unbalanced face lighting (e.g. half bright / half dark)',
+  },
+  '288686098': {
+    code: 'FaceInfoManagerErrorFaceLowerConfidence',
+    description: 'Low confidence in face detection',
+  },
+  '288686099': {
+    code: 'FaceInfoManagerErrorFaceLowerAlignScore',
+    description: 'Low face alignment score',
+  },
+  '288686100': {
+    code: 'FaceInfoManagerErrorFaceOcclusion',
+    description: 'Face with obstructions',
+  },
+  '288686101': {
+    code: 'FaceInfoManagerErrorLowerEyesDistance',
+    description: 'Distance between eyes below the limit',
+  },
+  '288686102': {
+    code: 'FaceInfoManagerErrorDownloadFail',
+    description: 'Failed to download the face image via URL',
+  },
+  '288686103': {
+    code: 'FaceInfoManagerErrorPhotoFFE',
+    description: 'Face detected, but feature extraction failed',
+  },
+  '288686104': {
+    code: 'FaceInfoManagerErrorPhotoFAFilteration',
+    description: 'Face filtered by attributes (e.g. mask, glasses, hat, age)',
+  },
+  '288686105': {
+    code: 'FaceInfoManagerErrorPhotoIncomplete',
+    description: 'Incomplete face image',
+  },
+  '288686106': {
+    code: 'FaceInfoManagerErrorFaceFeaturesize',
+    description: 'Invalid feature size',
+  },
+  '288686107': {
+    code: 'FaceInfoManagerErrorInvalidFeature',
+    description: 'Invalid feature',
+  },
+  '288686108': {
+    code: 'faceInfoManagerErrorAddUserRecordFail',
+    description: 'Failed to add user record',
+  },
+  '288686109': {
+    code: 'faceInfoManagerErrorUpdateUserFail',
+    description: 'Failed to update user',
+  },
+  '288686110': {
+    code: 'faceInfoManagerErrorUpdateRoomInfoFail',
+    description: 'Failed to update room information',
+  },
 };
 
 /** Envelope de lote — o motivo real está em detail.FailCodes. */
