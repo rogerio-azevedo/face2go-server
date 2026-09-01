@@ -1,7 +1,6 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
-import { parse as parseUrl } from 'node:url';
 
 import axios, {
   type AxiosInstance,
@@ -9,13 +8,31 @@ import axios, {
   type AxiosResponse,
 } from 'axios';
 
+type AxiosLikeError = {
+  response?: {
+    status?: number;
+    headers?: Record<string, string | string[] | undefined> & {
+      get?: (name: string) => string | undefined;
+    };
+  };
+};
+
 /** URI do Digest = path + query (Hikvision ISAPI exige ?format=json no uri). */
-function digestUriFromRequestUrl(requestUrl: string): string {
-  const parsed = parseUrl(requestUrl);
-  return `${parsed.pathname ?? ''}${parsed.search ?? ''}`;
+export function digestUriFromRequestUrl(
+  requestUrl: string,
+  omitQuery = false,
+): string {
+  try {
+    const parsed = new URL(requestUrl);
+    return omitQuery ? parsed.pathname : `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return requestUrl;
+  }
 }
 
-function parseDigestChallenge(wwwAuthenticate: string): Record<string, string> {
+export function parseDigestChallenge(
+  wwwAuthenticate: string,
+): Record<string, string> {
   const out: Record<string, string> = {};
   const re = /(\w+)=(?:"([^"]*)"|([^,\s]+))/gi;
   let match: RegExpExecArray | null;
@@ -25,24 +42,110 @@ function parseDigestChallenge(wwwAuthenticate: string): Record<string, string> {
   return out;
 }
 
-function hashAlgorithmFromChallenge(challenge: Record<string, string>): string {
+export function pickDigestWwwAuthenticate(
+  value: string | string[] | undefined,
+): string | undefined {
+  const parts = (Array.isArray(value) ? value : value ? [value] : [])
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  const digestPart = parts.find(
+    (part) =>
+      part.toLowerCase().includes('digest') &&
+      part.toLowerCase().includes('nonce'),
+  );
+  if (digestPart) {
+    return digestPart;
+  }
+  const joined = parts.join(', ');
+  if (
+    joined.toLowerCase().includes('digest') &&
+    joined.toLowerCase().includes('nonce')
+  ) {
+    return joined;
+  }
+  return undefined;
+}
+
+function headerValue(
+  headers:
+    | (Record<string, string | string[] | undefined> & {
+        get?: (name: string) => string | undefined;
+      })
+    | undefined,
+  name: string,
+): string | string[] | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  const lower = name.toLowerCase();
+  const direct = headers[lower] ?? headers[name];
+  if (direct != null) {
+    return direct;
+  }
+  if (typeof headers.get === 'function') {
+    return headers.get(lower);
+  }
+  return undefined;
+}
+
+function wwwAuthenticateHeader(err: AxiosLikeError): string | undefined {
+  return pickDigestWwwAuthenticate(
+    headerValue(err.response?.headers, 'www-authenticate'),
+  );
+}
+
+export function hashAlgorithmFromChallenge(
+  challenge: Record<string, string>,
+): string {
   const raw = (challenge.algorithm ?? 'MD5').toUpperCase();
   return raw.includes('256') ? 'sha256' : 'md5';
 }
 
-type AxiosLikeError = {
-  response?: {
-    status?: number;
-    headers?: Record<string, string | string[] | undefined>;
-  };
-};
+export function buildDigestAuthorization(params: {
+  wwwAuth: string;
+  username: string;
+  password: string;
+  method: string;
+  url: string;
+  nc: number;
+  cnonce: string;
+  omitQuery?: boolean;
+}): string {
+  const challenge = parseDigestChallenge(params.wwwAuth);
+  const realm = challenge.realm ?? '';
+  const nonce = challenge.nonce ?? '';
+  const qop = (challenge.qop ?? 'auth').split(',')[0]?.trim() || 'auth';
+  const hashName = hashAlgorithmFromChallenge(challenge);
+  const nc = `00000000${params.nc}`.slice(-8);
+  const method = params.method.toUpperCase();
+  const uri = digestUriFromRequestUrl(params.url, params.omitQuery === true);
 
-function wwwAuthenticateHeader(err: AxiosLikeError): string | undefined {
-  const headers = err.response?.headers;
-  if (!headers) return undefined;
-  const value = headers['www-authenticate'] ?? headers['WWW-Authenticate'];
-  if (Array.isArray(value)) return value[0];
-  return value;
+  const ha1 = crypto
+    .createHash(hashName)
+    .update(`${params.username}:${realm}:${params.password}`)
+    .digest('hex');
+  const ha2 = crypto
+    .createHash(hashName)
+    .update(`${method}:${uri}`)
+    .digest('hex');
+  const response = crypto
+    .createHash(hashName)
+    .update(`${ha1}:${nonce}:${nc}:${params.cnonce}:${qop}:${ha2}`)
+    .digest('hex');
+
+  const algorithmAttr = challenge.algorithm
+    ? `, algorithm=${challenge.algorithm}`
+    : '';
+  const opaqueAttr = Object.prototype.hasOwnProperty.call(challenge, 'opaque')
+    ? `, opaque="${challenge.opaque}"`
+    : '';
+
+  return (
+    `Digest username="${params.username}", realm="${realm}", nonce="${nonce}", ` +
+    `uri="${uri}", response="${response}", qop=${qop}, nc=${nc}, cnonce="${params.cnonce}"` +
+    algorithmAttr +
+    opaqueAttr
+  );
 }
 
 /**
@@ -51,7 +154,9 @@ function wwwAuthenticateHeader(err: AxiosLikeError): string | undefined {
  */
 export class HikvisionDigestAuth {
   private count = 0;
+  private nonceUsed: string | null = null;
   private cachedWwwAuth: string | null = null;
+  private tail: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly axiosInst: AxiosInstance,
@@ -60,32 +165,34 @@ export class HikvisionDigestAuth {
   ) {}
 
   async request(opts: AxiosRequestConfig): Promise<AxiosResponse> {
+    let release: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const prev = this.tail;
+    this.tail = prev.then(
+      () => done,
+      () => done,
+    );
+    await prev;
+    try {
+      return await this.dispatch(opts);
+    } finally {
+      release();
+    }
+  }
+
+  private async dispatch(opts: AxiosRequestConfig): Promise<AxiosResponse> {
     if (this.cachedWwwAuth) {
       try {
-        return await this.axiosInst.request({
-          ...opts,
-          headers: {
-            ...(opts.headers as Record<string, string> | undefined),
-            Authorization: this.buildAuthorization(this.cachedWwwAuth, opts),
-          },
-        });
+        return await this.sendDigest(opts, this.cachedWwwAuth, false);
       } catch (firstErr: unknown) {
         const err = firstErr as AxiosLikeError;
         if (err.response?.status !== 401) {
           throw firstErr;
         }
-        const wwwAuth = wwwAuthenticateHeader(err);
-        if (wwwAuth?.toLowerCase().includes('digest') && wwwAuth.includes('nonce')) {
-          this.cachedWwwAuth = wwwAuth;
-          return this.axiosInst.request({
-            ...opts,
-            headers: {
-              ...(opts.headers as Record<string, string> | undefined),
-              Authorization: this.buildAuthorization(wwwAuth, opts),
-            },
-          });
-        }
-        throw firstErr;
+        const wwwAuth = wwwAuthenticateHeader(err) ?? this.cachedWwwAuth;
+        return this.retryDigest(opts, wwwAuth, firstErr);
       }
     }
 
@@ -94,90 +201,85 @@ export class HikvisionDigestAuth {
     } catch (firstErr: unknown) {
       const err = firstErr as AxiosLikeError;
       const wwwAuth = wwwAuthenticateHeader(err);
-      if (
-        err.response?.status !== 401 ||
-        !wwwAuth?.toLowerCase().includes('digest') ||
-        !wwwAuth.includes('nonce')
-      ) {
+      if (err.response?.status !== 401 || !wwwAuth) {
         throw firstErr;
       }
-
       this.cachedWwwAuth = wwwAuth;
-      return this.axiosInst.request({
-        ...opts,
-        headers: {
-          ...(opts.headers as Record<string, string> | undefined),
-          Authorization: this.buildAuthorization(wwwAuth, opts),
-        },
-      });
+      return this.retryDigest(opts, wwwAuth, firstErr);
     }
+  }
+
+  private async retryDigest(
+    opts: AxiosRequestConfig,
+    wwwAuth: string,
+    originalErr: unknown,
+  ): Promise<AxiosResponse> {
+    this.cachedWwwAuth = wwwAuth;
+    try {
+      return await this.sendDigest(opts, wwwAuth, false);
+    } catch (digestErr: unknown) {
+      const err = digestErr as AxiosLikeError;
+      if (err.response?.status !== 401) {
+        throw digestErr;
+      }
+      const nextAuth = wwwAuthenticateHeader(err) ?? wwwAuth;
+      this.cachedWwwAuth = nextAuth;
+      try {
+        return await this.sendDigest(opts, nextAuth, true);
+      } catch (pathErr: unknown) {
+        this.cachedWwwAuth = null;
+        this.nonceUsed = null;
+        throw originalErr ?? pathErr;
+      }
+    }
+  }
+
+  private sendDigest(
+    opts: AxiosRequestConfig,
+    wwwAuth: string,
+    omitQuery: boolean,
+  ): Promise<AxiosResponse> {
+    return this.axiosInst.request({
+      ...opts,
+      headers: {
+        ...(opts.headers as Record<string, string> | undefined),
+        Authorization: this.buildAuthorization(wwwAuth, opts, omitQuery),
+      },
+    });
   }
 
   private buildAuthorization(
     wwwAuth: string,
     opts: AxiosRequestConfig,
+    omitQuery: boolean,
   ): string {
     const challenge = parseDigestChallenge(wwwAuth);
-    const realm = challenge.realm ?? '';
     const nonce = challenge.nonce ?? '';
-    const qop = (challenge.qop ?? 'auth').split(',')[0]?.trim() || 'auth';
-    const hashName = hashAlgorithmFromChallenge(challenge);
-
+    if (this.nonceUsed !== nonce) {
+      this.count = 0;
+      this.nonceUsed = nonce;
+    }
     this.count += 1;
-    const nc = `00000000${this.count}`.slice(-8);
-    const cnonce = crypto.randomBytes(12).toString('hex');
-    const method = (opts.method ?? 'GET').toUpperCase();
-    const uri = digestUriFromRequestUrl(String(opts.url ?? ''));
-
-    const ha1 = crypto
-      .createHash(hashName)
-      .update(`${this.username}:${realm}:${this.password}`)
-      .digest('hex');
-    const ha2 = crypto
-      .createHash(hashName)
-      .update(`${method}:${uri}`)
-      .digest('hex');
-    const response = crypto
-      .createHash(hashName)
-      .update(`${ha1}:${nonce}:${nc}:${cnonce}:${qop}:${ha2}`)
-      .digest('hex');
-
-    const algorithmAttr = challenge.algorithm
-      ? `, algorithm=${challenge.algorithm}`
-      : '';
-
-    return (
-      `Digest username="${this.username}", realm="${realm}", nonce="${nonce}", ` +
-      `uri="${uri}", response="${response}", qop=${qop}, nc=${nc}, cnonce="${cnonce}"` +
-      algorithmAttr
-    );
+    return buildDigestAuthorization({
+      wwwAuth,
+      username: this.username,
+      password: this.password,
+      method: String(opts.method ?? 'GET'),
+      url: String(opts.url ?? ''),
+      nc: this.count,
+      cnonce: crypto.randomBytes(12).toString('hex'),
+      omitQuery,
+    });
   }
 }
 
-const hikvisionHttpAgent = new http.Agent({
-  keepAlive: true,
-  maxSockets: 32,
-  keepAliveMsecs: 15_000,
-});
-const hikvisionHttpsAgent = new https.Agent({
-  keepAlive: true,
-  maxSockets: 32,
-  keepAliveMsecs: 15_000,
-});
-
-const axiosByTimeout = new Map<number, AxiosInstance>();
-
 export function createHikvisionAxios(timeoutMs: number): AxiosInstance {
-  const key = timeoutMs <= 0 ? 0 : timeoutMs;
-  const cached = axiosByTimeout.get(key);
-  if (cached) return cached;
-  const inst = axios.create({
-    timeout: key,
-    httpAgent: hikvisionHttpAgent,
-    httpsAgent: hikvisionHttpsAgent,
+  const timeout = timeoutMs <= 0 ? 0 : timeoutMs;
+  return axios.create({
+    timeout,
+    httpAgent: new http.Agent({ keepAlive: false }),
+    httpsAgent: new https.Agent({ keepAlive: false }),
   });
-  axiosByTimeout.set(key, inst);
-  return inst;
 }
 
 /** Fallback Basic Auth (axios trata user/senha sem montar URL manual). */

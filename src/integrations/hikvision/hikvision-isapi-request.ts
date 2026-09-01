@@ -32,7 +32,7 @@ function hikvisionClient(
   >,
   timeoutMs: number,
 ): CachedHikvisionClient {
-  const key = `${connection.baseUrl}\0${connection.username}\0${timeoutMs}`;
+  const key = `${connection.baseUrl}\0${connection.username}\0${connection.password}\0${timeoutMs}`;
   const cached = hikvisionClientCache.get(key);
   if (cached) return cached;
   const axiosInst = createHikvisionAxios(timeoutMs);

@@ -283,7 +283,15 @@ export async function hikvisionProbeAlertStreamSupported(
   const timer = setTimeout(() => ac.abort(), 5000);
 
   try {
-    await hikvisionOpenStreamRequest(connection, url, ac.signal);
+    const response = await hikvisionOpenStreamRequest(
+      connection,
+      url,
+      ac.signal,
+    );
+    const status = response.status;
+    if (typeof status === 'number' && (status < 200 || status >= 300)) {
+      return false;
+    }
     return true;
   } catch (err: unknown) {
     const status = (err as { response?: { status?: number } }).response?.status;

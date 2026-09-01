@@ -49,6 +49,19 @@ describe('hikvisionProbeAlertStreamSupported', () => {
     expect(supported).toBe(false);
   });
 
+  it('retorna false quando alertStream resolve com status 404', async () => {
+    jest.mocked(hikvisionOpenStreamRequest).mockResolvedValue({
+      status: 404,
+      statusText: 'Not Found',
+      headers: {},
+      data: {},
+      config: {} as never,
+    });
+
+    const supported = await hikvisionProbeAlertStreamSupported(connection);
+    expect(supported).toBe(false);
+  });
+
   it('retorna true quando alertStream conecta', async () => {
     jest.mocked(hikvisionOpenStreamRequest).mockResolvedValue({
       status: 200,

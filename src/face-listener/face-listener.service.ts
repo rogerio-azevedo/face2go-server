@@ -27,7 +27,6 @@ import {
   hikvisionEventToVideoEvent,
   hikvisionIsapiRequest,
   hikvisionOpenStreamRequest,
-  hikvisionProbeAlertStreamSupported,
   hikvisionSearchAcsEvents,
   parseHikvisionAlertStreamPart,
   toHikvisionConnection,
@@ -154,6 +153,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     HikvisionMonitorMode
   >();
   private hikvisionPollFailCountByReader = new Map<string, number>();
+  private hikvisionPollInFlight = new Set<string>();
   private hikvisionAlertStreamFailCountByReader = new Map<string, number>();
   private offlineNotifyTimers = new Map<string, NodeJS.Timeout>();
   private offlineNotifiedAt = new Map<string, Date>();
@@ -521,6 +521,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     this.hikvisionLastSerialByReader.delete(readerId);
     this.hikvisionIntegrationByReader.delete(readerId);
     this.hikvisionPollFailCountByReader.delete(readerId);
+    this.hikvisionPollInFlight.delete(readerId);
     this.hikvisionAlertStreamFailCountByReader.delete(readerId);
     const t = this.lastSeenDebounceTimers.get(readerId);
     if (t) clearTimeout(t);
@@ -722,7 +723,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async subscribeHikvision(ctx: ReaderStreamContext): Promise<void> {
+  private subscribeHikvision(ctx: ReaderStreamContext): void {
     const gen = this.bumpConnectGeneration(ctx.id);
     this.abortStream(ctx.id);
     this.clearHikvisionPollTimer(ctx.id);
@@ -742,30 +743,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       this.subscribeHikvisionPoll(ctx, connection, gen);
       return;
     }
-    if (persistedMode === 'alertStream') {
-      if (this.connectGeneration.get(ctx.id) !== gen) return;
-      this.subscribeHikvisionAlertStream(ctx, connection, gen);
-      return;
-    }
-
-    let useAlertStream = false;
-    try {
-      useAlertStream = await hikvisionProbeAlertStreamSupported(connection);
-    } catch (err: unknown) {
-      this.logger.warn(
-        `[FaceListener] Probe alertStream falhou "${ctx.name}": ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
 
     if (this.connectGeneration.get(ctx.id) !== gen) return;
-
-    if (useAlertStream) {
-      this.hikvisionIntegrationByReader.set(ctx.id, 'alertStream');
-      this.subscribeHikvisionAlertStream(ctx, connection, gen);
-    } else {
-      this.hikvisionIntegrationByReader.set(ctx.id, 'acsEventPoll');
-      this.subscribeHikvisionPoll(ctx, connection, gen);
-    }
+    this.subscribeHikvisionAlertStream(ctx, connection, gen);
   }
 
   private fallbackHikvisionToPoll(
@@ -858,6 +838,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           `[FaceListener] alertStream conectado "${ctx.name}" — aguardando eventos`,
         );
 
+        this.hikvisionIntegrationByReader.set(ctx.id, 'alertStream');
         this.updateStatus(ctx.id, {
           connected: true,
           connectedSince: new Date(),
@@ -920,6 +901,8 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
     const poll = async (): Promise<void> => {
       if (this.connectGeneration.get(ctx.id) !== gen) return;
+      if (this.hikvisionPollInFlight.has(ctx.id)) return;
+      this.hikvisionPollInFlight.add(ctx.id);
 
       try {
         const lastSerial = this.hikvisionLastSerialByReader.get(ctx.id);
@@ -984,6 +967,8 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
             lastConnectionError: message,
           });
         }
+      } finally {
+        this.hikvisionPollInFlight.delete(ctx.id);
       }
     };
 
