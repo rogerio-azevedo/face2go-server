@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, isNull } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import * as clientsQueries from './clients.queries';
@@ -572,4 +572,122 @@ export async function listReadersForFaceSyncByClient(
       ...r,
       brand: r.brand ?? 'intelbras',
     })) as ReaderFaceSyncRow[];
+}
+
+export type ReaderPushRow = {
+  id: string;
+  name: string;
+  clientId: string;
+  clientName: string;
+  companyId: string;
+  brand: ReaderBrand;
+  direction: ReaderDirection | null;
+  ip: string;
+  port: number;
+  serialNumber: string | null;
+  isActive: boolean;
+};
+
+function toPushRow(row: {
+  id: string;
+  name: string;
+  clientId: string;
+  clientName: string;
+  companyId: string;
+  brand: ReaderBrand | null;
+  direction: ReaderDirection | null;
+  ip: string;
+  port: number;
+  serialNumber: string | null;
+  isActive: boolean;
+}): ReaderPushRow {
+  return {
+    ...row,
+    brand: row.brand ?? 'intelbras',
+    direction: row.direction ?? null,
+  };
+}
+
+export async function getReaderForPushById(
+  db: AppDb,
+  readerId: string,
+): Promise<ReaderPushRow | undefined> {
+  const [row] = await db
+    .select({
+      id: facialReaders.id,
+      name: facialReaders.name,
+      clientId: facialReaders.clientId,
+      clientName: clients.name,
+      companyId: clients.companyId,
+      brand: facialReaders.brand,
+      direction: facialReaders.direction,
+      ip: facialReaders.ip,
+      port: facialReaders.port,
+      serialNumber: facialReaders.serialNumber,
+      isActive: facialReaders.isActive,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(eq(facialReaders.id, readerId))
+    .limit(1);
+  return row ? toPushRow(row) : undefined;
+}
+
+export async function findReaderForPushBySerial(
+  db: AppDb,
+  serial: string,
+): Promise<ReaderPushRow | undefined> {
+  const [row] = await db
+    .select({
+      id: facialReaders.id,
+      name: facialReaders.name,
+      clientId: facialReaders.clientId,
+      clientName: clients.name,
+      companyId: clients.companyId,
+      brand: facialReaders.brand,
+      direction: facialReaders.direction,
+      ip: facialReaders.ip,
+      port: facialReaders.port,
+      serialNumber: facialReaders.serialNumber,
+      isActive: facialReaders.isActive,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(
+      and(
+        eq(facialReaders.brand, 'intelbras'),
+        ilike(facialReaders.serialNumber, serial),
+      ),
+    )
+    .limit(1);
+  return row ? toPushRow(row) : undefined;
+}
+
+export async function setReaderSerialIfEmpty(
+  db: AppDb,
+  readerId: string,
+  serial: string,
+): Promise<void> {
+  await db
+    .update(facialReaders)
+    .set({ serialNumber: serial })
+    .where(and(eq(facialReaders.id, readerId), orIsEmptySerial()));
+}
+
+function orIsEmptySerial() {
+  return isNull(facialReaders.serialNumber);
+}
+
+export async function listIntelbrasReadersForProvision(
+  db: AppDb,
+  companyId: string,
+  clientId?: string,
+): Promise<ReaderEventStreamRow[]> {
+  const rows = await listReadersForEventStream(db);
+  return rows.filter(
+    (r) =>
+      r.companyId === companyId &&
+      r.brand === 'intelbras' &&
+      (!clientId || r.clientId === clientId),
+  );
 }

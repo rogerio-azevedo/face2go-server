@@ -27,6 +27,16 @@ export const envSchema = z.object({
   JWT_SECRET: z.string().min(8),
   JWT_EXPIRES_IN: z.string().default('7d'),
   FRONTEND_URL: z.string().url(),
+  /**
+   * Host público que o leitor Intelbras alcança no POST
+   * (`https://api.face2go.com.br`). Obrigatório para provisionar.
+   */
+  API_URL: z.string().url().optional(),
+  APP_PUBLIC_URL: z.string().url().optional(),
+  /** Corta snapManager facial Intelbras (POST + probe). Default off. */
+  FACIAL_INTELBRAS_SKIP_STREAM: z.string().optional(),
+  /** Rollback: reabre GET snapManager nos Intelbras faciais. */
+  FACIAL_INTELBRAS_USE_STREAM: z.string().optional(),
   PORT: z.coerce.number().default(3001),
   /** Quantidade máxima de zonas AccessTimeSchedule customizadas por leitor (exclui 255). */
   READER_MAX_TIME_ZONES: z.coerce.number().int().min(1).max(254).default(32),

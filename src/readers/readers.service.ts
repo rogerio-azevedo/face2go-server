@@ -14,6 +14,10 @@ import { DatabaseService } from '../database/database.service';
 import * as readersQueries from '../database/queries/readers.queries';
 import { FaceListenerService } from '../face-listener/face-listener.service';
 import {
+  IntelbrasPushProvisionService,
+  type IntelbrasPushMode,
+} from '../intelbras-push/intelbras-push.provision.service';
+import {
   intelbrasGetDeviceUsers,
   intelbrasGetFaceImage,
   intelbrasRemoveUserFromReader,
@@ -44,6 +48,7 @@ export class ReadersService {
     private readonly permissionsService: PermissionsService,
     private readonly faceListener: FaceListenerService,
     private readonly configService: ConfigService<EnvVars, true>,
+    private readonly intelbrasPushProvision: IntelbrasPushProvisionService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -242,6 +247,39 @@ export class ReadersService {
       return updated;
     }
     return readersQueries.readerRowToPublic(updated);
+  }
+
+  async previewIntelbrasPush(user: JwtPayload, readerId: string) {
+    if (user.role !== 'company_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+    const companyId = this.ensureCompany(user);
+    return this.intelbrasPushProvision.preview(companyId, readerId);
+  }
+
+  async provisionIntelbrasPush(
+    user: JwtPayload,
+    readerId: string,
+    mode?: string,
+  ) {
+    if (user.role !== 'company_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+    const companyId = this.ensureCompany(user);
+    const chosen: IntelbrasPushMode | undefined =
+      mode === 'v1' || mode === 'v2' ? mode : undefined;
+    return this.intelbrasPushProvision.provision(companyId, readerId, chosen);
+  }
+
+  async provisionAllIntelbrasPush(user: JwtPayload, clientId?: string) {
+    if (user.role !== 'company_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+    const companyId = this.ensureCompany(user);
+    return this.intelbrasPushProvision.provisionIntelbrasForClient(
+      companyId,
+      clientId,
+    );
   }
 
   async setActive(user: JwtPayload, readerId: string, body: unknown) {

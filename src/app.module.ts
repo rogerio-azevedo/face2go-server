@@ -24,6 +24,7 @@ import { RepositoriesModule } from './database/repositories/repositories.module'
 import { LprPlateSyncModule } from './lpr-plate-sync/lpr-plate-sync.module';
 import { FaceEnrollmentModule } from './face-enrollment/face-enrollment.module';
 import { HealthModule } from './health/health.module';
+import { IntelbrasPushModule } from './intelbras-push/intelbras-push.module';
 import { IenhModule } from './ienh/ienh.module';
 import { ClientInvitesModule } from './client-invites/invites.module';
 import { LegalDocumentsModule } from './legal-documents/legal-documents.module';
@@ -101,6 +102,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     DashboardModule,
     NotificationsModule,
     HealthModule,
+    IntelbrasPushModule,
     LegalDocumentsModule,
     ArrivalsModule,
     SimulateModule,

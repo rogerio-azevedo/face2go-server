@@ -60,6 +60,18 @@ export class ReadersController {
     return this.readersService.list(user, clientId);
   }
 
+  @Post('intelbras-push/provision-all')
+  @ApiOperation({
+    summary:
+      'Provisionar POST Intelbras em todos os leitores Intelbras da empresa (ou de um cliente)',
+  })
+  provisionAllIntelbrasPush(
+    @CurrentUser() user: JwtPayload,
+    @Query('clientId') clientId?: string,
+  ) {
+    return this.readersService.provisionAllIntelbrasPush(user, clientId);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Cadastrar leitor (apenas admin da empresa)' })
   create(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
@@ -74,6 +86,29 @@ export class ReadersController {
     @Body() body: unknown,
   ) {
     return this.readersService.update(user, readerId, body);
+  }
+
+  @Get(':readerId/push-config')
+  @ApiOperation({
+    summary: 'Preview da config POST Intelbras (firmware + DeviceMode)',
+  })
+  pushConfig(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+  ) {
+    return this.readersService.previewIntelbrasPush(user, readerId);
+  }
+
+  @Post(':readerId/provision-push')
+  @ApiOperation({
+    summary: 'Enviar config POST 1.0/2.0 ao leitor Intelbras',
+  })
+  provisionPush(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+    @Query('mode') mode?: string,
+  ) {
+    return this.readersService.provisionIntelbrasPush(user, readerId, mode);
   }
 
   @Patch(':readerId/active')

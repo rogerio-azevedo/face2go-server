@@ -72,6 +72,8 @@ import {
   DEFAULT_READER_OFFLINE_NOTIFY_DEBOUNCE_MS,
   shouldEmitOfflineNotification,
 } from './face-listener-offline-notifier.util';
+import { skipIntelbrasPersistentStream } from '../intelbras-push/intelbras-push.flags';
+import { intelbrasGetSoftwareVersion } from '../intelbras-push/intelbras-push.config.client';
 
 type FacialSnapEvent = NonNullable<ReturnType<typeof snapFlatMapToVideoEvent>>;
 
@@ -163,9 +165,12 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   private static readonly LAST_SEEN_DEBOUNCE_MS = 30_000;
   private static readonly HIKVISION_POLL_INTERVAL_MS = 3_000;
   private static readonly HIKVISION_EVENT_DEDUP_MS = 5 * 60_000;
+  private static readonly PUSH_PROBE_TTL_MS = 10 * 60_000;
 
   private statuses = new Map<string, ReaderListenerStatus>();
   private lastSeenDebounceTimers = new Map<string, NodeJS.Timeout>();
+  private lastPushAt = new Map<string, Date>();
+  private lastProbeOkAt = new Map<string, Date>();
 
   constructor(
     private readonly database: DatabaseService,
@@ -230,6 +235,21 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     this.streamAbortByReader.clear();
   }
 
+  notePushActivity(readerId: string): void {
+    const now = new Date();
+    this.lastPushAt.set(readerId, now);
+    if (!this.statuses.has(readerId)) {
+      return;
+    }
+    this.updateStatus(readerId, {
+      lastEventAt: now,
+      eventsReceived: (this.statuses.get(readerId)?.eventsReceived ?? 0) + 1,
+      lastConnectionError: undefined,
+    });
+    this.scheduleLastSeenPersist(readerId);
+    this.syncOnePushLiveness(readerId);
+  }
+
   /**
    * Status agregado para uma empresa (REST). Mescla leitores do banco + estado in-memory do stream.
    */
@@ -281,12 +301,29 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         };
       }
 
+      if (d.brand === 'intelbras' && skipIntelbrasPersistentStream()) {
+        const lastPush = this.lastPushAt.get(d.id) ?? existing?.lastEventAt;
+        return {
+          ...base,
+          connected: this.isPushLive(d.id),
+          eventsReceived: existing?.eventsReceived ?? 0,
+          lastEventAt: lastPush ?? null,
+          connectedSince: existing?.connectedSince ?? null,
+          lastConnectionError: existing?.lastConnectionError ?? null,
+        };
+      }
+
       if (existing) {
+        const lastPush = this.lastPushAt.get(d.id);
+        const lastEventAt =
+          lastPush && (!existing.lastEventAt || lastPush > existing.lastEventAt)
+            ? lastPush
+            : (existing.lastEventAt ?? null);
         return {
           ...base,
           connected: existing.connected,
           eventsReceived: existing.eventsReceived,
-          lastEventAt: existing.lastEventAt ?? null,
+          lastEventAt,
           connectedSince: existing.connectedSince ?? null,
           lastConnectionError: existing.lastConnectionError ?? null,
         };
@@ -334,6 +371,8 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     );
 
     let hikvisionConnectIndex = 0;
+    let intelbrasStream = 0;
+    let intelbrasPush = 0;
     for (const ctx of valid) {
       this.statuses.set(ctx.id, {
         readerId: ctx.id,
@@ -358,8 +397,19 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         continue;
       }
 
+      if (skipIntelbrasPersistentStream()) {
+        intelbrasPush += 1;
+        this.trackIntelbrasPushOnly(ctx);
+        continue;
+      }
+
+      intelbrasStream += 1;
       this.subscribe(ctx);
     }
+
+    this.logger.log(
+      `[FaceListener] Stream Intelbras: ${intelbrasStream} | POST Intelbras: ${intelbrasPush} | Hikvision: ${hikvisionConnectIndex}`,
+    );
   }
 
   async refreshConnections(): Promise<void> {
@@ -385,6 +435,31 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     for (const ctx of validContexts) {
       const dbHost = ctx.host;
       const existing = this.statuses.get(ctx.id);
+
+      if (ctx.brand !== 'hikvision' && skipIntelbrasPersistentStream()) {
+        if (!existing) {
+          this.statuses.set(ctx.id, {
+            readerId: ctx.id,
+            readerName: ctx.name,
+            clientId: ctx.clientId,
+            clientName: ctx.clientName,
+            companyId: ctx.companyId,
+            brand: toBrandSlug(ctx.brand),
+            host: dbHost,
+            connected: false,
+            eventsReceived: 0,
+          });
+        } else {
+          this.updateStatus(ctx.id, {
+            readerName: ctx.name,
+            host: dbHost,
+            clientName: ctx.clientName,
+          });
+        }
+        this.trackIntelbrasPushOnly(ctx);
+        void this.probeIntelbrasLiveness(ctx);
+        continue;
+      }
 
       if (!existing) {
         this.statuses.set(ctx.id, {
@@ -426,6 +501,13 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           readerName: ctx.name,
           clientName: ctx.clientName,
         });
+        if (
+          ctx.brand !== 'hikvision' &&
+          !this.streamAbortByReader.has(ctx.id) &&
+          !this.reconnectTimers.has(ctx.id)
+        ) {
+          this.subscribe(ctx);
+        }
       }
     }
   }
@@ -492,6 +574,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       });
     }
     this.clearReconnectTimer(readerId);
+    if (ctx.brand !== 'hikvision' && skipIntelbrasPersistentStream()) {
+      this.trackIntelbrasPushOnly(ctx);
+      return;
+    }
     this.subscribe(ctx);
   }
 
@@ -529,6 +615,115 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     this.clearOfflineNotifyTimer(readerId);
     this.offlineNotifiedAt.delete(readerId);
     this.statuses.delete(readerId);
+  }
+
+  private trackIntelbrasPushOnly(ctx: ReaderStreamContext): void {
+    if (
+      this.streamAbortByReader.has(ctx.id) ||
+      this.reconnectTimers.has(ctx.id)
+    ) {
+      this.logger.log(
+        `[FaceListener] Encerrando stream Intelbras (POST) "${ctx.name}"`,
+      );
+    }
+    this.clearReconnectTimer(ctx.id);
+    this.abortStream(ctx.id);
+    this.multipartByReader.delete(ctx.id);
+    this.pendingByReader.delete(ctx.id);
+    if (!this.statuses.has(ctx.id)) {
+      this.statuses.set(ctx.id, {
+        readerId: ctx.id,
+        readerName: ctx.name,
+        clientId: ctx.clientId,
+        clientName: ctx.clientName,
+        companyId: ctx.companyId,
+        brand: toBrandSlug(ctx.brand),
+        host: ctx.host,
+        connected: false,
+        eventsReceived: 0,
+      });
+    } else {
+      this.updateStatus(ctx.id, {
+        readerName: ctx.name,
+        host: ctx.host,
+        clientName: ctx.clientName,
+      });
+    }
+    const lastPush = this.lastPushAt.get(ctx.id);
+    if (lastPush) {
+      this.updateStatus(ctx.id, { lastEventAt: lastPush });
+    }
+    this.syncOnePushLiveness(ctx.id);
+  }
+
+  private isPushLive(readerId: string): boolean {
+    const now = Date.now();
+    const lastPush = this.lastPushAt.get(readerId);
+    if (
+      lastPush &&
+      now - lastPush.getTime() < FaceListenerService.PUSH_PROBE_TTL_MS
+    ) {
+      return true;
+    }
+    const lastProbe = this.lastProbeOkAt.get(readerId);
+    return (
+      lastProbe != null &&
+      now - lastProbe.getTime() < FaceListenerService.PUSH_PROBE_TTL_MS
+    );
+  }
+
+  private syncOnePushLiveness(readerId: string): void {
+    if (!skipIntelbrasPersistentStream()) {
+      return;
+    }
+    const status = this.statuses.get(readerId);
+    if (!status || status.brand !== 'intelbras') {
+      return;
+    }
+    const live = this.isPushLive(readerId);
+    if (status.connected === live) {
+      return;
+    }
+    this.updateStatus(readerId, {
+      connected: live,
+      connectedSince: live
+        ? (status.connectedSince ?? new Date())
+        : status.connectedSince,
+    });
+  }
+
+  private async probeIntelbrasLiveness(
+    ctx: ReaderStreamContext,
+  ): Promise<void> {
+    const lastPush = this.lastPushAt.get(ctx.id);
+    if (
+      lastPush &&
+      Date.now() - lastPush.getTime() < FaceListenerService.PUSH_PROBE_TTL_MS
+    ) {
+      this.syncOnePushLiveness(ctx.id);
+      return;
+    }
+    const lastColon = ctx.host.lastIndexOf(':');
+    const ip = lastColon > 0 ? ctx.host.slice(0, lastColon) : ctx.host;
+    const port =
+      lastColon > 0 ? Number(ctx.host.slice(lastColon + 1)) || 80 : 80;
+    try {
+      await intelbrasGetSoftwareVersion({
+        id: ctx.id,
+        name: ctx.name,
+        ip,
+        port,
+        username: ctx.username,
+        plainPassword: ctx.passwordPlain,
+      });
+      this.lastProbeOkAt.set(ctx.id, new Date());
+      this.updateStatus(ctx.id, { lastConnectionError: undefined });
+    } catch (err) {
+      this.updateStatus(ctx.id, {
+        lastConnectionError: err instanceof Error ? err.message : String(err),
+      });
+    }
+    this.syncOnePushLiveness(ctx.id);
   }
 
   private subscribe(ctx: ReaderStreamContext): void {

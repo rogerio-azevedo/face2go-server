@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { raw } from 'express';
 import { cleanupOpenApiDoc, ZodValidationPipe } from 'nestjs-zod';
 
 import { AppModule } from './app.module';
@@ -23,11 +24,17 @@ async function bootstrap() {
 
   app.useGlobalFilters(new HttpExceptionFilter());
 
+  app.use('/device-events', raw({ type: '*/*', limit: '10mb' }));
+  app.use('/notification', raw({ type: '*/*', limit: '10mb' }));
   app.useBodyParser('json', { limit: '8mb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '8mb' });
 
   app.setGlobalPrefix('api', {
-    exclude: [{ path: '/', method: RequestMethod.GET }],
+    exclude: [
+      { path: '/', method: RequestMethod.GET },
+      { path: 'device-events/facial/:readerId', method: RequestMethod.POST },
+      { path: 'notification', method: RequestMethod.POST },
+    ],
   });
   app.useGlobalPipes(new ZodValidationPipe());
 
