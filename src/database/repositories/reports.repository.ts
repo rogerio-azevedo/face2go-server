@@ -19,4 +19,8 @@ export class ReportsRepository extends BaseRepository {
   listActiveSchoolClassesByClient(clientId: string) {
     return reportsQueries.listActiveSchoolClassesByClient(this.db, clientId);
   }
+
+  hasActiveFacialReaders(clientId: string) {
+    return reportsQueries.hasActiveFacialReaders(this.db, clientId);
+  }
 }

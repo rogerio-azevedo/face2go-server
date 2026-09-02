@@ -27,17 +27,42 @@ function simNao(value: boolean): string {
   return value ? 'Sim' : 'Não';
 }
 
+function isPartialSyncError(error: string | null): boolean {
+  return error?.toLowerCase().includes('parcialmente') ?? false;
+}
+
+function syncLabel(row: EnrollmentListRow): string {
+  if (!row.hasFace) return 'Sem foto';
+  if (
+    row.deviceSyncStatus === 'synced' &&
+    isPartialSyncError(row.deviceSyncError)
+  ) {
+    return 'Parcial';
+  }
+  if (row.deviceSyncStatus === 'synced') return 'Sincronizado';
+  if (row.deviceSyncStatus === 'pending_sync') return 'Pendente';
+  if (row.deviceSyncStatus === 'sync_failed') return 'Erro';
+  return 'Sem foto';
+}
+
+export function groupIncludesLogin(group: EnrollmentGroup): boolean {
+  return group !== 'students';
+}
+
 export function buildEnrollmentCsv(
   group: EnrollmentGroup,
   rows: EnrollmentListRow[],
 ): string {
   const includeClass = group === 'students';
   const includeRole = group === 'members';
+  const includeLogin = groupIncludesLogin(group);
   const includeVehicle = groupIncludesVehicle(group);
   const header = [
     'Nome',
     ...(includeClass ? ['Turma'] : []),
     ...(includeRole ? ['Função'] : []),
+    ...(includeLogin ? ['Acesso login'] : []),
+    'Sincronismo',
     'Face',
     ...(includeVehicle ? ['Veículo'] : []),
   ];
@@ -47,6 +72,8 @@ export function buildEnrollmentCsv(
       csvCell(row.name),
       ...(includeClass ? [csvCell(row.className ?? '')] : []),
       ...(includeRole ? [csvCell(row.roleName ?? '')] : []),
+      ...(includeLogin ? [csvCell(row.hasLogin ? 'Sim' : '—')] : []),
+      csvCell(syncLabel(row)),
       csvCell(simNao(row.hasFace)),
       ...(includeVehicle ? [csvCell(simNao(row.hasVehicle))] : []),
     ];

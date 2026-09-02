@@ -40,6 +40,7 @@ export const enrollmentReportQuerySchema = z.object({
   search: optionalSearch,
   hasFace: optionalBoolQuery,
   hasVehicle: optionalBoolQuery,
+  syncFailed: optionalBoolQuery,
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
@@ -81,4 +82,7 @@ export const enrollmentListItemSchema = z.object({
   deviceSyncStatus: z
     .enum(['pending_sync', 'synced', 'sync_failed'])
     .nullable(),
+  deviceSyncError: z.string().nullable().optional(),
+  hasFacialReaders: z.boolean(),
+  hasLogin: z.boolean().optional(),
 });

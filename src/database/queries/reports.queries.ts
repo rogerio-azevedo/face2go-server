@@ -1,10 +1,21 @@
-import { and, asc, count, eq, exists, not, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  isNotNull,
+  not,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import {
   clientMembers,
   clientRoles,
+  facialReaders,
   responsibles,
   schoolClasses,
   studentClasses,
@@ -22,6 +33,7 @@ export type EnrollmentReportFilters = {
   search?: string;
   hasFace?: boolean;
   hasVehicle?: boolean;
+  syncFailed?: boolean;
 };
 
 export type EnrollmentSummaryCounts = {
@@ -39,6 +51,8 @@ export type EnrollmentListRow = {
   hasFace: boolean;
   hasVehicle: boolean;
   deviceSyncStatus: 'pending_sync' | 'synced' | 'sync_failed' | null;
+  deviceSyncError: string | null;
+  hasLogin: boolean;
 };
 
 export type EnrollmentListOptions = {
@@ -128,6 +142,9 @@ function studentWhere(
     filters.hasFace,
   );
   if (faceCond) conditions.push(faceCond);
+  if (filters.syncFailed) {
+    conditions.push(eq(students.deviceSyncStatus, 'sync_failed'));
+  }
   return and(...conditions);
 }
 
@@ -145,6 +162,9 @@ function responsibleWhere(filters: EnrollmentReportFilters): SQL | undefined {
   if (faceCond) conditions.push(faceCond);
   const vehicleCond = matchBool(responsibleHasVehicle(), filters.hasVehicle);
   if (vehicleCond) conditions.push(vehicleCond);
+  if (filters.syncFailed) {
+    conditions.push(eq(responsibles.deviceSyncStatus, 'sync_failed'));
+  }
   return and(...conditions);
 }
 
@@ -162,6 +182,9 @@ function memberWhere(filters: EnrollmentReportFilters): SQL | undefined {
   if (faceCond) conditions.push(faceCond);
   const vehicleCond = matchBool(memberHasVehicle(), filters.hasVehicle);
   if (vehicleCond) conditions.push(vehicleCond);
+  if (filters.syncFailed) {
+    conditions.push(eq(clientMembers.deviceSyncStatus, 'sync_failed'));
+  }
   return and(...conditions);
 }
 
@@ -272,6 +295,7 @@ async function listStudents(
       photoKey: students.photoKey,
       hasFace: hasCompleteFaceSelect(students.faceId, students.photoKey),
       deviceSyncStatus: students.deviceSyncStatus,
+      deviceSyncError: students.deviceSyncError,
     })
     .from(students)
     .where(studentWhere(db, filters))
@@ -291,6 +315,8 @@ async function listStudents(
       hasFace: toBool(row.hasFace),
       hasVehicle: false,
       deviceSyncStatus: row.deviceSyncStatus ?? null,
+      deviceSyncError: row.deviceSyncError ?? null,
+      hasLogin: false,
     })),
   );
 }
@@ -311,6 +337,8 @@ async function listResponsibles(
       ),
       hasVehicle: sql<boolean>`${responsibleHasVehicle()}`.as('hasVehicle'),
       deviceSyncStatus: responsibles.deviceSyncStatus,
+      deviceSyncError: responsibles.deviceSyncError,
+      userId: responsibles.userId,
     })
     .from(responsibles)
     .where(responsibleWhere(filters))
@@ -329,6 +357,8 @@ async function listResponsibles(
     hasFace: toBool(row.hasFace),
     hasVehicle: toBool(row.hasVehicle),
     deviceSyncStatus: row.deviceSyncStatus ?? null,
+    deviceSyncError: row.deviceSyncError ?? null,
+    hasLogin: row.userId != null,
   }));
 }
 
@@ -349,6 +379,8 @@ async function listMembers(
       ),
       hasVehicle: sql<boolean>`${memberHasVehicle()}`.as('hasVehicle'),
       deviceSyncStatus: clientMembers.deviceSyncStatus,
+      deviceSyncError: clientMembers.deviceSyncError,
+      userId: clientMembers.userId,
     })
     .from(clientMembers)
     .innerJoin(clientRoles, eq(clientMembers.roleId, clientRoles.id))
@@ -368,6 +400,8 @@ async function listMembers(
     hasFace: toBool(row.hasFace),
     hasVehicle: toBool(row.hasVehicle),
     deviceSyncStatus: row.deviceSyncStatus ?? null,
+    deviceSyncError: row.deviceSyncError ?? null,
+    hasLogin: row.userId != null,
   }));
 }
 
@@ -383,6 +417,26 @@ export async function listEnrollment(
     return listResponsibles(db, filters, options);
   }
   return listMembers(db, filters, options);
+}
+
+export async function hasActiveFacialReaders(
+  db: AppDb,
+  clientId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: facialReaders.id })
+    .from(facialReaders)
+    .where(
+      and(
+        eq(facialReaders.clientId, clientId),
+        eq(facialReaders.isActive, true),
+        isNotNull(facialReaders.username),
+        isNotNull(facialReaders.passwordEncrypted),
+        isNotNull(facialReaders.ip),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function listActiveSchoolClassesByClient(

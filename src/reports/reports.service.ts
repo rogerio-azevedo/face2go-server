@@ -97,11 +97,13 @@ export class ReportsService {
       query.page !== undefined ? String(query.page) : undefined,
       query.pageSize !== undefined ? String(query.pageSize) : undefined,
     );
-    const [rows, counts] = await Promise.all([
+    const [rows, counts, hasFacialReaders] = await Promise.all([
       this.reports.listEnrollment(filters, { offset, limit: pageSize }),
       this.reports.summarizeEnrollment(filters),
+      this.reports.hasActiveFacialReaders(client.id),
     ]);
     const includeVehicle = groupIncludesVehicle(query.group);
+    const includeLogin = query.group !== 'students';
     const data = await Promise.all(
       rows.map(async (row) => ({
         id: row.id,
@@ -112,6 +114,9 @@ export class ReportsService {
         hasFace: row.hasFace,
         hasVehicle: includeVehicle ? row.hasVehicle : undefined,
         deviceSyncStatus: row.deviceSyncStatus,
+        deviceSyncError: row.deviceSyncError,
+        hasFacialReaders,
+        hasLogin: includeLogin ? row.hasLogin : undefined,
       })),
     );
     return buildPaginatedResult(data, counts.total, page, pageSize);
@@ -147,6 +152,7 @@ export class ReportsService {
             hasFace: query.hasFace,
             hasVehicle:
               query.group === 'students' ? undefined : query.hasVehicle,
+            syncFailed: query.syncFailed,
           }
         : {}),
     };
