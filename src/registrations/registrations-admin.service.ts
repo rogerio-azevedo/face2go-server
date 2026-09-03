@@ -16,10 +16,11 @@ import { MembersService } from '../members/members.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { zodFirstMessage } from '../validation/zod-utils';
-
-const listQuerySchema = z.object({
-  status: z.enum(['draft', 'approved', 'rejected']).optional(),
-});
+import type { ListRegistrationsQuery } from '../validation/registrations.schema';
+import {
+  buildPaginatedResult,
+  parseListPaginationParams,
+} from '../common/pagination';
 
 const rejectBodySchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
@@ -140,42 +141,55 @@ export class RegistrationsAdminService {
   async listForCompanyUser(
     user: JwtPayload,
     clientId: string,
-    query: Record<string, string | undefined>,
+    query: ListRegistrationsQuery,
   ) {
     await this.ensureCompanyCanAccessClient(user, clientId);
-    const parsed = listQuerySchema.safeParse(query);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-    const [rows, hasFacialReaders] = await Promise.all([
-      registrationsQueries.listSubmittedRegistrationsForClient(
-        this.database.db,
-        clientId,
-        parsed.data.status,
-      ),
-      this.faceSync.hasActiveFacialReaders(clientId),
-    ]);
-    return Promise.all(rows.map((r) => this.mapRow(r, hasFacialReaders)));
+    return this.listShared(clientId, query);
   }
 
-  async listForClientTenant(
-    user: JwtPayload,
-    query: Record<string, string | undefined>,
-  ) {
+  async listForClientTenant(user: JwtPayload, query: ListRegistrationsQuery) {
     const clientId = this.ensureClientTenant(user);
-    const parsed = listQuerySchema.safeParse(query);
-    if (!parsed.success) {
-      throw new BadRequestException(zodFirstMessage(parsed.error));
-    }
-    const [rows, hasFacialReaders] = await Promise.all([
+    return this.listShared(clientId, query);
+  }
+
+  private async listShared(clientId: string, query: ListRegistrationsQuery) {
+    const { page, pageSize, search, offset } = parseListPaginationParams(
+      query.page,
+      query.pageSize,
+      query.search,
+    );
+    const listOpts = {
+      status: query.status,
+      search,
+      offset,
+      limit: pageSize,
+    };
+
+    const [rows, total, counts, hasFacialReaders] = await Promise.all([
       registrationsQueries.listSubmittedRegistrationsForClient(
         this.database.db,
         clientId,
-        parsed.data.status,
+        listOpts,
+      ),
+      registrationsQueries.countSubmittedRegistrationsForClient(
+        this.database.db,
+        clientId,
+        { status: query.status, search },
+      ),
+      registrationsQueries.countSubmittedRegistrationsByStatus(
+        this.database.db,
+        clientId,
       ),
       this.faceSync.hasActiveFacialReaders(clientId),
     ]);
-    return Promise.all(rows.map((r) => this.mapRow(r, hasFacialReaders)));
+
+    const data = await Promise.all(
+      rows.map((r) => this.mapRow(r, hasFacialReaders)),
+    );
+    return {
+      ...buildPaginatedResult(data, total, page, pageSize),
+      counts,
+    };
   }
 
   async faceUrlForCompanyUser(

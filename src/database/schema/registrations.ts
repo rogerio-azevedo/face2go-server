@@ -9,6 +9,7 @@ import {
   jsonb,
   pgEnum,
   integer,
+  index,
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth';
@@ -51,40 +52,50 @@ export const registrationLinks = pgTable('registration_links', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const registrations = pgTable('registrations', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  registrationLinkId: uuid('registration_link_id')
-    .notNull()
-    .references(() => registrationLinks.id, { onDelete: 'cascade' }),
-  clientId: uuid('client_id')
-    .notNull()
-    .references(() => clients.id, { onDelete: 'cascade' }),
-  name: varchar('name', { length: 255 }),
-  document: varchar('document', { length: 32 }),
-  phone: varchar('phone', { length: 32 }),
-  email: varchar('email', { length: 255 }),
-  faceImageKey: text('face_image_key'),
-  additionalData: jsonb('additional_data').$type<{
-    block?: string;
-    unit?: string;
-    room?: string;
-  } | null>(),
-  status: registrationStatusEnum('status').notNull().default('draft'),
-  approvedByUserId: text('approved_by_user_id').references(() => users.id, {
-    onDelete: 'set null',
-  }),
-  approvedAt: timestamp('approved_at'),
-  rejectionNotes: text('rejection_notes'),
-  submittedAt: timestamp('submitted_at'),
-  /** ID numérico no leitor facial (único dentro do mesmo cliente). */
-  faceId: integer('face_id'),
-  /** Sincronização com leitores; nulo até haver foto e aprovação com sincronização. */
-  deviceSyncStatus: deviceSyncStatusEnum('device_sync_status'),
-  deviceSyncedAt: timestamp('device_synced_at'),
-  deviceSyncError: text('device_sync_error'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const registrations = pgTable(
+  'registrations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    registrationLinkId: uuid('registration_link_id')
+      .notNull()
+      .references(() => registrationLinks.id, { onDelete: 'cascade' }),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 255 }),
+    document: varchar('document', { length: 32 }),
+    phone: varchar('phone', { length: 32 }),
+    email: varchar('email', { length: 255 }),
+    faceImageKey: text('face_image_key'),
+    additionalData: jsonb('additional_data').$type<{
+      block?: string;
+      unit?: string;
+      room?: string;
+    } | null>(),
+    status: registrationStatusEnum('status').notNull().default('draft'),
+    approvedByUserId: text('approved_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedAt: timestamp('approved_at'),
+    rejectionNotes: text('rejection_notes'),
+    submittedAt: timestamp('submitted_at'),
+    /** ID numérico no leitor facial (único dentro do mesmo cliente). */
+    faceId: integer('face_id'),
+    /** Sincronização com leitores; nulo até haver foto e aprovação com sincronização. */
+    deviceSyncStatus: deviceSyncStatusEnum('device_sync_status'),
+    deviceSyncedAt: timestamp('device_synced_at'),
+    deviceSyncError: text('device_sync_error'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('registrations_client_status_submitted_at_idx').on(
+      t.clientId,
+      t.status,
+      t.submittedAt,
+    ),
+  ],
+);
 
 export const registrationLinksRelations = relations(
   registrationLinks,

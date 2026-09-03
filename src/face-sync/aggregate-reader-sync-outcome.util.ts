@@ -1,7 +1,36 @@
+import { isNotNull, isNull, ne, or, type AnyColumn, type SQL } from 'drizzle-orm';
+
 export type ReaderSyncOutcome = {
   deviceSyncStatus: 'synced' | 'sync_failed';
   deviceSyncError: string | null;
 };
+
+/** Parcial = `synced` com `device_sync_error` preenchido. */
+export function isIncompleteDeviceSync(
+  status: string | null | undefined,
+  error: string | null | undefined,
+): boolean {
+  return status !== 'synced' || error != null;
+}
+
+export function isFullySyncedDevice(
+  status: string | null | undefined,
+  error: string | null | undefined,
+): boolean {
+  return !isIncompleteDeviceSync(status, error);
+}
+
+/** Pendente, falho, nulo ou parcial (`synced` + erro). */
+export function incompleteDeviceSyncSql(
+  statusCol: AnyColumn,
+  errorCol: AnyColumn,
+): SQL {
+  return or(
+    ne(statusCol, 'synced'),
+    isNull(statusCol),
+    isNotNull(errorCol),
+  ) as SQL;
+}
 
 function splitReaderFailure(failure: string): { name: string; reason: string } {
   const idx = failure.indexOf(': ');

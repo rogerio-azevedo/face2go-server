@@ -22,6 +22,7 @@ import {
   users,
 } from '../schema';
 
+import { incompleteDeviceSyncSql } from '../../face-sync/aggregate-reader-sync-outcome.util';
 import * as studentClassesQueries from './student-classes.queries';
 import * as studentsQueries from './students.queries';
 import { unaccentIlike } from './search-utils';
@@ -885,7 +886,7 @@ export type ResponsibleForGlobalSyncRow = {
   photoKey: string;
 };
 
-/** Responsáveis com foto e sync pendente/falho — elegíveis para sync global. */
+/** Responsáveis com foto e sync pendente, falho ou parcial — elegíveis para sync global. */
 export async function listResponsiblesForGlobalSync(
   db: AppDb,
   clientId: string,
@@ -903,9 +904,9 @@ export async function listResponsiblesForGlobalSync(
         eq(responsibles.clientId, clientId),
         isNotNull(responsibles.faceId),
         isNotNull(responsibles.photoKey),
-        or(
-          ne(responsibles.deviceSyncStatus, 'synced'),
-          isNull(responsibles.deviceSyncStatus),
+        incompleteDeviceSyncSql(
+          responsibles.deviceSyncStatus,
+          responsibles.deviceSyncError,
         ),
       ),
     )

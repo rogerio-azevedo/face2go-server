@@ -5,8 +5,6 @@ import {
   eq,
   inArray,
   isNotNull,
-  isNull,
-  ne,
   notInArray,
   or,
   type SQL,
@@ -14,6 +12,7 @@ import {
 
 import type { AppDb } from '../database.types';
 import { responsibleStudents, studentClasses, students } from '../schema';
+import { incompleteDeviceSyncSql } from '../../face-sync/aggregate-reader-sync-outcome.util';
 
 import * as studentClassesQueries from './student-classes.queries';
 import { unaccentIlike } from './search-utils';
@@ -372,7 +371,7 @@ export type StudentForGlobalSyncRow = {
   photoKey: string;
 };
 
-/** Alunos com foto e sync pendente/falho — elegíveis para sync global. */
+/** Alunos com foto e sync pendente, falho ou parcial — elegíveis para sync global. */
 export async function listStudentsForGlobalSync(
   db: AppDb,
   clientId: string,
@@ -390,9 +389,9 @@ export async function listStudentsForGlobalSync(
         eq(students.clientId, clientId),
         isNotNull(students.faceId),
         isNotNull(students.photoKey),
-        or(
-          ne(students.deviceSyncStatus, 'synced'),
-          isNull(students.deviceSyncStatus),
+        incompleteDeviceSyncSql(
+          students.deviceSyncStatus,
+          students.deviceSyncError,
         ),
       ),
     )

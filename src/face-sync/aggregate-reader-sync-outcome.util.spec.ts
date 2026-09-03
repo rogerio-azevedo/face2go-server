@@ -1,4 +1,8 @@
-import { aggregateReaderSyncOutcome } from './aggregate-reader-sync-outcome.util';
+import {
+  aggregateReaderSyncOutcome,
+  isFullySyncedDevice,
+  isIncompleteDeviceSync,
+} from './aggregate-reader-sync-outcome.util';
 
 describe('aggregateReaderSyncOutcome', () => {
   const rejection =
@@ -49,5 +53,39 @@ describe('aggregateReaderSyncOutcome', () => {
       deviceSyncStatus: 'synced',
       deviceSyncError: `Sincronizado parcialmente (1 de 2 leitor(es)). ${rejection}`,
     });
+  });
+});
+
+describe('isIncompleteDeviceSync', () => {
+  it('trata synced sem erro como completo', () => {
+    expect(isIncompleteDeviceSync('synced', null)).toBe(false);
+    expect(isFullySyncedDevice('synced', null)).toBe(true);
+  });
+
+  it('trata synced com erro (parcial) como incompleto', () => {
+    expect(
+      isIncompleteDeviceSync(
+        'synced',
+        'Sincronizado parcialmente (1 de 2 leitor(es)). Portaria: offline',
+      ),
+    ).toBe(true);
+    expect(
+      isFullySyncedDevice(
+        'synced',
+        'Sincronizado parcialmente (1 de 2 leitor(es)). Portaria: offline',
+      ),
+    ).toBe(false);
+  });
+
+  it('trata pending_sync e sync_failed como incompletos', () => {
+    expect(isIncompleteDeviceSync('pending_sync', null)).toBe(true);
+    expect(isIncompleteDeviceSync('sync_failed', 'timeout')).toBe(true);
+    expect(isFullySyncedDevice('pending_sync', null)).toBe(false);
+    expect(isFullySyncedDevice('sync_failed', 'timeout')).toBe(false);
+  });
+
+  it('trata status nulo como incompleto', () => {
+    expect(isIncompleteDeviceSync(null, null)).toBe(true);
+    expect(isFullySyncedDevice(undefined, null)).toBe(false);
   });
 });

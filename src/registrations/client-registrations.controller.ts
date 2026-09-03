@@ -12,6 +12,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { ListRegistrationsQueryDto } from '../validation/dto/registrations.dto';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
 @ApiTags('client-registrations')
@@ -22,10 +23,13 @@ export class ClientRegistrationsController {
   constructor(private readonly registrationsAdmin: RegistrationsAdminService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar cadastros enviados do meu cliente' })
+  @ApiOperation({
+    summary:
+      'Listar cadastros enviados do meu cliente paginados (?page, ?pageSize, ?status, ?search)',
+  })
   list(
     @CurrentUser() user: JwtPayload,
-    @Query() query: Record<string, string | undefined>,
+    @Query() query: ListRegistrationsQueryDto,
   ) {
     return this.registrationsAdmin.listForClientTenant(user, query);
   }

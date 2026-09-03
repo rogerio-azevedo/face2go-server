@@ -20,7 +20,10 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
 import { loadOrCreateReaderFaceVariant } from './face-image-variants';
-import { aggregateReaderSyncOutcome } from './aggregate-reader-sync-outcome.util';
+import {
+  aggregateReaderSyncOutcome,
+  isFullySyncedDevice,
+} from './aggregate-reader-sync-outcome.util';
 import {
   FACE_SYNC_REQUESTED,
   type FaceSyncRequestedPayload,
@@ -57,8 +60,11 @@ export type FaceSyncProgressEvent =
       ok: boolean;
       error?: string;
     }
+  | { type: 'ping' }
   | { type: 'done' }
   | { type: 'error'; message: string };
+
+const SSE_PING_MS = 15_000;
 
 @Injectable()
 export class FaceSyncService {
@@ -632,32 +638,41 @@ export class FaceSyncService {
         clientId,
       );
     emit({ type: 'start', total: rows.length });
-    for (const r of rows) {
-      try {
-        await this.syncApprovedRegistration(r.id, clientId);
-        const fresh = await registrationsQueries.getRegistrationByIdForClient(
-          this.database.db,
-          r.id,
-          clientId,
-        );
-        const ok = fresh?.deviceSyncStatus === 'synced';
-        emit({
-          type: 'item',
-          registrationId: r.id,
-          name: fresh?.name ?? r.name ?? null,
-          ok,
-          error: ok ? undefined : (fresh?.deviceSyncError ?? undefined),
-        });
-      } catch (e) {
-        emit({
-          type: 'item',
-          registrationId: r.id,
-          name: r.name ?? null,
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-        });
+
+    const pingTimer = setInterval(() => emit({ type: 'ping' }), SSE_PING_MS);
+    try {
+      for (const r of rows) {
+        try {
+          await this.syncApprovedRegistration(r.id, clientId);
+          const fresh = await registrationsQueries.getRegistrationByIdForClient(
+            this.database.db,
+            r.id,
+            clientId,
+          );
+          const ok = isFullySyncedDevice(
+            fresh?.deviceSyncStatus,
+            fresh?.deviceSyncError,
+          );
+          emit({
+            type: 'item',
+            registrationId: r.id,
+            name: fresh?.name ?? r.name ?? null,
+            ok,
+            error: ok ? undefined : (fresh?.deviceSyncError ?? undefined),
+          });
+        } catch (e) {
+          emit({
+            type: 'item',
+            registrationId: r.id,
+            name: r.name ?? null,
+            ok: false,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
       }
+      emit({ type: 'done' });
+    } finally {
+      clearInterval(pingTimer);
     }
-    emit({ type: 'done' });
   }
 }

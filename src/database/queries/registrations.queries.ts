@@ -1,4 +1,14 @@
-import { and, desc, eq, isNotNull, or, sql } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  isNotNull,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import {
@@ -7,6 +17,9 @@ import {
   registrationLinks,
   registrations,
 } from '../schema';
+
+import { incompleteDeviceSyncSql } from '../../face-sync/aggregate-reader-sync-outcome.util';
+import { unaccentIlike } from './search-utils';
 
 export type RegistrationLinkRow = typeof registrationLinks.$inferSelect;
 export type RegistrationRow = typeof registrations.$inferSelect;
@@ -160,23 +173,112 @@ export async function getRegistrationByIdForClient(
   return row;
 }
 
-export async function listSubmittedRegistrationsForClient(
-  db: AppDb,
+export type RegistrationStatus = 'draft' | 'approved' | 'rejected';
+
+export type RegistrationStatusCounts = Record<RegistrationStatus, number>;
+
+export type RegistrationListQueryOptions = {
+  status?: RegistrationStatus;
+  search?: string;
+  offset?: number;
+  limit?: number;
+};
+
+function registrationSearchCondition(search?: string): SQL | undefined {
+  const term = search?.trim();
+  if (!term) return undefined;
+  const pattern = `%${term}%`;
+  const digits = term.replace(/\D/g, '');
+  const conds: SQL[] = [
+    unaccentIlike(registrations.name, term),
+    unaccentIlike(registrations.email, term),
+    sql`coalesce(${registrations.additionalData}->>'block', '') ilike ${pattern}`,
+    sql`coalesce(${registrations.additionalData}->>'unit', '') ilike ${pattern}`,
+    sql`coalesce(${registrations.additionalData}->>'room', '') ilike ${pattern}`,
+  ];
+  if (digits.length >= 3) {
+    conds.push(ilike(registrations.document, `%${digits}%`));
+  }
+  return or(...conds);
+}
+
+function submittedRegistrationsWhere(
   clientId: string,
-  status?: 'draft' | 'approved' | 'rejected',
-): Promise<RegistrationRow[]> {
-  const conds = [
+  options: Pick<RegistrationListQueryOptions, 'status' | 'search'> = {},
+) {
+  const conds: SQL[] = [
     eq(registrations.clientId, clientId),
     isNotNull(registrations.submittedAt),
   ];
-  if (status) {
-    conds.push(eq(registrations.status, status));
+  if (options.status) {
+    conds.push(eq(registrations.status, options.status));
   }
-  return db
+  const searchCond = registrationSearchCondition(options.search);
+  if (searchCond) conds.push(searchCond);
+  return and(...conds);
+}
+
+export async function countSubmittedRegistrationsForClient(
+  db: AppDb,
+  clientId: string,
+  options: Pick<RegistrationListQueryOptions, 'status' | 'search'> = {},
+): Promise<number> {
+  const [row] = await db
+    .select({ total: count() })
+    .from(registrations)
+    .where(submittedRegistrationsWhere(clientId, options));
+  return Number(row?.total ?? 0);
+}
+
+export async function countSubmittedRegistrationsByStatus(
+  db: AppDb,
+  clientId: string,
+): Promise<RegistrationStatusCounts> {
+  const rows = await db
+    .select({
+      status: registrations.status,
+      total: count(),
+    })
+    .from(registrations)
+    .where(
+      and(
+        eq(registrations.clientId, clientId),
+        isNotNull(registrations.submittedAt),
+      ),
+    )
+    .groupBy(registrations.status);
+
+  const counts: RegistrationStatusCounts = {
+    draft: 0,
+    approved: 0,
+    rejected: 0,
+  };
+  for (const row of rows) {
+    if (row.status in counts) {
+      counts[row.status] = Number(row.total);
+    }
+  }
+  return counts;
+}
+
+export async function listSubmittedRegistrationsForClient(
+  db: AppDb,
+  clientId: string,
+  options: RegistrationListQueryOptions = {},
+): Promise<RegistrationRow[]> {
+  const q = db
     .select()
     .from(registrations)
-    .where(and(...conds))
+    .where(submittedRegistrationsWhere(clientId, options))
     .orderBy(desc(registrations.submittedAt));
+
+  if (options.limit !== undefined) {
+    q.limit(options.limit);
+  }
+  if (options.offset !== undefined) {
+    q.offset(options.offset);
+  }
+  return q;
 }
 
 export async function approveRegistration(
@@ -319,7 +421,7 @@ export async function updateRegistrationDeviceSync(
   return row;
 }
 
-/** Aprovados com foto que ainda falta sync com leitor ou re-sync após erro. */
+/** Aprovados com foto pendente, falha ou sync parcial. */
 export async function listApprovedRegistrationsPendingDeviceSync(
   db: AppDb,
   clientId: string,
@@ -333,9 +435,9 @@ export async function listApprovedRegistrationsPendingDeviceSync(
         eq(registrations.status, 'approved'),
         isNotNull(registrations.faceImageKey),
         isNotNull(registrations.faceId),
-        or(
-          eq(registrations.deviceSyncStatus, 'pending_sync'),
-          eq(registrations.deviceSyncStatus, 'sync_failed'),
+        incompleteDeviceSyncSql(
+          registrations.deviceSyncStatus,
+          registrations.deviceSyncError,
         ),
       ),
     )
