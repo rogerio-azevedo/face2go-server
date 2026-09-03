@@ -131,7 +131,7 @@ async function loadFaces(db: AppDb, clientId: string): Promise<FaceRow[]> {
 async function main() {
   const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
   if (!databaseUrl) {
-    console.error('Defina DATABASE_URL no .env.');
+    console.error('Defina DATABASE_URL no .env');
     process.exit(1);
   }
   if (!clientIdArg) {
