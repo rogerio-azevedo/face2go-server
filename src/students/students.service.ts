@@ -476,6 +476,8 @@ export class StudentsService {
         studentId,
       ),
       logContext: `student-sync=${studentId}`,
+      resetReaderProgress: false,
+      previousDeviceSyncError: student.deviceSyncError,
       persistResult: async (sync) => {
         await studentsQueries.updateStudentFace(
           this.database.db,

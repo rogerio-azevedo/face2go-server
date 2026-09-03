@@ -41,6 +41,8 @@ export class FaceSyncListener implements OnModuleInit {
         validFrom: payload.validFrom,
         validUntil: payload.validUntil,
         photoOnly: payload.photoOnly,
+        resetReaderProgress: payload.resetReaderProgress,
+        previousDeviceSyncError: payload.previousDeviceSyncError,
       });
       await payload.persistResult(outcome);
     } catch (err) {

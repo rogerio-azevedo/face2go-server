@@ -8,6 +8,7 @@ export * from './client-addresses';
 export * from './client-display-devices';
 export * from './client-panic-config';
 export * from './readers';
+export * from './person-reader-sync';
 export * from './cameras';
 export * from './faces';
 export * from './registrations';

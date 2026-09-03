@@ -16,6 +16,7 @@ import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as readersQueries from '../database/queries/readers.queries';
+import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
@@ -44,6 +45,7 @@ import {
   toHikvisionConnection,
 } from '../integrations/hikvision';
 import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
+import { planPersonReaderSync } from './person-reader-sync.util';
 import { AccessTimeZoneService } from './access-time-zone.service';
 import {
   readerLabel,
@@ -190,8 +192,8 @@ export class FaceSyncService {
   }
 
   /**
-   * Envia uma imagem (buffer) para todos os leitores ativos do cliente.
-   * Não persiste status em tabela; o chamador atualiza `device_sync_*`.
+   * Envia a face aos leitores que ainda não estão synced.
+   * O chamador atualiza o resumo `device_sync_*` da entidade.
    */
   async syncPersonOnReaders(params: {
     clientId: string;
@@ -204,6 +206,8 @@ export class FaceSyncService {
     validFrom?: Date;
     validUntil?: Date;
     photoOnly?: boolean;
+    resetReaderProgress?: boolean;
+    previousDeviceSyncError?: string | null;
   }): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed';
     deviceSyncError: string | null;
@@ -256,8 +260,54 @@ export class FaceSyncService {
         };
       }
 
-      const hasIntelbras = readers.some((r) => r.brand === 'intelbras');
-      const hasHikvision = readers.some((r) => r.brand === 'hikvision');
+      if (params.resetReaderProgress === true) {
+        await personReaderSyncQueries.deletePersonReaderSyncByFace(
+          this.database.db,
+          clientId,
+          faceId,
+        );
+      }
+
+      const existingRows = await personReaderSyncQueries.listPersonReaderSyncByFace(
+        this.database.db,
+        clientId,
+        faceId,
+      );
+      const plan = planPersonReaderSync(
+        readers,
+        existingRows,
+        params.previousDeviceSyncError,
+      );
+
+      if (plan.seedSyncedIds.length > 0) {
+        await Promise.all(
+          plan.seedSyncedIds.map((readerId) =>
+            personReaderSyncQueries.upsertPersonReaderSync(this.database.db, {
+              clientId,
+              faceId,
+              readerId,
+              status: 'synced',
+              error: null,
+            }),
+          ),
+        );
+        syncLog('syncPersonOnReaders:seedParcial', {
+          clientId,
+          faceId,
+          seeded: plan.seedSyncedIds.length,
+          retry: plan.toSync.length,
+        });
+      }
+
+      syncLog('syncPersonOnReaders:plano', {
+        clientId,
+        faceId,
+        skipped: plan.skipped.length,
+        toSync: plan.toSync.length,
+      });
+
+      const hasIntelbras = plan.toSync.some((r) => r.brand === 'intelbras');
+      const hasHikvision = plan.toSync.some((r) => r.brand === 'hikvision');
 
       let intelbrasBase64: string | null = null;
       if (hasIntelbras) {
@@ -335,7 +385,7 @@ export class FaceSyncService {
       const failures: string[] = [];
 
       const outcomes = await mapReadersWithSyncGate(
-        readers,
+        plan.toSync,
         (r) => r.id,
         async (r) => {
           const label = readerLabel(r);
@@ -426,9 +476,25 @@ export class FaceSyncService {
         },
       );
 
-      for (const m of outcomes) {
-        if (m !== null) failures.push(m);
+      for (const msg of outcomes) {
+        if (msg !== null) failures.push(msg);
       }
+
+      await Promise.all(
+        plan.toSync.map((reader, index) => {
+          const msg = outcomes[index] ?? null;
+          return personReaderSyncQueries.upsertPersonReaderSync(
+            this.database.db,
+            {
+              clientId,
+              faceId,
+              readerId: reader.id,
+              status: msg === null ? 'synced' : 'sync_failed',
+              error: msg,
+            },
+          );
+        }),
+      );
 
       const outcome = aggregateReaderSyncOutcome(failures, readers.length);
 
@@ -445,6 +511,7 @@ export class FaceSyncService {
         clientId,
         faceId,
         synced: readers.length - failures.length,
+        skipped: plan.skipped.length,
         total: readers.length,
         partial: failures.length > 0,
       });
@@ -472,6 +539,12 @@ export class FaceSyncService {
     if (readers.length === 0) {
       return { removed: 0, total: 0, failures: [] };
     }
+
+    await personReaderSyncQueries.deletePersonReaderSyncByFace(
+      this.database.db,
+      clientId,
+      faceId,
+    );
 
     const cipher = createReaderCredentialsCipher(
       this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
@@ -583,6 +656,7 @@ export class FaceSyncService {
         imageBuffer: buffer,
         photoKey: row.faceImageKey,
         logContext: `reg=${registrationId}`,
+        previousDeviceSyncError: row.deviceSyncError,
       });
 
     await registrationsQueries.updateRegistrationDeviceSync(
@@ -616,7 +690,10 @@ export class FaceSyncService {
     deviceSyncStatus: 'pending_sync';
     deviceSyncError: null;
   } {
-    this.eventEmitter.emit(FACE_SYNC_REQUESTED, payload);
+    this.eventEmitter.emit(FACE_SYNC_REQUESTED, {
+      ...payload,
+      resetReaderProgress: payload.resetReaderProgress ?? true,
+    });
     return { deviceSyncStatus: 'pending_sync', deviceSyncError: null };
   }
 

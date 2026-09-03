@@ -608,6 +608,8 @@ export class ResponsiblesService {
         responsibleId,
       ),
       logContext: `responsible-sync=${responsibleId}`,
+      resetReaderProgress: false,
+      previousDeviceSyncError: row.deviceSyncError,
       persistResult: async (sync) => {
         await responsiblesQueries.updateResponsibleFace(
           this.database.db,

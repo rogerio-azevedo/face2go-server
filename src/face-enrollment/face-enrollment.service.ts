@@ -522,6 +522,8 @@ export class FaceEnrollmentService {
         responsibleId,
       ),
       logContext: `responsible=${responsibleId}`,
+      resetReaderProgress: false,
+      previousDeviceSyncError: row.deviceSyncError,
       persistResult: async (sync) => {
         await responsiblesQueries.updateResponsibleFace(
           this.database.db,
@@ -617,6 +619,8 @@ export class FaceEnrollmentService {
         studentId,
       ),
       logContext: `student=${studentId}`,
+      resetReaderProgress: false,
+      previousDeviceSyncError: student.deviceSyncError,
       persistResult: async (sync) => {
         await studentsQueries.updateStudentFace(
           this.database.db,
@@ -1053,6 +1057,8 @@ export class FaceEnrollmentService {
         memberId,
       ),
       logContext: `member-resync=${memberId}`,
+      resetReaderProgress: false,
+      previousDeviceSyncError: member.deviceSyncError,
       persistResult: async (sync) => {
         await membersQueries.updateMemberFace(
           this.database.db,

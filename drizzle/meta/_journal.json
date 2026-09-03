@@ -435,6 +435,13 @@
       "when": 1779300000000,
       "tag": "0061_registrations_list_index",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1779310000000,
+      "tag": "0062_person_reader_sync",
+      "breakpoints": true
     }
   ]
 }

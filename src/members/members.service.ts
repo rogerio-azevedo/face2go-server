@@ -672,6 +672,8 @@ export class MembersService {
         memberId,
       ),
       logContext: `member-sync=${memberId}`,
+      resetReaderProgress: false,
+      previousDeviceSyncError: row.deviceSyncError,
       persistResult: async (sync) => {
         await membersQueries.updateMemberFace(
           this.database.db,

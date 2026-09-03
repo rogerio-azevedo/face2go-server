@@ -23,10 +23,12 @@ function registration(overrides: Partial<RegistrationRow> = {}): RegistrationRow
   } as RegistrationRow;
 }
 
-describe('FaceSyncService.syncAllPending', () => {
+describe('FaceSyncService', () => {
   let service: FaceSyncService;
+  let eventEmitter: { emit: jest.Mock };
 
   beforeEach(async () => {
+    eventEmitter = { emit: jest.fn() };
     const module = await Test.createTestingModule({
       providers: [
         FaceSyncService,
@@ -35,7 +37,7 @@ describe('FaceSyncService.syncAllPending', () => {
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: PermissionsService, useValue: {} },
         { provide: AccessTimeZoneService, useValue: {} },
-        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
 
@@ -97,5 +99,34 @@ describe('FaceSyncService.syncAllPending', () => {
       name: 'Maria',
       ok: true,
     });
+  });
+
+  it('enqueuePersonSync assume resetReaderProgress true (foto nova)', () => {
+    service.enqueuePersonSync({
+      clientId: 'c1',
+      faceId: 1,
+      name: 'Maria',
+      imageBuffer: Buffer.from('x'),
+      persistResult: async () => undefined,
+    });
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ resetReaderProgress: true }),
+    );
+  });
+
+  it('enqueuePersonSync preserva resetReaderProgress false (retry)', () => {
+    service.enqueuePersonSync({
+      clientId: 'c1',
+      faceId: 1,
+      name: 'Maria',
+      imageBuffer: Buffer.from('x'),
+      resetReaderProgress: false,
+      persistResult: async () => undefined,
+    });
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ resetReaderProgress: false }),
+    );
   });
 });
