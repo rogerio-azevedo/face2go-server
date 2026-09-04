@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build usado no CodeBuild e no hook predeploy do Elastic Beanstalk.
+# Build do CodeBuild. A instância EB só descompacta o artefato (não recompila).
 set -euo pipefail
 
 ROOT="${1:-.}"
