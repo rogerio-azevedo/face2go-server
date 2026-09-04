@@ -3,20 +3,19 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
-  Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { GlobalFaceSyncService } from '../face-sync/global-face-sync.service';
 import { StudentsService } from './students.service';
 
 @ApiTags('students')
@@ -24,10 +23,7 @@ import { StudentsService } from './students.service';
 @Roles('company_admin', 'company_operator', 'client_admin')
 @Controller('clients/:clientId/students')
 export class StudentsController {
-  constructor(
-    private readonly studentsService: StudentsService,
-    private readonly globalFaceSync: GlobalFaceSyncService,
-  ) {}
+  constructor(private readonly studentsService: StudentsService) {}
 
   @Get()
   @ApiOperation({
@@ -49,38 +45,27 @@ export class StudentsController {
     });
   }
 
-  @Get('face/global-sync/progress')
+  @Get('face/global-sync/status')
   @ApiOperation({
-    summary:
-      'SSE — progresso da sincronização global de alunos (token na query)',
+    summary: 'Jobs de sync de faces ativos neste cliente (escola)',
   })
-  async globalSyncProgress(
+  getGlobalSyncStatus(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
-    @Res() res: Response,
-  ): Promise<void> {
-    res.status(200);
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
+  ) {
+    return this.studentsService.getGlobalFaceSyncStatus(user, clientId);
+  }
 
-    const write = (data: Record<string, unknown>) => {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
-    try {
-      await this.globalFaceSync.globalSyncStudents(user, clientId, (evt) =>
-        write(evt),
-      );
-    } catch (e: unknown) {
-      write({
-        type: 'error',
-        message: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      res.end();
-    }
+  @Post('face/global-sync')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Enfileira sync global de alunos pendentes (não bloqueia)',
+  })
+  enqueueGlobalSync(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.studentsService.enqueueGlobalFaceSync(user, clientId);
   }
 
   @Post(':studentId/classes')

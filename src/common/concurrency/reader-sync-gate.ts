@@ -1,7 +1,7 @@
 import { mapWithConcurrency } from './map-with-concurrency';
 
 /** Teto agregado de syncs de face em voo (2 vCPU). */
-const GLOBAL_FACE_SYNC_LIMIT = 4;
+const GLOBAL_FACE_SYNC_LIMIT = 2;
 
 let globalActive = 0;
 const globalWaiters: Array<() => void> = [];

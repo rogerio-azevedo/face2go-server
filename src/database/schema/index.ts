@@ -9,6 +9,8 @@ export * from './client-display-devices';
 export * from './client-panic-config';
 export * from './readers';
 export * from './person-reader-sync';
+export * from './device-sync-jobs';
+export * from './vehicle-camera-sync';
 export * from './cameras';
 export * from './faces';
 export * from './registrations';

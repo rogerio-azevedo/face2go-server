@@ -4,22 +4,18 @@ import { ConfigService } from '@nestjs/config';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
-import * as rebuildQueries from '../database/queries/device-reader-rebuild.queries';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
-import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
-import type { FaceSyncProgressEvent } from '../face-sync/face-sync.service';
+import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import {
   intelbrasListAllDeviceUsers,
   intelbrasRemoveUsersFromReader,
 } from '../face-sync/intelbras-device.client';
-import { ALWAYS_TIME_ZONE_INDEX } from '../face-sync/intelbras-time-zone.constants';
 import {
   hikvisionDeleteAllUsers,
   toHikvisionConnection,
 } from '../integrations/hikvision';
 import { PermissionsService } from '../permissions/permissions.service';
-import { R2StorageService } from '../storage/r2-storage.service';
 import {
   assertCompanyOperatorAction,
   assertNotSchoolClient,
@@ -27,18 +23,6 @@ import {
   loadActiveDeviceReader,
   type LoadedDeviceReader,
 } from './readers-device-access';
-
-const SSE_PING_MS = 15_000;
-
-type RebuildPerson = {
-  id: string;
-  name: string;
-  faceId: number;
-  photoKey: string;
-  timeSectionIds: number[];
-  validFrom?: Date;
-  validUntil?: Date;
-};
 
 export type DeviceUsersWipeAllResult = {
   strategy: 'hikvision-all' | 'hikvision-fallback' | 'intelbras-batch';
@@ -53,8 +37,7 @@ export class ReadersDeviceWipeSyncService {
     private readonly permissionsService: PermissionsService,
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly faceSync: FaceSyncService,
-    private readonly accessTimeZone: AccessTimeZoneService,
-    private readonly r2: R2StorageService,
+    private readonly queue: DeviceSyncQueueService,
   ) {}
 
   private async prepare(user: JwtPayload, readerId: string) {
@@ -95,54 +78,47 @@ export class ReadersDeviceWipeSyncService {
     }
   }
 
-  async syncAllOnReader(
+  async enqueueSyncAllOnReader(
     user: JwtPayload,
     readerId: string,
-    emit: (e: FaceSyncProgressEvent) => void,
-  ): Promise<void> {
-    const loaded = await this.prepare(user, readerId);
-    const people = await this.listPeopleToSync(loaded.clientId, loaded.id);
-    emit({ type: 'start', total: people.length });
+    force = false,
+  ) {
+    await assertCompanyOperatorAction(
+      this.permissionsService,
+      user,
+      'can_delete',
+    );
+    const loaded = await loadActiveDeviceReader(
+      this.database.db,
+      this.configService,
+      ensureCompanyId(user),
+      readerId,
+    );
+    return this.faceSync.enqueueReaderRebuildJob(
+      loaded.clientId,
+      loaded.id,
+      force,
+      user.sub,
+    );
+  }
 
-    const pingTimer = setInterval(() => emit({ type: 'ping' }), SSE_PING_MS);
-    try {
-      for (const person of people) {
-        try {
-          const { buffer } = await this.r2.getObjectBytes(person.photoKey);
-          const outcome = await this.faceSync.syncPersonOnReaders({
-            clientId: loaded.clientId,
-            faceId: person.faceId,
-            name: person.name,
-            imageBuffer: buffer,
-            photoKey: person.photoKey,
-            timeSectionIds: person.timeSectionIds,
-            validFrom: person.validFrom,
-            validUntil: person.validUntil,
-            logContext: `reader-rebuild=${loaded.id}:${person.id}`,
-            readerIds: [loaded.id],
-            resetReaderProgress: false,
-          });
-          emit({
-            type: 'item',
-            registrationId: person.id,
-            name: person.name,
-            ok: outcome.deviceSyncStatus === 'synced',
-            error: outcome.deviceSyncError ?? undefined,
-          });
-        } catch (e) {
-          emit({
-            type: 'item',
-            registrationId: person.id,
-            name: person.name,
-            ok: false,
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
-      }
-      emit({ type: 'done' });
-    } finally {
-      clearInterval(pingTimer);
-    }
+  async getFaceReaderSyncStatus(user: JwtPayload, readerId: string) {
+    await assertCompanyOperatorAction(
+      this.permissionsService,
+      user,
+      'can_read',
+    );
+    const loaded = await loadActiveDeviceReader(
+      this.database.db,
+      this.configService,
+      ensureCompanyId(user),
+      readerId,
+    );
+    const rows = await this.queue.listActiveFaceReader(loaded.clientId);
+    return {
+      clientId: loaded.clientId,
+      jobs: rows.map((row) => this.queue.toDto(row)),
+    };
   }
 
   private async wipeOnDevice(
@@ -168,96 +144,5 @@ export class ReadersDeviceWipeSyncService {
       deleted: result.deleted.length,
       failed: result.failed,
     };
-  }
-
-  private async listPeopleToSync(
-    clientId: string,
-    readerId: string,
-  ): Promise<RebuildPerson[]> {
-    const [members, regs, invites, alreadySynced] = await Promise.all([
-      rebuildQueries.listMembersWithFaceByClient(this.database.db, clientId),
-      rebuildQueries.listApprovedRegistrationsWithFaceByClient(
-        this.database.db,
-        clientId,
-      ),
-      rebuildQueries.listActiveInvitesWithFaceByClient(
-        this.database.db,
-        clientId,
-      ),
-      personReaderSyncQueries.listSyncedFaceIdsByReader(
-        this.database.db,
-        clientId,
-        readerId,
-      ),
-    ]);
-
-    const pending: Array<{
-      id: string;
-      name: string;
-      faceId: number;
-      photoKey: string;
-      memberId?: string;
-      validFrom?: Date;
-      validUntil?: Date;
-    }> = [];
-    const seen = new Set<number>();
-
-    for (const row of members) {
-      if (row.faceId == null || !row.photoKey) continue;
-      if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) continue;
-      seen.add(row.faceId);
-      pending.push({
-        id: row.id,
-        name: row.name,
-        faceId: row.faceId,
-        photoKey: row.photoKey,
-        memberId: row.id,
-      });
-    }
-
-    for (const row of regs) {
-      if (row.faceId == null || !row.photoKey) continue;
-      if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) continue;
-      seen.add(row.faceId);
-      pending.push({
-        id: row.id,
-        name: row.name ?? 'USUARIO',
-        faceId: row.faceId,
-        photoKey: row.photoKey,
-      });
-    }
-
-    for (const row of invites) {
-      if (row.faceId == null || !row.photoKey) continue;
-      if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) continue;
-      seen.add(row.faceId);
-      pending.push({
-        id: row.id,
-        name: row.name?.trim() || 'VISITANTE',
-        faceId: row.faceId,
-        photoKey: row.photoKey,
-        validFrom: row.validFrom,
-        validUntil: row.validUntil,
-      });
-    }
-
-    const people: RebuildPerson[] = [];
-    for (const row of pending) {
-      people.push({
-        id: row.id,
-        name: row.name,
-        faceId: row.faceId,
-        photoKey: row.photoKey,
-        timeSectionIds: row.memberId
-          ? await this.accessTimeZone.resolveMemberTimeSections(
-              clientId,
-              row.memberId,
-            )
-          : [ALWAYS_TIME_ZONE_INDEX],
-        validFrom: row.validFrom,
-        validUntil: row.validUntil,
-      });
-    }
-    return people;
   }
 }

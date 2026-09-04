@@ -443,6 +443,9 @@ export class InvitesService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'invite_guest',
+      entityId: id,
+      requestedByMemberId: row.requestedByMemberId,
       faceId,
       name: guestName,
       imageBuffer: buffer,

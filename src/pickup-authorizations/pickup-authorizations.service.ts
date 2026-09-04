@@ -724,6 +724,9 @@ export class PickupAuthorizationsService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'pickup_guest',
+      entityId: id,
+      requestedByMemberId: row.requestedByResponsibleId,
       faceId,
       name: guestName,
       imageBuffer: buffer,

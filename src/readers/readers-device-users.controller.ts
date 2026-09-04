@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -15,10 +17,17 @@ import type { Response } from 'express';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { EnqueueDeviceSyncBodyDto } from '../validation/dto/device-sync-jobs.dto';
 import {
   BatchDeleteDeviceUsersDto,
   RemoveDeviceUserOrphansDto,
 } from '../validation/dto/readers.dto';
+import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
+import { observeDeviceSyncJob } from '../device-sync-queue/observe-device-sync-job';
+import {
+  writeSseEvent,
+  writeSseHeaders,
+} from '../device-sync-queue/device-sync-sse.util';
 import { ReadersDeviceUsersService } from './readers-device-users.service';
 import { ReadersDeviceWipeSyncService } from './readers-device-wipe-sync.service';
 
@@ -30,6 +39,7 @@ export class ReadersDeviceUsersController {
   constructor(
     private readonly deviceUsers: ReadersDeviceUsersService,
     private readonly wipeSync: ReadersDeviceWipeSyncService,
+    private readonly queue: DeviceSyncQueueService,
   ) {}
 
   @Get(':readerId/device-users')
@@ -91,30 +101,52 @@ export class ReadersDeviceUsersController {
     return this.wipeSync.wipeAll(user, readerId);
   }
 
+  @Get(':readerId/device-users/sync-status')
+  @ApiOperation({
+    summary: 'Jobs de sync de faces ativos neste cliente (queued/running)',
+  })
+  getSyncStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+  ) {
+    return this.wipeSync.getFaceReaderSyncStatus(user, readerId);
+  }
+
+  @Post(':readerId/device-users/sync-all')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Enfileira sync neste leitor e devolve o job (não bloqueia)',
+  })
+  enqueueSyncAll(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+    @Body() dto: EnqueueDeviceSyncBodyDto,
+  ) {
+    return this.wipeSync.enqueueSyncAllOnReader(user, readerId, dto.force);
+  }
+
   @Get(':readerId/device-users/sync-all/progress')
   @ApiOperation({
     summary:
-      'SSE — sincronizar membros, cadastros e convites neste leitor (token na query aceito)',
+      'SSE — observa sync neste leitor (query force=1 reenvia todos; token na query aceito)',
   })
   async syncAllProgress(
     @CurrentUser() user: JwtPayload,
     @Param('readerId', ParseUUIDPipe) readerId: string,
     @Res() res: Response,
+    @Query('force') force?: string,
   ): Promise<void> {
-    res.status(200);
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
-
-    const write = (data: Record<string, unknown>) => {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
+    writeSseHeaders(res);
     try {
-      await this.wipeSync.syncAllOnReader(user, readerId, (evt) => write(evt));
+      const job = await this.wipeSync.enqueueSyncAllOnReader(
+        user,
+        readerId,
+        force === '1' || force === 'true',
+      );
+      writeSseEvent(res, { type: 'job', jobId: job.jobId });
+      await observeDeviceSyncJob(this.queue, res, job.jobId);
     } catch (e: unknown) {
-      write({
+      writeSseEvent(res, {
         type: 'error',
         message: e instanceof Error ? e.message : String(e),
       });

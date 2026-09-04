@@ -268,6 +268,8 @@ export class FaceEnrollmentService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'responsible',
+      entityId: responsibleId,
       faceId,
       name: responsible.name,
       imageBuffer: buffer,
@@ -421,6 +423,8 @@ export class FaceEnrollmentService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'student',
+      entityId: studentId,
       faceId,
       name: student.name,
       imageBuffer: buffer,
@@ -513,6 +517,8 @@ export class FaceEnrollmentService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'responsible',
+      entityId: responsibleId,
       faceId: row.faceId,
       name: responsible.name,
       imageBuffer: buffer,
@@ -610,6 +616,8 @@ export class FaceEnrollmentService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'student',
+      entityId: studentId,
       faceId: student.faceId,
       name: student.name,
       imageBuffer: buffer,
@@ -962,6 +970,8 @@ export class FaceEnrollmentService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'member',
+      entityId: memberId,
       faceId,
       name: member.name,
       imageBuffer: buffer,
@@ -1048,6 +1058,8 @@ export class FaceEnrollmentService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'member',
+      entityId: memberId,
       faceId: member.faceId,
       name: member.name,
       imageBuffer: buffer,

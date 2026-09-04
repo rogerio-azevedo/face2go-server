@@ -1,11 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -25,10 +25,12 @@ import {
   aggregateReaderSyncOutcome,
   isFullySyncedDevice,
 } from './aggregate-reader-sync-outcome.util';
-import {
-  FACE_SYNC_REQUESTED,
-  type FaceSyncRequestedPayload,
-} from './face-sync.events';
+import type { FaceSyncOutcome, FaceSyncRequestedPayload } from './face-sync.events';
+import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
+import type {
+  FacePersonJobPayload,
+  FaceSchoolJobPayload,
+} from '../device-sync-queue/device-sync-queue.types';
 import {
   formatReaderFaceSyncError,
   intelbrasRemoveUserFromReader,
@@ -71,6 +73,10 @@ const SSE_PING_MS = 15_000;
 @Injectable()
 export class FaceSyncService {
   private readonly log = new Logger(FaceSyncService.name);
+  private readonly persistHooks = new Map<
+    string,
+    (outcome: FaceSyncOutcome) => Promise<void>
+  >();
 
   constructor(
     private readonly database: DatabaseService,
@@ -78,8 +84,22 @@ export class FaceSyncService {
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly permissionsService: PermissionsService,
     private readonly accessTimeZone: AccessTimeZoneService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly queue: DeviceSyncQueueService,
   ) {}
+
+  takePersistHook(jobId: string) {
+    const hook = this.persistHooks.get(jobId);
+    this.persistHooks.delete(jobId);
+    return hook;
+  }
+
+  ensureCompanyCanAccessClientPublic(user: JwtPayload, clientId: string) {
+    return this.ensureCompanyCanAccessClient(user, clientId);
+  }
+
+  ensureClientTenantPublic(user: JwtPayload): string {
+    return this.ensureClientTenant(user);
+  }
 
   private ensureCompany(user: JwtPayload): string {
     const companyId = user.companyId ?? undefined;
@@ -680,6 +700,32 @@ export class FaceSyncService {
     return { deviceSyncStatus, deviceSyncError };
   }
 
+  async enqueueAllPendingRegistrations(
+    user: JwtPayload,
+    clientId: string,
+  ): Promise<string[]> {
+    if (user.role === 'client_admin' || user.role === 'client_operator') {
+      this.ensureClientTenant(user);
+    } else {
+      await this.ensureCompanyCanAccessClient(user, clientId);
+    }
+    const rows =
+      await registrationsQueries.listApprovedRegistrationsPendingDeviceSync(
+        this.database.db,
+        clientId,
+      );
+    const jobIds: string[] = [];
+    for (const row of rows) {
+      const job = await this.enqueueApprovedRegistrationJob(
+        row.id,
+        clientId,
+        user.sub,
+      );
+      jobIds.push(job.jobId);
+    }
+    return jobIds;
+  }
+
   async syncAllPendingForCompany(
     user: JwtPayload,
     clientId: string,
@@ -696,12 +742,154 @@ export class FaceSyncService {
   enqueuePersonSync(payload: FaceSyncRequestedPayload): {
     deviceSyncStatus: 'pending_sync';
     deviceSyncError: null;
+    jobId?: string;
   } {
-    this.eventEmitter.emit(FACE_SYNC_REQUESTED, {
-      ...payload,
+    const entityId = payload.entityId ?? `${payload.clientId}:${payload.faceId}`;
+    const entityKind = payload.entityKind ?? 'registration';
+    const jobPayload: FacePersonJobPayload = {
+      entityKind,
+      faceId: payload.faceId,
+      name: payload.name,
+      photoKey: payload.photoKey ?? '',
+      timeSectionIds: payload.timeSectionIds,
+      validFrom: payload.validFrom?.toISOString(),
+      validUntil: payload.validUntil?.toISOString(),
+      photoOnly: payload.photoOnly,
       resetReaderProgress: payload.resetReaderProgress ?? true,
-    });
+      previousDeviceSyncError: payload.previousDeviceSyncError,
+      logContext: payload.logContext,
+      userId: payload.userId,
+      requestedByMemberId: payload.requestedByMemberId,
+    };
+    void this.queue
+      .enqueue({
+        kind: 'face.person',
+        clientId: payload.clientId,
+        targetId: entityId,
+        dedupeKey: `face.person:${payload.clientId}:${entityKind}:${entityId}`,
+        payload: jobPayload,
+        total: 1,
+      })
+      .then((job) => {
+        this.persistHooks.set(job.id, payload.persistResult);
+      })
+      .catch((err: unknown) => {
+        this.log.warn(
+          `enqueuePersonSync falhou: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        void payload.persistResult({
+          deviceSyncStatus: 'sync_failed',
+          deviceSyncError:
+            err instanceof Error ? err.message : 'Falha ao enfileirar sync.',
+        });
+      });
     return { deviceSyncStatus: 'pending_sync', deviceSyncError: null };
+  }
+
+  async enqueueApprovedRegistrationJob(
+    registrationId: string,
+    clientId: string,
+    createdBy?: string,
+  ) {
+    const row = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!row || row.status !== 'approved') {
+      throw new NotFoundException(
+        'Cadastro não encontrado ou não está aprovado.',
+      );
+    }
+    if (!row.faceImageKey) {
+      throw new BadRequestException('Cadastro sem foto.');
+    }
+    if (row.faceId == null) {
+      throw new BadRequestException(
+        'Cadastro sem face_id — reaprovar ou contactar suporte.',
+      );
+    }
+    await registrationsQueries.updateRegistrationDeviceSync(
+      this.database.db,
+      registrationId,
+      clientId,
+      { deviceSyncStatus: 'pending_sync', deviceSyncedAt: null },
+    );
+    const job = await this.queue.enqueue({
+      kind: 'face.person',
+      clientId,
+      targetId: registrationId,
+      createdBy,
+      dedupeKey: `face.person:${clientId}:registration:${registrationId}`,
+      total: 1,
+      payload: {
+        entityKind: 'registration',
+        faceId: row.faceId,
+        name: row.name ?? 'USUARIO',
+        photoKey: row.faceImageKey,
+        logContext: `reg=${registrationId}`,
+        previousDeviceSyncError: row.deviceSyncError,
+      } satisfies FacePersonJobPayload,
+    });
+    return this.queue.toDto(job);
+  }
+
+  async enqueueReaderRebuildJob(
+    clientId: string,
+    readerId: string,
+    force: boolean,
+    createdBy?: string,
+  ) {
+    const active = await this.queue.listActiveFace(clientId);
+    if (active.length > 0) {
+      throw new ConflictException(
+        'Já existe um sync de faces em andamento neste cliente.',
+      );
+    }
+    if (force) {
+      await personReaderSyncQueries.deletePersonReaderSyncByReader(
+        this.database.db,
+        clientId,
+        readerId,
+      );
+    }
+    const job = await this.queue.enqueue({
+      kind: 'face.reader',
+      clientId,
+      targetId: readerId,
+      force,
+      createdBy,
+      dedupeKey: `face.reader:${clientId}:${readerId}:${force ? 'force' : 'incremental'}`,
+      payload: { force },
+    });
+    return this.queue.toDto(job);
+  }
+
+  async enqueueSchoolBatchJob(
+    clientId: string,
+    entityKind: 'student' | 'responsible',
+    createdBy?: string,
+  ) {
+    const active = await this.queue.listActiveFace(clientId);
+    if (active.length > 0) {
+      throw new ConflictException(
+        'Já existe um sync de faces em andamento neste cliente.',
+      );
+    }
+    const job = await this.queue.enqueue({
+      kind: 'face.school',
+      clientId,
+      targetId: clientId,
+      createdBy,
+      dedupeKey: `face.school:${clientId}:${entityKind}`,
+      payload: { entityKind } satisfies FaceSchoolJobPayload,
+    });
+    return this.queue.toDto(job);
+  }
+
+  async listActiveFaceJobs(clientId: string) {
+    const rows = await this.queue.listActiveFace(clientId);
+    return rows.map((row) => this.queue.toDto(row));
   }
 
   async syncAllPendingForClientTenant(

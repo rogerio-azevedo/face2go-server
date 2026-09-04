@@ -442,6 +442,20 @@
       "when": 1779310000000,
       "tag": "0062_person_reader_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1779320000000,
+      "tag": "0063_device_sync_queue",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1779330000000,
+      "tag": "0064_face_school_job_kind",
+      "breakpoints": true
     }
   ]
 }

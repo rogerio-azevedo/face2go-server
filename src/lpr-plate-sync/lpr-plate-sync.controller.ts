@@ -12,6 +12,12 @@ import type { Response } from 'express';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
+import { observeDeviceSyncJobs } from '../device-sync-queue/observe-device-sync-job';
+import {
+  writeSseEvent,
+  writeSseHeaders,
+} from '../device-sync-queue/device-sync-sse.util';
 import { LprPlateSyncService } from './lpr-plate-sync.service';
 
 @ApiTags('company-lpr-plate-sync')
@@ -19,12 +25,14 @@ import { LprPlateSyncService } from './lpr-plate-sync.service';
 @Roles('company_admin', 'company_operator')
 @Controller('clients/:clientId/lpr-plates')
 export class CompanyLprPlateSyncController {
-  constructor(private readonly lprPlateSync: LprPlateSyncService) {}
+  constructor(
+    private readonly lprPlateSync: LprPlateSyncService,
+    private readonly queue: DeviceSyncQueueService,
+  ) {}
 
   @Post(':vehicleId/sync')
   @ApiOperation({
-    summary:
-      'Sincronizar placa do veículo com as câmeras LPR Intelbras do cliente',
+    summary: 'Enfileirar sync da placa com as câmeras LPR (jobId)',
   })
   syncOne(
     @CurrentUser() user: JwtPayload,
@@ -36,30 +44,22 @@ export class CompanyLprPlateSyncController {
 
   @Get('sync-all/progress')
   @ApiOperation({
-    summary:
-      'SSE — progresso da sincronização em lote de placas LPR (token na query aceito)',
+    summary: 'SSE — observa a fila de sync de placas (token na query aceito)',
   })
   async syncAllProgress(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Res() res: Response,
   ): Promise<void> {
-    res.status(200);
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
-
-    const write = (data: Record<string, unknown>) => {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
+    writeSseHeaders(res);
     try {
-      await this.lprPlateSync.syncAllPendingForCompany(user, clientId, (evt) =>
-        write(evt),
+      const jobIds = await this.lprPlateSync.enqueueAllPendingVehicles(
+        user,
+        clientId,
       );
+      await observeDeviceSyncJobs(this.queue, res, jobIds);
     } catch (e: unknown) {
-      write({
+      writeSseEvent(res, {
         type: 'error',
         message: e instanceof Error ? e.message : String(e),
       });
@@ -74,12 +74,13 @@ export class CompanyLprPlateSyncController {
 @Roles('client_admin', 'client_operator')
 @Controller('client/lpr-plates')
 export class ClientLprPlateSyncController {
-  constructor(private readonly lprPlateSync: LprPlateSyncService) {}
+  constructor(
+    private readonly lprPlateSync: LprPlateSyncService,
+    private readonly queue: DeviceSyncQueueService,
+  ) {}
 
   @Post(':vehicleId/sync')
-  @ApiOperation({
-    summary: 'Sincronizar placa com as câmeras LPR Intelbras do meu cliente',
-  })
+  @ApiOperation({ summary: 'Enfileirar sync da placa (jobId)' })
   syncOne(
     @CurrentUser() user: JwtPayload,
     @Param('vehicleId', ParseUUIDPipe) vehicleId: string,
@@ -89,28 +90,22 @@ export class ClientLprPlateSyncController {
 
   @Get('sync-all/progress')
   @ApiOperation({
-    summary: 'SSE — progresso da sincronização em lote (token na query)',
+    summary: 'SSE — observa a fila de sync de placas (token na query)',
   })
   async syncAllProgress(
     @CurrentUser() user: JwtPayload,
     @Res() res: Response,
   ): Promise<void> {
-    res.status(200);
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-transform');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
-
-    const write = (data: Record<string, unknown>) => {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
+    writeSseHeaders(res);
     try {
-      await this.lprPlateSync.syncAllPendingForClientTenant(user, (evt) =>
-        write(evt),
+      const clientId = user.clientId ?? '';
+      const jobIds = await this.lprPlateSync.enqueueAllPendingVehicles(
+        user,
+        clientId,
       );
+      await observeDeviceSyncJobs(this.queue, res, jobIds);
     } catch (e: unknown) {
-      write({
+      writeSseEvent(res, {
         type: 'error',
         message: e instanceof Error ? e.message : String(e),
       });

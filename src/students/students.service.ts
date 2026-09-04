@@ -418,6 +418,19 @@ export class StudentsService {
     return { success: true };
   }
 
+  async enqueueGlobalFaceSync(user: JwtPayload, clientId: string) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    return this.faceSync.enqueueSchoolBatchJob(clientId, 'student', user.sub);
+  }
+
+  async getGlobalFaceSyncStatus(user: JwtPayload, clientId: string) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    return {
+      clientId,
+      jobs: await this.faceSync.listActiveFaceJobs(clientId),
+    };
+  }
+
   async syncFaceByCompany(
     user: JwtPayload,
     clientId: string,
@@ -467,6 +480,8 @@ export class StudentsService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'student',
+      entityId: studentId,
       faceId: student.faceId,
       name: student.name,
       imageBuffer: buffer,

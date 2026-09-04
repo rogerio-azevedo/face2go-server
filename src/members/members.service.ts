@@ -663,6 +663,8 @@ export class MembersService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'member',
+      entityId: memberId,
       faceId: row.faceId,
       name: row.name,
       imageBuffer: buffer,

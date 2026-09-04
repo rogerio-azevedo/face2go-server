@@ -541,6 +541,23 @@ export class ResponsiblesService {
     return { removed: true };
   }
 
+  async enqueueGlobalFaceSync(user: JwtPayload, clientId: string) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    return this.faceSync.enqueueSchoolBatchJob(
+      clientId,
+      'responsible',
+      user.sub,
+    );
+  }
+
+  async getGlobalFaceSyncStatus(user: JwtPayload, clientId: string) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    return {
+      clientId,
+      jobs: await this.faceSync.listActiveFaceJobs(clientId),
+    };
+  }
+
   async syncFaceByCompany(
     user: JwtPayload,
     clientId: string,
@@ -599,6 +616,8 @@ export class ResponsiblesService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
+      entityKind: 'responsible',
+      entityId: responsibleId,
       faceId: row.faceId,
       name: responsible.name,
       imageBuffer: buffer,

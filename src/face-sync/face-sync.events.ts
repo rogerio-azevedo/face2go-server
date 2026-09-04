@@ -22,4 +22,14 @@ export type FaceSyncRequestedPayload = {
   /** Erro parcial anterior — seed dos leitores que já deram certo. */
   previousDeviceSyncError?: string | null;
   persistResult: (outcome: FaceSyncOutcome) => Promise<void>;
+  entityKind?:
+    | 'registration'
+    | 'student'
+    | 'responsible'
+    | 'member'
+    | 'invite_guest'
+    | 'pickup_guest';
+  entityId?: string;
+  userId?: string;
+  requestedByMemberId?: string | null;
 };

@@ -1,7 +1,13 @@
 import { and, eq, gte, isNotNull } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { clientInvites, clientMembers, registrations } from '../schema';
+import {
+  clientInvites,
+  clientMembers,
+  registrations,
+  responsibles,
+  students,
+} from '../schema';
 
 export async function listMembersWithFaceByClient(db: AppDb, clientId: string) {
   return db
@@ -40,6 +46,47 @@ export async function listApprovedRegistrationsWithFaceByClient(
         eq(registrations.status, 'approved'),
         isNotNull(registrations.faceImageKey),
         isNotNull(registrations.faceId),
+      ),
+    );
+}
+
+export async function listStudentsWithFaceByClient(db: AppDb, clientId: string) {
+  return db
+    .select({
+      id: students.id,
+      name: students.name,
+      faceId: students.faceId,
+      photoKey: students.photoKey,
+    })
+    .from(students)
+    .where(
+      and(
+        eq(students.clientId, clientId),
+        eq(students.isActive, true),
+        isNotNull(students.photoKey),
+        isNotNull(students.faceId),
+      ),
+    );
+}
+
+export async function listResponsiblesWithFaceByClient(
+  db: AppDb,
+  clientId: string,
+) {
+  return db
+    .select({
+      id: responsibles.id,
+      name: responsibles.name,
+      faceId: responsibles.faceId,
+      photoKey: responsibles.photoKey,
+    })
+    .from(responsibles)
+    .where(
+      and(
+        eq(responsibles.clientId, clientId),
+        eq(responsibles.isActive, true),
+        isNotNull(responsibles.photoKey),
+        isNotNull(responsibles.faceId),
       ),
     );
 }
