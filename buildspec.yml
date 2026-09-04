@@ -8,34 +8,10 @@ phases:
       - npm install -g pnpm@11.24.0
   build:
     commands:
-      - |
-        cat > .npmrc <<'EOF'
-        node-linker=hoisted
-        omit=dev
-        fund=false
-        prefer-offline=true
-        EOF
       - echo "${CODEBUILD_RESOLVED_SOURCE_VERSION:-unknown}" > deploy-commit.txt
       - chmod +x scripts/eb-build.sh
       - ./scripts/eb-build.sh .
-      - pnpm prune --prod
-  post_build:
-    commands:
-      - test -f dist/main.js
-      - test -f Procfile
-      - test -f newrelic.js
-      - test -d node_modules/newrelic
 
 artifacts:
   files:
-    - dist/**/*
-    - package.json
-    - pnpm-lock.yaml
-    - pnpm-workspace.yaml
-    - Procfile
-    - newrelic.js
-    - .npmrc
-    - .ebextensions/**/*
-    - .platform/**/*
-    - node_modules/**/*
-    - deploy-commit.txt
+    - '**/*'
