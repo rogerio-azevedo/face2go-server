@@ -134,6 +134,7 @@ export async function getReaderWithCredentialsById(
   const [row] = await db
     .select({
       id: facialReaders.id,
+      clientId: facialReaders.clientId,
       name: facialReaders.name,
       ip: facialReaders.ip,
       port: facialReaders.port,

@@ -58,7 +58,7 @@ function resolveSeedIds(
 }
 
 async function loadFaces(db: AppDb, clientId: string): Promise<FaceRow[]> {
-  const [regs, students, responsibles] = await Promise.all([
+  const [regs, students, responsibles, members] = await Promise.all([
     db
       .select({
         id: schema.registrations.id,
@@ -105,6 +105,21 @@ async function loadFaces(db: AppDb, clientId: string): Promise<FaceRow[]> {
           isNotNull(schema.responsibles.faceId),
         ),
       ),
+    db
+      .select({
+        id: schema.clientMembers.id,
+        name: schema.clientMembers.name,
+        faceId: schema.clientMembers.faceId,
+        deviceSyncStatus: schema.clientMembers.deviceSyncStatus,
+        deviceSyncError: schema.clientMembers.deviceSyncError,
+      })
+      .from(schema.clientMembers)
+      .where(
+        and(
+          eq(schema.clientMembers.clientId, clientId),
+          isNotNull(schema.clientMembers.faceId),
+        ),
+      ),
   ]);
 
   const asRows = (
@@ -125,6 +140,7 @@ async function loadFaces(db: AppDb, clientId: string): Promise<FaceRow[]> {
     ...asRows('registration', regs),
     ...asRows('student', students),
     ...asRows('responsible', responsibles),
+    ...asRows('member', members),
   ];
 }
 

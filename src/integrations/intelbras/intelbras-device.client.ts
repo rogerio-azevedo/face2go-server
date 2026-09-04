@@ -963,15 +963,61 @@ function mapReaderCardError(err: unknown): string {
   return mapReaderError(err);
 }
 
+const INTELBRAS_REMOVE_CHUNK = 50;
+
+export async function intelbrasRemoveUsersFromReader(
+  reader: PlainReaderCredential,
+  faceIdParams: Array<number | string>,
+): Promise<{ deleted: string[]; failed: { userId: string; error: string }[] }> {
+  const unique = [
+    ...new Set(faceIdParams.map((id) => String(id).trim()).filter(Boolean)),
+  ];
+  const deleted: string[] = [];
+  const failed: { userId: string; error: string }[] = [];
+  const auth = digestAuthForReader(reader);
+  const base = deviceUrl(reader);
+
+  for (let i = 0; i < unique.length; i += INTELBRAS_REMOVE_CHUNK) {
+    const chunk = unique.slice(i, i + INTELBRAS_REMOVE_CHUNK);
+    const params = chunk
+      .map((id, index) => `UserIDList[${index}]=${encodeURIComponent(id)}`)
+      .join('&');
+    const url = `${base}/cgi-bin/AccessUser.cgi?action=removeMulti&${params}`;
+    try {
+      await digestRequest(auth, { method: 'GET', url });
+      deleted.push(...chunk);
+    } catch (batchError) {
+      for (const userId of chunk) {
+        try {
+          await digestRequest(auth, {
+            method: 'GET',
+            url: `${base}/cgi-bin/AccessUser.cgi?action=removeMulti&UserIDList[0]=${encodeURIComponent(userId)}`,
+          });
+          deleted.push(userId);
+        } catch (oneError) {
+          const msg =
+            oneError instanceof Error
+              ? oneError.message
+              : batchError instanceof Error
+                ? batchError.message
+                : 'Falha ao remover usuário';
+          failed.push({ userId, error: msg });
+        }
+      }
+    }
+  }
+
+  return { deleted, failed };
+}
+
 export async function intelbrasRemoveUserFromReader(
   reader: PlainReaderCredential,
   faceIdParam: number | string,
 ): Promise<void> {
-  const auth = digestAuthForReader(reader);
-  const faceId = String(faceIdParam);
-  const base = deviceUrl(reader);
-  const url = `${base}/cgi-bin/AccessUser.cgi?action=removeMulti&UserIDList[0]=${faceId}`;
-  await digestRequest(auth, { method: 'GET', url });
+  const result = await intelbrasRemoveUsersFromReader(reader, [faceIdParam]);
+  if (result.failed[0]) {
+    throw new Error(result.failed[0].error);
+  }
 }
 
 export type DeviceUser = {
@@ -1077,7 +1123,7 @@ async function fetchDeviceUsersPage(
   return parsed;
 }
 
-async function fetchAllDeviceUsers(
+export async function intelbrasListAllDeviceUsers(
   reader: PlainReaderCredential,
 ): Promise<DeviceUser[]> {
   const all: DeviceUser[] = [];
@@ -1163,7 +1209,7 @@ export async function intelbrasSearchDeviceUsers(
   const safeCount = Math.min(Math.max(count, 1), DEVICE_USERS_BATCH_SIZE);
   const safeOffset = Math.max(offset, 0);
 
-  const all = await fetchAllDeviceUsers(reader);
+  const all = await intelbrasListAllDeviceUsers(reader);
   const filtered = all.filter((row) =>
     normalizeCardNameSearch(row.CardName).includes(term),
   );

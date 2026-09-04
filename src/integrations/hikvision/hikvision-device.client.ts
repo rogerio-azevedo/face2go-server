@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
 import { hikvisionIsapiRequest } from './hikvision-isapi-request';
 import {
@@ -12,6 +14,8 @@ import {
   isFaceAlreadyExistsError,
   isFaceModelingError,
   isHikvisionSuccess,
+  isHikvisionWipeUnsupported,
+  isHikvisionWipeUnsupportedBody,
   isUserNotFoundError,
   USER_ALREADY_EXISTS_CODES,
 } from './hikvision-error.util';
@@ -107,6 +111,18 @@ function userInfoDeleteUrl(
   connection: Pick<HikvisionReaderConnection, 'baseUrl'>,
 ): string {
   return `${connection.baseUrl}/ISAPI/AccessControl/UserInfo/Delete?format=json`;
+}
+
+function userInfoDetailDeleteUrl(
+  connection: Pick<HikvisionReaderConnection, 'baseUrl'>,
+): string {
+  return `${connection.baseUrl}/ISAPI/AccessControl/UserInfoDetail/Delete?format=json`;
+}
+
+function userInfoDetailDeleteProcessUrl(
+  connection: Pick<HikvisionReaderConnection, 'baseUrl'>,
+): string {
+  return `${connection.baseUrl}/ISAPI/AccessControl/UserInfoDetail/DeleteProcess?format=json`;
 }
 
 function faceDataRecordUrl(
@@ -651,10 +667,14 @@ async function hikvisionPutFaceSetup(
   }
 }
 
-export async function hikvisionDeleteUser(
+async function hikvisionDeleteEmployeeNos(
   connection: HikvisionReaderConnection,
-  employeeNo: string,
+  employeeNos: string[],
 ): Promise<{ success: boolean; error?: string }> {
+  if (employeeNos.length === 0) {
+    return { success: true };
+  }
+
   try {
     const response = await hikvisionIsapiRequest(connection, {
       method: 'PUT',
@@ -662,7 +682,7 @@ export async function hikvisionDeleteUser(
       headers: { 'Content-Type': 'application/json' },
       data: {
         UserInfoDelCond: {
-          EmployeeNoList: [{ employeeNo }],
+          EmployeeNoList: employeeNos.map((employeeNo) => ({ employeeNo })),
         },
       },
     });
@@ -688,6 +708,194 @@ export async function hikvisionDeleteUser(
       error: hikvisionFaceErrorMessage(error),
     };
   }
+}
+
+export async function hikvisionDeleteUser(
+  connection: HikvisionReaderConnection,
+  employeeNo: string,
+): Promise<{ success: boolean; error?: string }> {
+  return hikvisionDeleteEmployeeNos(connection, [employeeNo]);
+}
+
+const HIKVISION_DELETE_CHUNK = 32;
+
+export async function hikvisionDeleteUsers(
+  connection: HikvisionReaderConnection,
+  employeeNos: string[],
+): Promise<{ deleted: string[]; failed: { userId: string; error: string }[] }> {
+  const unique = [
+    ...new Set(employeeNos.map((id) => id.trim()).filter(Boolean)),
+  ];
+  const deleted: string[] = [];
+  const failed: { userId: string; error: string }[] = [];
+
+  for (let i = 0; i < unique.length; i += HIKVISION_DELETE_CHUNK) {
+    const chunk = unique.slice(i, i + HIKVISION_DELETE_CHUNK);
+    const batch = await hikvisionDeleteEmployeeNos(connection, chunk);
+    if (batch.success) {
+      deleted.push(...chunk);
+      continue;
+    }
+    for (const userId of chunk) {
+      const one = await hikvisionDeleteEmployeeNos(connection, [userId]);
+      if (one.success) {
+        deleted.push(userId);
+      } else {
+        failed.push({
+          userId,
+          error: one.error ?? 'Falha ao remover usuário',
+        });
+      }
+    }
+  }
+
+  return { deleted, failed };
+}
+
+export type HikvisionDeleteAllResult = {
+  strategy: 'native' | 'fallback';
+  deleted: string[];
+  failed: { userId: string; error: string }[];
+};
+
+const HIKVISION_WIPE_POLL_MS = 1_000;
+const HIKVISION_WIPE_POLL_MAX = 120;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseDeleteProcessStatus(
+  data: unknown,
+): 'success' | 'failed' | 'processing' {
+  const root = asRecord(data);
+  const nested =
+    asRecord(root?.UserInfoDetailDeleteProcess) ??
+    asRecord(root?.userInfoDetailDeleteProcess) ??
+    asRecord(root?.UserInfoDetail) ??
+    root;
+  const status = pickStr(
+    nested ?? {},
+    'status',
+    'Status',
+    'processStatus',
+    'ProcessStatus',
+  );
+  const lower = (status ?? '').toLowerCase();
+  if (
+    lower === 'success' ||
+    lower === 'ok' ||
+    lower === 'finished' ||
+    lower === 'complete'
+  ) {
+    return 'success';
+  }
+  if (lower === 'failed' || lower === 'fail' || lower === 'error') {
+    return 'failed';
+  }
+  if (!status && isHikvisionSuccess(data)) {
+    return 'success';
+  }
+  return 'processing';
+}
+
+async function hikvisionPollDeleteProcess(
+  connection: HikvisionReaderConnection,
+): Promise<void> {
+  for (let i = 0; i < HIKVISION_WIPE_POLL_MAX; i += 1) {
+    try {
+      const response = await hikvisionIsapiRequest(connection, {
+        method: 'GET',
+        url: userInfoDetailDeleteProcessUrl(connection),
+      });
+      const state = parseDeleteProcessStatus(response.data);
+      if (state === 'success') return;
+      if (state === 'failed') {
+        throw new Error('O leitor reportou falha ao apagar todos os usuários.');
+      }
+    } catch (error) {
+      if (isHikvisionWipeUnsupported(error)) {
+        return;
+      }
+      const failedOnDevice =
+        error instanceof Error &&
+        error.message.includes('reportou falha ao apagar');
+      if (failedOnDevice || i === HIKVISION_WIPE_POLL_MAX - 1) {
+        throw error;
+      }
+    }
+    await sleep(HIKVISION_WIPE_POLL_MS);
+  }
+  throw new Error('Tempo esgotado aguardando a exclusão no leitor.');
+}
+
+async function hikvisionDeleteAllUsersFallback(
+  connection: HikvisionReaderConnection,
+): Promise<HikvisionDeleteAllResult> {
+  const users = await hikvisionListAllDeviceUsers(connection);
+  const result = await hikvisionDeleteUsers(
+    connection,
+    users.map((u) => u.userId),
+  );
+  return { strategy: 'fallback', ...result };
+}
+
+/** Apaga todos os usuários do leitor (mode=all). Fallback: lista + delete em lote. */
+export async function hikvisionDeleteAllUsers(
+  connection: HikvisionReaderConnection,
+): Promise<HikvisionDeleteAllResult> {
+  try {
+    const response = await hikvisionIsapiRequest(connection, {
+      method: 'PUT',
+      url: userInfoDetailDeleteUrl(connection),
+      headers: { 'Content-Type': 'application/json' },
+      data: { UserInfoDetail: { mode: 'all' } },
+    });
+    if (isHikvisionWipeUnsupportedBody(response.data)) {
+      return hikvisionDeleteAllUsersFallback(connection);
+    }
+    if (!isHikvisionSuccess(response.data)) {
+      const status = extractResponseStatus(response.data);
+      throw new Error(
+        status?.subStatusCode ??
+          status?.statusString ??
+          'Falha ao apagar todos os usuários Hikvision',
+      );
+    }
+    await hikvisionPollDeleteProcess(connection);
+    return { strategy: 'native', deleted: [], failed: [] };
+  } catch (error) {
+    if (isHikvisionWipeUnsupported(error)) {
+      return hikvisionDeleteAllUsersFallback(connection);
+    }
+    throw error;
+  }
+}
+
+const HIKVISION_LIST_ALL_PAGE = 500;
+const HIKVISION_LIST_ALL_MAX_PAGES = 200;
+
+export async function hikvisionListAllDeviceUsers(
+  connection: HikvisionReaderConnection,
+): Promise<HikvisionDeviceUser[]> {
+  const searchID = hikvisionUserInfoSearchId(connection.baseUrl, '*all*');
+  const all: HikvisionDeviceUser[] = [];
+  let offset = 0;
+
+  for (let page = 0; page < HIKVISION_LIST_ALL_MAX_PAGES; page += 1) {
+    const result = await fetchUserInfoSearchPage(connection, {
+      limit: HIKVISION_LIST_ALL_PAGE,
+      offset,
+      searchID,
+    });
+    all.push(...result.records);
+    if (result.records.length === 0) break;
+    if (result.records.length < HIKVISION_LIST_ALL_PAGE) break;
+    offset += result.records.length;
+    if (result.totalCount > 0 && offset >= result.totalCount) break;
+  }
+
+  return all;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -741,6 +949,27 @@ function userInfoSearchUrl(
   connection: Pick<HikvisionReaderConnection, 'baseUrl'>,
 ): string {
   return `${connection.baseUrl}/ISAPI/AccessControl/UserInfo/Search?format=json`;
+}
+
+/** Mesmo searchID em todas as páginas — o firmware Hikvision recusa offset>0 com ID novo (HTTP 401). */
+export function hikvisionUserInfoSearchId(
+  baseUrl: string,
+  filter = '',
+): string {
+  const digest = crypto
+    .createHash('md5')
+    .update(`${baseUrl}\0${filter}`)
+    .digest('hex')
+    .slice(0, 12);
+  return `face2go-${digest}`;
+}
+
+export function isHikvisionHttp401(error: unknown): boolean {
+  const err = error as AxiosLikeError;
+  if (err.response?.status === 401) return true;
+  return (
+    typeof err.message === 'string' && /status code 401/i.test(err.message)
+  );
 }
 
 function parseUserInfoSearchItems(
@@ -800,13 +1029,20 @@ async function fetchUserInfoSearchPage(
     offset: number;
     fuzzySearch?: string;
     employeeNo?: string;
+    searchID?: string;
   },
 ): Promise<HikvisionDeviceUsersListResult> {
   const safeLimit = Math.min(Math.max(params.limit, 1), 500);
   const safeOffset = Math.max(params.offset, 0);
+  const searchID =
+    params.searchID?.trim() ||
+    hikvisionUserInfoSearchId(
+      connection.baseUrl,
+      params.fuzzySearch ?? params.employeeNo ?? '',
+    );
 
   const cond: Record<string, unknown> = {
-    searchID: `face2go-${Date.now()}-${safeOffset}`,
+    searchID,
     searchResultPosition: safeOffset,
     maxResults: safeLimit,
   };
@@ -841,6 +1077,34 @@ async function fetchUserInfoSearchPage(
   return parseUserInfoSearchPage(response.data);
 }
 
+async function fetchUserInfoSearchPageResilient(
+  connection: HikvisionReaderConnection,
+  params: {
+    limit: number;
+    offset: number;
+    fuzzySearch?: string;
+    employeeNo?: string;
+  },
+): Promise<HikvisionDeviceUsersListResult> {
+  const searchID = hikvisionUserInfoSearchId(
+    connection.baseUrl,
+    params.fuzzySearch ?? params.employeeNo ?? '',
+  );
+  try {
+    return await fetchUserInfoSearchPage(connection, { ...params, searchID });
+  } catch (error) {
+    if (params.offset <= 0 || !isHikvisionHttp401(error)) {
+      throw error;
+    }
+    await fetchUserInfoSearchPage(connection, {
+      ...params,
+      offset: 0,
+      searchID,
+    });
+    return fetchUserInfoSearchPage(connection, { ...params, searchID });
+  }
+}
+
 /** Variantes de caixa para fuzzySearch quando o firmware exige match exato. */
 export function buildFuzzySearchCaseVariants(term: string): string[] {
   const trimmed = term.trim();
@@ -871,7 +1135,7 @@ export async function hikvisionGetDeviceUsers(
   if (term) {
     return hikvisionSearchDeviceUsers(connection, term, limit, offset);
   }
-  return fetchUserInfoSearchPage(connection, { limit, offset });
+  return fetchUserInfoSearchPageResilient(connection, { limit, offset });
 }
 
 export async function hikvisionSearchDeviceUsers(
@@ -882,11 +1146,11 @@ export async function hikvisionSearchDeviceUsers(
 ): Promise<HikvisionDeviceUsersListResult> {
   const term = search.trim();
   if (!term) {
-    return fetchUserInfoSearchPage(connection, { limit, offset });
+    return fetchUserInfoSearchPageResilient(connection, { limit, offset });
   }
 
   try {
-    const first = await fetchUserInfoSearchPage(connection, {
+    const first = await fetchUserInfoSearchPageResilient(connection, {
       limit,
       offset,
       fuzzySearch: term,
@@ -899,7 +1163,7 @@ export async function hikvisionSearchDeviceUsers(
       if (variant === term) {
         continue;
       }
-      const variantResult = await fetchUserInfoSearchPage(connection, {
+      const variantResult = await fetchUserInfoSearchPageResilient(connection, {
         limit,
         offset,
         fuzzySearch: variant,

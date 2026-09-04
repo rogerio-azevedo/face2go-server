@@ -40,7 +40,12 @@ export {
   CreatePickupAuthorizationDto,
   PatchPickupAuthorizationDto,
 } from './pickup-authorizations.dto';
-export { CreateReaderDto, PatchReaderDto } from './readers.dto';
+export {
+  BatchDeleteDeviceUsersDto,
+  CreateReaderDto,
+  PatchReaderDto,
+  RemoveDeviceUserOrphansDto,
+} from './readers.dto';
 export {
   CompanyEnrollmentReportQueryDto,
   EnrollmentListItemDto,

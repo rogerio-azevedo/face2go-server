@@ -77,3 +77,53 @@ export async function deletePersonReaderSyncByFace(
       ),
     );
 }
+
+export async function deletePersonReaderSyncByFaceAndReader(
+  db: AppDb,
+  clientId: string,
+  faceId: number,
+  readerId: string,
+) {
+  await db
+    .delete(personReaderSync)
+    .where(
+      and(
+        eq(personReaderSync.clientId, clientId),
+        eq(personReaderSync.faceId, faceId),
+        eq(personReaderSync.readerId, readerId),
+      ),
+    );
+}
+
+export async function listSyncedFaceIdsByReader(
+  db: AppDb,
+  clientId: string,
+  readerId: string,
+): Promise<Set<number>> {
+  const rows = await db
+    .select({ faceId: personReaderSync.faceId })
+    .from(personReaderSync)
+    .where(
+      and(
+        eq(personReaderSync.clientId, clientId),
+        eq(personReaderSync.readerId, readerId),
+        eq(personReaderSync.status, 'synced'),
+      ),
+    );
+  return new Set(rows.map((row) => row.faceId));
+}
+
+export async function deletePersonReaderSyncByReader(
+  db: AppDb,
+  clientId: string,
+  readerId: string,
+) {
+  await db
+    .delete(personReaderSync)
+    .where(
+      and(
+        eq(personReaderSync.clientId, clientId),
+        eq(personReaderSync.readerId, readerId),
+      ),
+    );
+}

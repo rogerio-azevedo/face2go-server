@@ -208,6 +208,7 @@ export class FaceSyncService {
     photoOnly?: boolean;
     resetReaderProgress?: boolean;
     previousDeviceSyncError?: string | null;
+    readerIds?: string[];
   }): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed';
     deviceSyncError: string | null;
@@ -239,10 +240,15 @@ export class FaceSyncService {
     });
 
     try {
-      const readers = await readersQueries.listReadersForFaceSyncByClient(
+      const allReaders = await readersQueries.listReadersForFaceSyncByClient(
         this.database.db,
         clientId,
       );
+      const allowIds = params.readerIds?.filter((id) => id.trim());
+      const readers =
+        allowIds && allowIds.length > 0
+          ? allReaders.filter((r) => allowIds.includes(r.id))
+          : allReaders;
 
       syncLog('syncPersonOnReaders:leitores', {
         clientId,
@@ -268,11 +274,12 @@ export class FaceSyncService {
         );
       }
 
-      const existingRows = await personReaderSyncQueries.listPersonReaderSyncByFace(
-        this.database.db,
-        clientId,
-        faceId,
-      );
+      const existingRows =
+        await personReaderSyncQueries.listPersonReaderSyncByFace(
+          this.database.db,
+          clientId,
+          faceId,
+        );
       const plan = planPersonReaderSync(
         readers,
         existingRows,

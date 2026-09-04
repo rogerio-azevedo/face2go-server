@@ -91,3 +91,14 @@ export const createReaderSchema = readerSchema.refine(
 );
 
 export const updateReaderSchema = readerSchema.partial();
+
+export const batchDeleteDeviceUsersSchema = z.object({
+  userIds: z
+    .array(z.string().trim().min(1, 'UserID inválido.'))
+    .min(1, 'Informe ao menos um usuário.')
+    .max(100, 'No máximo 100 usuários por lote.'),
+});
+
+export const removeDeviceUserOrphansSchema = z.object({
+  dryRun: z.boolean().optional().default(false),
+});

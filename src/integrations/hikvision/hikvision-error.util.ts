@@ -193,6 +193,29 @@ export function isUserNotFoundError(error: unknown): boolean {
   return subStatusCode != null && USER_NOT_FOUND_CODES.has(subStatusCode);
 }
 
+function mentionsNotSupport(value: string | undefined): boolean {
+  return (value ?? '').toLowerCase().includes('notsupport');
+}
+
+/** Firmware sem UserInfoDetail/Delete (401, 404 ou subStatus notSupport). */
+export function isHikvisionWipeUnsupported(error: unknown): boolean {
+  const err = error as AxiosLikeError;
+  const http = err.response?.status;
+  if (http === 401 || http === 404 || http === 405) {
+    return true;
+  }
+  return isHikvisionWipeUnsupportedBody(err.response?.data);
+}
+
+export function isHikvisionWipeUnsupportedBody(data: unknown): boolean {
+  const status = extractResponseStatus(data);
+  return (
+    mentionsNotSupport(status?.subStatusCode) ||
+    mentionsNotSupport(status?.errorMsg) ||
+    mentionsNotSupport(status?.statusString)
+  );
+}
+
 /** Mensagem por leitor para `deviceSyncError` (FaceSyncService). */
 export function formatHikvisionFaceSyncError(
   readerName: string,

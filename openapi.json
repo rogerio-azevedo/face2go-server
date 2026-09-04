@@ -1359,6 +1359,84 @@
         ]
       }
     },
+    "/readers/{readerId}/device-users/batch-delete": {
+      "post": {
+        "operationId": "ReadersDeviceUsersController_batchDeleteDeviceUsers",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteDeviceUsersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover vários usuários da memória do dispositivo",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/remove-orphans": {
+      "post": {
+        "operationId": "ReadersDeviceUsersController_removeOrphans",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveDeviceUserOrphansDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover do leitor os usuários que não existem no Face2Go (órfãos)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
     "/readers/monitor/status": {
       "get": {
         "operationId": "ReadersController_monitorStatus",
@@ -9877,6 +9955,31 @@
           "note": {
             "type": "string",
             "maxLength": 500
+          }
+        }
+      },
+      "BatchDeleteDeviceUsersDto": {
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "userIds"
+        ]
+      },
+      "RemoveDeviceUserOrphansDto": {
+        "type": "object",
+        "properties": {
+          "dryRun": {
+            "type": "boolean",
+            "default": false
           }
         }
       }

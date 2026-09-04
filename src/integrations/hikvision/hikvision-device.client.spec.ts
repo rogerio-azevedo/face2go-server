@@ -3,6 +3,8 @@ import {
   buildFuzzySearchCaseVariants,
   buildHikvisionFaceMultipartBody,
   chooseFaceLib,
+  hikvisionUserInfoSearchId,
+  isHikvisionHttp401,
   parseUserInfoSearchPage,
 } from './hikvision-device.client';
 
@@ -105,6 +107,33 @@ describe('assertHikvisionEmployeeNoMatch', () => {
     );
 
     expect(user.userId).toBe('1');
+  });
+});
+
+describe('hikvisionUserInfoSearchId', () => {
+  it('é estável para o mesmo leitor e filtro', () => {
+    const a = hikvisionUserInfoSearchId('http://leitor:80', '');
+    const b = hikvisionUserInfoSearchId('http://leitor:80', '');
+    expect(a).toBe(b);
+    expect(a).toMatch(/^face2go-[0-9a-f]{12}$/);
+  });
+
+  it('muda quando o leitor ou o filtro mudam', () => {
+    const list = hikvisionUserInfoSearchId('http://leitor:80', '');
+    expect(hikvisionUserInfoSearchId('http://outro:80', '')).not.toBe(list);
+    expect(hikvisionUserInfoSearchId('http://leitor:80', 'ANA')).not.toBe(list);
+  });
+});
+
+describe('isHikvisionHttp401', () => {
+  it('reconhece 401 do axios', () => {
+    expect(
+      isHikvisionHttp401({
+        message: 'Request failed with status code 401',
+        response: { status: 401 },
+      }),
+    ).toBe(true);
+    expect(isHikvisionHttp401(new Error('timeout'))).toBe(false);
   });
 });
 
