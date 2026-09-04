@@ -174,7 +174,7 @@ export class ReadersDeviceWipeSyncService {
     clientId: string,
     readerId: string,
   ): Promise<RebuildPerson[]> {
-    const [members, regs, invites] = await Promise.all([
+    const [members, regs, invites, alreadySynced] = await Promise.all([
       rebuildQueries.listMembersWithFaceByClient(this.database.db, clientId),
       rebuildQueries.listApprovedRegistrationsWithFaceByClient(
         this.database.db,
@@ -184,60 +184,80 @@ export class ReadersDeviceWipeSyncService {
         this.database.db,
         clientId,
       ),
+      personReaderSyncQueries.listSyncedFaceIdsByReader(
+        this.database.db,
+        clientId,
+        readerId,
+      ),
     ]);
 
-    const byFace = new Map<number, RebuildPerson>();
+    const pending: Array<{
+      id: string;
+      name: string;
+      faceId: number;
+      photoKey: string;
+      memberId?: string;
+      validFrom?: Date;
+      validUntil?: Date;
+    }> = [];
+    const seen = new Set<number>();
 
     for (const row of members) {
       if (row.faceId == null || !row.photoKey) continue;
-      byFace.set(row.faceId, {
+      if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) continue;
+      seen.add(row.faceId);
+      pending.push({
         id: row.id,
         name: row.name,
         faceId: row.faceId,
         photoKey: row.photoKey,
-        timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
-          clientId,
-          row.id,
-        ),
+        memberId: row.id,
       });
     }
 
     for (const row of regs) {
-      if (row.faceId == null || !row.photoKey || byFace.has(row.faceId)) {
-        continue;
-      }
-      byFace.set(row.faceId, {
+      if (row.faceId == null || !row.photoKey) continue;
+      if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) continue;
+      seen.add(row.faceId);
+      pending.push({
         id: row.id,
         name: row.name ?? 'USUARIO',
         faceId: row.faceId,
         photoKey: row.photoKey,
-        timeSectionIds: [ALWAYS_TIME_ZONE_INDEX],
       });
     }
 
     for (const row of invites) {
-      if (row.faceId == null || !row.photoKey || byFace.has(row.faceId)) {
-        continue;
-      }
-      byFace.set(row.faceId, {
+      if (row.faceId == null || !row.photoKey) continue;
+      if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) continue;
+      seen.add(row.faceId);
+      pending.push({
         id: row.id,
         name: row.name?.trim() || 'VISITANTE',
         faceId: row.faceId,
         photoKey: row.photoKey,
-        timeSectionIds: [ALWAYS_TIME_ZONE_INDEX],
         validFrom: row.validFrom,
         validUntil: row.validUntil,
       });
     }
 
-    const alreadySynced =
-      await personReaderSyncQueries.listSyncedFaceIdsByReader(
-        this.database.db,
-        clientId,
-        readerId,
-      );
-    return [...byFace.values()].filter(
-      (person) => !alreadySynced.has(person.faceId),
-    );
+    const people: RebuildPerson[] = [];
+    for (const row of pending) {
+      people.push({
+        id: row.id,
+        name: row.name,
+        faceId: row.faceId,
+        photoKey: row.photoKey,
+        timeSectionIds: row.memberId
+          ? await this.accessTimeZone.resolveMemberTimeSections(
+              clientId,
+              row.memberId,
+            )
+          : [ALWAYS_TIME_ZONE_INDEX],
+        validFrom: row.validFrom,
+        validUntil: row.validUntil,
+      });
+    }
+    return people;
   }
 }
