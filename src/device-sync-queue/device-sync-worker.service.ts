@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
@@ -42,7 +47,9 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     this.running = true;
     void this.recoverOrphans().then(() => {
-      this.loops = Array.from({ length: WORKER_CONCURRENCY }, () => this.loop());
+      this.loops = Array.from({ length: WORKER_CONCURRENCY }, () =>
+        this.loop(),
+      );
     });
   }
 

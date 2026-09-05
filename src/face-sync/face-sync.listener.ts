@@ -38,7 +38,10 @@ export class FaceSyncListener implements OnModuleInit {
               clientId,
             );
           for (const row of rows) {
-            await this.faceSync.enqueueApprovedRegistrationJob(row.id, clientId);
+            await this.faceSync.enqueueApprovedRegistrationJob(
+              row.id,
+              clientId,
+            );
           }
         } catch (err) {
           this.log.warn(

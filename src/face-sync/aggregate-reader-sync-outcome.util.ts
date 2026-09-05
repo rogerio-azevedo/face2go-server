@@ -1,4 +1,11 @@
-import { isNotNull, isNull, ne, or, type AnyColumn, type SQL } from 'drizzle-orm';
+import {
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  type AnyColumn,
+  type SQL,
+} from 'drizzle-orm';
 
 export type ReaderSyncOutcome = {
   deviceSyncStatus: 'synced' | 'sync_failed';

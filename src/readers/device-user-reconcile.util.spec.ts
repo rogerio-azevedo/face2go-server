@@ -34,10 +34,7 @@ describe('namesMismatch', () => {
 describe('enrichDeviceUserRecords', () => {
   it('marca inSystem e nameMismatch', () => {
     const persons = new Map([
-      [
-        10,
-        { faceId: 10, name: 'Maria Silva', personType: 'member' as const },
-      ],
+      [10, { faceId: 10, name: 'Maria Silva', personType: 'member' as const }],
     ]);
     const [inSystem, orphan] = enrichDeviceUserRecords(
       [

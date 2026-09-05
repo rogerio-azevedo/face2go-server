@@ -53,7 +53,11 @@ export async function insertDeviceSyncJob(
   return row;
 }
 
-export async function getDeviceSyncJobById(db: AppDb, id: string, clientId?: string) {
+export async function getDeviceSyncJobById(
+  db: AppDb,
+  id: string,
+  clientId?: string,
+) {
   const filters = [eq(deviceSyncJobs.id, id)];
   if (clientId) filters.push(eq(deviceSyncJobs.clientId, clientId));
   const [row] = await db
@@ -98,7 +102,8 @@ export async function requeueOrphanRunningJobs(db: AppDb): Promise<number> {
     WHERE status = 'running'
     RETURNING id
   `);
-  const rows = (result as unknown as { rows?: Array<{ id: string }> }).rows ?? [];
+  const rows =
+    (result as unknown as { rows?: Array<{ id: string }> }).rows ?? [];
   return rows.length;
 }
 
@@ -119,7 +124,8 @@ export async function claimNextDeviceSyncJob(
     )
     RETURNING j.id
   `);
-  const rows = (result as unknown as { rows?: Array<{ id: string }> }).rows ?? [];
+  const rows =
+    (result as unknown as { rows?: Array<{ id: string }> }).rows ?? [];
   const id = rows[0]?.id;
   if (!id) return null;
   return getDeviceSyncJobById(db, id);

@@ -125,7 +125,8 @@ export class PersonProfileService {
             deviceSyncError: sync.deviceSyncError,
           },
           {
-            responsibleId: target.type === 'responsible' ? target.id : undefined,
+            responsibleId:
+              target.type === 'responsible' ? target.id : undefined,
             memberId: target.type === 'member' ? target.id : undefined,
           },
         );

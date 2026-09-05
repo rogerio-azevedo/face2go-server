@@ -41,7 +41,10 @@ export const deviceSyncJobs = pgTable(
     force: boolean('force').notNull().default(false),
     status: deviceSyncJobStatusEnum('status').notNull().default('queued'),
     dedupeKey: text('dedupe_key').notNull(),
-    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    payload: jsonb('payload')
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     processed: integer('processed').notNull().default(0),
     total: integer('total').notNull().default(0),
     error: text('error'),
@@ -61,6 +64,7 @@ export const deviceSyncJobs = pgTable(
 );
 
 export type DeviceSyncJobRow = typeof deviceSyncJobs.$inferSelect;
-export type DeviceSyncJobKind = (typeof deviceSyncJobKindEnum.enumValues)[number];
+export type DeviceSyncJobKind =
+  (typeof deviceSyncJobKindEnum.enumValues)[number];
 export type DeviceSyncJobStatus =
   (typeof deviceSyncJobStatusEnum.enumValues)[number];

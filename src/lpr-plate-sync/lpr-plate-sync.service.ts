@@ -266,7 +266,9 @@ export class LprPlateSyncService {
           cameraId,
         )
       : new Set<string>();
-    const pending = rows.filter((row) => !already.has(row.id) && row.plate.trim());
+    const pending = rows.filter(
+      (row) => !already.has(row.id) && row.plate.trim(),
+    );
     let processed = 0;
     await onProgress?.(0, pending.length);
     for (const row of pending) {
@@ -375,7 +377,9 @@ export class LprPlateSyncService {
           vehicleId,
         );
     const syncedCamIds = new Set(
-      existing.filter((row) => row.status === 'synced').map((row) => row.cameraId),
+      existing
+        .filter((row) => row.status === 'synced')
+        .map((row) => row.cameraId),
     );
     const toSync = cams.filter((cam) => !syncedCamIds.has(cam.id));
 
@@ -610,14 +614,8 @@ export class LprPlateSyncService {
   ): void {
     void this.enqueueCameraFromActivation(cameraId, companyId).catch((e) => {
       const msg =
-        e instanceof Error
-          ? e.message
-          : typeof e === 'string'
-            ? e
-            : String(e);
-      this.log.error(
-        `syncAllVehiclePlatesToCamera camera=${cameraId}: ${msg}`,
-      );
+        e instanceof Error ? e.message : typeof e === 'string' ? e : String(e);
+      this.log.error(`syncAllVehiclePlatesToCamera camera=${cameraId}: ${msg}`);
     });
   }
 

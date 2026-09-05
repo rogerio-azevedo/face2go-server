@@ -101,9 +101,10 @@ describe('person-reader-sync.util', () => {
       null,
     );
     expect(plan.toSync).toHaveLength(1);
-    expect(
-      aggregateReaderSyncOutcome([], readers.length),
-    ).toEqual({ deviceSyncStatus: 'synced', deviceSyncError: null });
+    expect(aggregateReaderSyncOutcome([], readers.length)).toEqual({
+      deviceSyncStatus: 'synced',
+      deviceSyncError: null,
+    });
   });
 
   it('7 pulados + 1 falha continua parcial', () => {

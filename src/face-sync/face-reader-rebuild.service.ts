@@ -43,30 +43,36 @@ export class FaceReaderRebuildService {
     options?: { skipSynced?: boolean },
   ): Promise<RebuildPerson[]> {
     const skipSynced = options?.skipSynced !== false;
-    const [members, regs, invites, schoolStudents, schoolResponsibles, alreadySynced] =
-      await Promise.all([
-        rebuildQueries.listMembersWithFaceByClient(this.database.db, clientId),
-        rebuildQueries.listApprovedRegistrationsWithFaceByClient(
-          this.database.db,
-          clientId,
-        ),
-        rebuildQueries.listActiveInvitesWithFaceByClient(
-          this.database.db,
-          clientId,
-        ),
-        rebuildQueries.listStudentsWithFaceByClient(this.database.db, clientId),
-        rebuildQueries.listResponsiblesWithFaceByClient(
-          this.database.db,
-          clientId,
-        ),
-        skipSynced
-          ? personReaderSyncQueries.listSyncedFaceIdsByReader(
-              this.database.db,
-              clientId,
-              readerId,
-            )
-          : Promise.resolve(new Set<number>()),
-      ]);
+    const [
+      members,
+      regs,
+      invites,
+      schoolStudents,
+      schoolResponsibles,
+      alreadySynced,
+    ] = await Promise.all([
+      rebuildQueries.listMembersWithFaceByClient(this.database.db, clientId),
+      rebuildQueries.listApprovedRegistrationsWithFaceByClient(
+        this.database.db,
+        clientId,
+      ),
+      rebuildQueries.listActiveInvitesWithFaceByClient(
+        this.database.db,
+        clientId,
+      ),
+      rebuildQueries.listStudentsWithFaceByClient(this.database.db, clientId),
+      rebuildQueries.listResponsiblesWithFaceByClient(
+        this.database.db,
+        clientId,
+      ),
+      skipSynced
+        ? personReaderSyncQueries.listSyncedFaceIdsByReader(
+            this.database.db,
+            clientId,
+            readerId,
+          )
+        : Promise.resolve(new Set<number>()),
+    ]);
 
     const pending: PendingRow[] = [];
     const seen = new Set<number>();
@@ -100,11 +106,10 @@ export class FaceReaderRebuildService {
     for (const row of schoolResponsibles) push(row, 'responsible');
     for (const row of regs) push(row, 'registration');
     for (const row of invites) {
-      push(
-        { ...row, name: row.name?.trim() || 'VISITANTE' },
-        'invite_guest',
-        { validFrom: row.validFrom ?? undefined, validUntil: row.validUntil ?? undefined },
-      );
+      push({ ...row, name: row.name?.trim() || 'VISITANTE' }, 'invite_guest', {
+        validFrom: row.validFrom ?? undefined,
+        validUntil: row.validUntil ?? undefined,
+      });
     }
 
     const people: RebuildPerson[] = [];
@@ -156,7 +161,10 @@ export class FaceReaderRebuildService {
       return this.accessTimeZone.resolveStudentTimeSections(clientId, row.id);
     }
     if (row.entityKind === 'responsible') {
-      return this.accessTimeZone.resolveResponsibleTimeSections(clientId, row.id);
+      return this.accessTimeZone.resolveResponsibleTimeSections(
+        clientId,
+        row.id,
+      );
     }
     return Promise.resolve([ALWAYS_TIME_ZONE_INDEX]);
   }

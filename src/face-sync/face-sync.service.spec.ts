@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import type { RegistrationRow } from '../database/queries/registrations.queries';
+import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { AccessTimeZoneService } from './access-time-zone.service';
@@ -13,7 +14,9 @@ import {
   type FaceSyncProgressEvent,
 } from './face-sync.service';
 
-function registration(overrides: Partial<RegistrationRow> = {}): RegistrationRow {
+function registration(
+  overrides: Partial<RegistrationRow> = {},
+): RegistrationRow {
   return {
     id: 'reg-1',
     name: 'Maria',
@@ -25,10 +28,10 @@ function registration(overrides: Partial<RegistrationRow> = {}): RegistrationRow
 
 describe('FaceSyncService', () => {
   let service: FaceSyncService;
-  let eventEmitter: { emit: jest.Mock };
+  let queue: { enqueue: jest.Mock };
 
   beforeEach(async () => {
-    eventEmitter = { emit: jest.fn() };
+    queue = { enqueue: jest.fn().mockResolvedValue({ id: 'job-1' }) };
     const module = await Test.createTestingModule({
       providers: [
         FaceSyncService,
@@ -37,7 +40,8 @@ describe('FaceSyncService', () => {
         { provide: ConfigService, useValue: { get: jest.fn() } },
         { provide: PermissionsService, useValue: {} },
         { provide: AccessTimeZoneService, useValue: {} },
-        { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        { provide: DeviceSyncQueueService, useValue: queue },
       ],
     }).compile();
 
@@ -80,7 +84,10 @@ describe('FaceSyncService', () => {
     jest
       .spyOn(registrationsQueries, 'listApprovedRegistrationsPendingDeviceSync')
       .mockResolvedValue([
-        registration({ deviceSyncStatus: 'pending_sync', deviceSyncError: null }),
+        registration({
+          deviceSyncStatus: 'pending_sync',
+          deviceSyncError: null,
+        }),
       ]);
     jest.spyOn(service, 'syncApprovedRegistration').mockResolvedValue({
       deviceSyncStatus: 'synced',
@@ -107,12 +114,12 @@ describe('FaceSyncService', () => {
       faceId: 1,
       name: 'Maria',
       imageBuffer: Buffer.from('x'),
-      persistResult: async () => undefined,
+      persistResult: () => Promise.resolve(),
     });
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ resetReaderProgress: true }),
-    );
+    const [arg] = queue.enqueue.mock.calls[0] as [
+      { payload: { resetReaderProgress?: boolean } },
+    ];
+    expect(arg.payload.resetReaderProgress).toBe(true);
   });
 
   it('enqueuePersonSync preserva resetReaderProgress false (retry)', () => {
@@ -122,11 +129,30 @@ describe('FaceSyncService', () => {
       name: 'Maria',
       imageBuffer: Buffer.from('x'),
       resetReaderProgress: false,
-      persistResult: async () => undefined,
+      persistResult: () => Promise.resolve(),
     });
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ resetReaderProgress: false }),
-    );
+    const [arg] = queue.enqueue.mock.calls[0] as [
+      { payload: { resetReaderProgress?: boolean } },
+    ];
+    expect(arg.payload.resetReaderProgress).toBe(false);
+  });
+
+  it('getApprovedRegistrationSyncStatus devolve o resumo do cadastro', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(
+        registration({
+          status: 'approved',
+          deviceSyncStatus: 'synced',
+          deviceSyncError: 'Sincronizado parcialmente (1 de 2 leitor(es)).',
+        }),
+      );
+
+    await expect(
+      service.getApprovedRegistrationSyncStatus('reg-1', 'client-1'),
+    ).resolves.toEqual({
+      deviceSyncStatus: 'synced',
+      deviceSyncError: 'Sincronizado parcialmente (1 de 2 leitor(es)).',
+    });
   });
 });

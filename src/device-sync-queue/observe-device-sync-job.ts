@@ -32,7 +32,11 @@ export async function observeDeviceSyncJob(
       lastProcessed = job.processed;
     }
     if (job.status === 'done') {
-      writeSseEvent(res, { type: 'done', processed: job.processed, total: job.total });
+      writeSseEvent(res, {
+        type: 'done',
+        processed: job.processed,
+        total: job.total,
+      });
       return;
     }
     if (job.status === 'failed') {

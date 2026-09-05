@@ -23,7 +23,9 @@ export function readerIdsToSeedAsSynced(
 ): string[] | null {
   const cited = new Set(readerIdsCitedInSyncError(error, readers));
   if (cited.size === 0) return null;
-  return readers.filter((reader) => !cited.has(reader.id)).map((reader) => reader.id);
+  return readers
+    .filter((reader) => !cited.has(reader.id))
+    .map((reader) => reader.id);
 }
 
 export type PersonReaderSyncPlan<T extends { id: string; name: string }> = {
@@ -40,7 +42,11 @@ export function planPersonReaderSync<T extends { id: string; name: string }>(
   const byReader = new Map(existing.map((row) => [row.readerId, row]));
   let seedSyncedIds: string[] = [];
 
-  if (existing.length === 0 && isPartialSyncError(previousError) && previousError) {
+  if (
+    existing.length === 0 &&
+    isPartialSyncError(previousError) &&
+    previousError
+  ) {
     const seeded = readerIdsToSeedAsSynced(previousError, readers);
     if (seeded) {
       seedSyncedIds = seeded;

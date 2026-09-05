@@ -32,7 +32,9 @@ function readerAuthKey(reader: ReaderAuthInput): string {
 }
 
 /** Instância Digest reutilizada por leitor (evita 401+retry em toda request). */
-export function digestAuthForReader(reader: ReaderAuthInput): IntelbrasDigestAuth {
+export function digestAuthForReader(
+  reader: ReaderAuthInput,
+): IntelbrasDigestAuth {
   const key = readerAuthKey(reader);
   const cached = digestCache.get(key);
   if (cached) return cached;
@@ -48,6 +50,6 @@ export function digestAuthForReader(reader: ReaderAuthInput): IntelbrasDigestAut
     // @mhoc/axios-digest-auth tipa axios 0.22; o projeto usa 1.x.
     axios: axiosInst as never,
   });
-  digestCache.set(key, auth as IntelbrasDigestAuth);
-  return auth as IntelbrasDigestAuth;
+  digestCache.set(key, auth);
+  return auth;
 }

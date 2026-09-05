@@ -50,7 +50,10 @@ export async function listApprovedRegistrationsWithFaceByClient(
     );
 }
 
-export async function listStudentsWithFaceByClient(db: AppDb, clientId: string) {
+export async function listStudentsWithFaceByClient(
+  db: AppDb,
+  clientId: string,
+) {
   return db
     .select({
       id: students.id,

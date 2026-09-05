@@ -14,7 +14,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
 import { observeDeviceSyncJobs } from '../device-sync-queue/observe-device-sync-job';
-import { writeSseHeaders, writeSseEvent } from '../device-sync-queue/device-sync-sse.util';
+import {
+  writeSseHeaders,
+  writeSseEvent,
+} from '../device-sync-queue/device-sync-sse.util';
 import { FaceSyncService } from './face-sync.service';
 
 @ApiTags('company-face-sync')
@@ -29,8 +32,7 @@ export class CompanyFaceSyncController {
 
   @Post(':registrationId/sync')
   @ApiOperation({
-    summary:
-      'Enfileirar sync da face de um cadastro aprovado (202 + jobId)',
+    summary: 'Enfileirar sync da face de um cadastro aprovado (202 + jobId)',
   })
   async syncOne(
     @CurrentUser() user: JwtPayload,
@@ -42,6 +44,22 @@ export class CompanyFaceSyncController {
       registrationId,
       clientId,
       user.sub,
+    );
+  }
+
+  @Get(':registrationId/sync')
+  @ApiOperation({
+    summary: 'Status do sync facial de um cadastro aprovado',
+  })
+  async getSyncStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    await this.faceSync.ensureCompanyCanAccessClientPublic(user, clientId);
+    return this.faceSync.getApprovedRegistrationSyncStatus(
+      registrationId,
+      clientId,
     );
   }
 
@@ -93,6 +111,19 @@ export class ClientFaceSyncController {
       registrationId,
       clientId,
       user.sub,
+    );
+  }
+
+  @Get(':registrationId/sync')
+  @ApiOperation({ summary: 'Status do sync facial de um cadastro' })
+  getSyncStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    const clientId = this.faceSync.ensureClientTenantPublic(user);
+    return this.faceSync.getApprovedRegistrationSyncStatus(
+      registrationId,
+      clientId,
     );
   }
 

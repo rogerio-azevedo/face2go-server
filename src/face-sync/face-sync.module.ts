@@ -31,10 +31,6 @@ import { FaceSyncListener } from './face-sync.listener';
     FaceSyncListener,
     DeviceSyncWorkerService,
   ],
-  exports: [
-    FaceSyncService,
-    AccessTimeZoneService,
-    FaceReaderRebuildService,
-  ],
+  exports: [FaceSyncService, AccessTimeZoneService, FaceReaderRebuildService],
 })
 export class FaceSyncModule {}

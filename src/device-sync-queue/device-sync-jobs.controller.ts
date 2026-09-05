@@ -1,4 +1,10 @@
-import { Controller, Get, NotFoundException, Param, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -8,12 +14,7 @@ import { DeviceSyncQueueService } from './device-sync-queue.service';
 
 @ApiTags('device-sync-jobs')
 @ApiBearerAuth()
-@Roles(
-  'company_admin',
-  'company_operator',
-  'client_admin',
-  'client_operator',
-)
+@Roles('company_admin', 'company_operator', 'client_admin', 'client_operator')
 @Controller('device-sync-jobs')
 export class DeviceSyncJobsController {
   constructor(private readonly queue: DeviceSyncQueueService) {}

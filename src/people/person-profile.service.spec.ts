@@ -63,7 +63,9 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
     jest
       .spyOn(peopleQueries, 'findSharedFaceByUserIdAndClient')
       .mockResolvedValue(sharedFace);
-    jest.spyOn(membersQueries, 'updateMemberFace').mockResolvedValue(undefined as never);
+    jest
+      .spyOn(membersQueries, 'updateMemberFace')
+      .mockResolvedValue(undefined as never);
     jest
       .spyOn(peopleQueries, 'listSiblingBondsByUserIdAndClient')
       .mockResolvedValue({ responsibleIds: ['resp-1'], memberIds: [] });

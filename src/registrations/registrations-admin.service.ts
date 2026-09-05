@@ -275,15 +275,19 @@ export class RegistrationsAdminService {
       }
       rowOut = linked;
 
-      void this.faceSync
-        .syncApprovedRegistration(registrationId, clientId)
-        .catch((err: unknown) => {
-          const msg =
-            err instanceof Error
-              ? err.message
-              : 'Erro ao sincronizar face com os leitores.';
-          this.logger.warn(`sync pós-aprovação reg=${registrationId}: ${msg}`);
-        });
+      try {
+        await this.faceSync.enqueueApprovedRegistrationJob(
+          registrationId,
+          clientId,
+          decidedByUserId,
+        );
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Erro ao enfileirar sync da face com os leitores.';
+        this.logger.warn(`enqueue pós-aprovação reg=${registrationId}: ${msg}`);
+      }
     }
 
     if (client.type !== 'school') {

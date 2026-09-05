@@ -25,7 +25,10 @@ import {
   aggregateReaderSyncOutcome,
   isFullySyncedDevice,
 } from './aggregate-reader-sync-outcome.util';
-import type { FaceSyncOutcome, FaceSyncRequestedPayload } from './face-sync.events';
+import type {
+  FaceSyncOutcome,
+  FaceSyncRequestedPayload,
+} from './face-sync.events';
 import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
 import type {
   FacePersonJobPayload,
@@ -744,7 +747,8 @@ export class FaceSyncService {
     deviceSyncError: null;
     jobId?: string;
   } {
-    const entityId = payload.entityId ?? `${payload.clientId}:${payload.faceId}`;
+    const entityId =
+      payload.entityId ?? `${payload.clientId}:${payload.faceId}`;
     const entityKind = payload.entityKind ?? 'registration';
     const jobPayload: FacePersonJobPayload = {
       entityKind,
@@ -831,7 +835,34 @@ export class FaceSyncService {
         previousDeviceSyncError: row.deviceSyncError,
       } satisfies FacePersonJobPayload,
     });
-    return this.queue.toDto(job);
+    return {
+      ...this.queue.toDto(job),
+      deviceSyncStatus: 'pending_sync' as const,
+      deviceSyncError: null,
+    };
+  }
+
+  async getApprovedRegistrationSyncStatus(
+    registrationId: string,
+    clientId: string,
+  ): Promise<{
+    deviceSyncStatus: string;
+    deviceSyncError: string | null;
+  }> {
+    const row = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!row || row.status !== 'approved') {
+      throw new NotFoundException(
+        'Cadastro não encontrado ou não está aprovado.',
+      );
+    }
+    return {
+      deviceSyncStatus: row.deviceSyncStatus ?? 'pending_sync',
+      deviceSyncError: row.deviceSyncError ?? null,
+    };
   }
 
   async enqueueReaderRebuildJob(
