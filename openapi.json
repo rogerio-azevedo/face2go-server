@@ -2790,6 +2790,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "force",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2802,7 +2810,7 @@
             "bearer": []
           }
         ],
-        "summary": "SSE — progresso da sincronização em lote (token na query aceito)",
+        "summary": "SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query aceito)",
         "tags": [
           "company-face-sync"
         ]
@@ -2840,7 +2848,16 @@
     "/client/faces/sync-all/progress": {
       "get": {
         "operationId": "ClientFaceSyncController_syncAllProgress",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "force",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -2851,7 +2868,7 @@
             "bearer": []
           }
         ],
-        "summary": "SSE — progresso da sincronização em lote (token na query)",
+        "summary": "SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query)",
         "tags": [
           "client-face-sync"
         ]
@@ -8979,6 +8996,124 @@
           "emergency-events"
         ]
       }
+    },
+    "/clients/{clientId}/faces/sync-all": {
+      "post": {
+        "operationId": "CompanyFaceSyncController_enqueueSyncAll",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueDeviceSyncBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileira sync em lote dos cadastros (não bloqueia)",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/clients/{clientId}/faces/sync-status": {
+      "get": {
+        "operationId": "CompanyFaceSyncController_getBatchSyncStatus",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resumo dos jobs de faces ativos neste cliente (queued/running)",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/client/faces/sync-all": {
+      "post": {
+        "operationId": "ClientFaceSyncController_enqueueSyncAll",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueDeviceSyncBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileira sync em lote dos cadastros (não bloqueia)",
+        "tags": [
+          "client-face-sync"
+        ]
+      }
+    },
+    "/client/faces/sync-status": {
+      "get": {
+        "operationId": "ClientFaceSyncController_getBatchSyncStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resumo dos jobs de faces ativos neste cliente (queued/running)",
+        "tags": [
+          "client-face-sync"
+        ]
+      }
     }
   },
   "info": {
@@ -9980,6 +10115,14 @@
           "dryRun": {
             "type": "boolean",
             "default": false
+          }
+        }
+      },
+      "EnqueueDeviceSyncBodyDto": {
+        "type": "object",
+        "properties": {
+          "force": {
+            "type": "boolean"
           }
         }
       }

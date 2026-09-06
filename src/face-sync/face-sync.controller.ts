@@ -1,12 +1,16 @@
 import {
+  Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Res,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -18,6 +22,7 @@ import {
   writeSseHeaders,
   writeSseEvent,
 } from '../device-sync-queue/device-sync-sse.util';
+import { EnqueueDeviceSyncBodyDto } from '../validation/dto/device-sync-jobs.dto';
 import { FaceSyncService } from './face-sync.service';
 
 @ApiTags('company-face-sync')
@@ -29,6 +34,35 @@ export class CompanyFaceSyncController {
     private readonly faceSync: FaceSyncService,
     private readonly queue: DeviceSyncQueueService,
   ) {}
+
+  @Post('sync-all')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Enfileira sync em lote dos cadastros (não bloqueia)',
+  })
+  async enqueueSyncAll(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Body() dto: EnqueueDeviceSyncBodyDto,
+  ) {
+    const jobIds = await this.faceSync.enqueueAllPendingRegistrations(
+      user,
+      clientId,
+      dto.force,
+    );
+    return { queued: jobIds.length, force: dto.force === true };
+  }
+
+  @Get('sync-status')
+  @ApiOperation({
+    summary: 'Resumo dos jobs de faces ativos neste cliente (queued/running)',
+  })
+  getBatchSyncStatus(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.faceSync.getRegistrationSyncAllStatus(user, clientId);
+  }
 
   @Post(':registrationId/sync')
   @ApiOperation({
@@ -44,6 +78,7 @@ export class CompanyFaceSyncController {
       registrationId,
       clientId,
       user.sub,
+      { resetReaderProgress: true },
     );
   }
 
@@ -65,18 +100,22 @@ export class CompanyFaceSyncController {
 
   @Get('sync-all/progress')
   @ApiOperation({
-    summary: 'SSE — observa a fila de sync em lote (token na query aceito)',
+    summary:
+      'SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query aceito)',
   })
+  @ApiQuery({ name: 'force', required: false })
   async syncAllProgress(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Res() res: Response,
+    @Query('force') force?: string,
   ): Promise<void> {
     writeSseHeaders(res);
     try {
       const jobIds = await this.faceSync.enqueueAllPendingRegistrations(
         user,
         clientId,
+        force === '1' || force === 'true',
       );
       await observeDeviceSyncJobs(this.queue, res, jobIds);
     } catch (e: unknown) {
@@ -100,6 +139,33 @@ export class ClientFaceSyncController {
     private readonly queue: DeviceSyncQueueService,
   ) {}
 
+  @Post('sync-all')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Enfileira sync em lote dos cadastros (não bloqueia)',
+  })
+  async enqueueSyncAll(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: EnqueueDeviceSyncBodyDto,
+  ) {
+    const clientId = this.faceSync.ensureClientTenantPublic(user);
+    const jobIds = await this.faceSync.enqueueAllPendingRegistrations(
+      user,
+      clientId,
+      dto.force,
+    );
+    return { queued: jobIds.length, force: dto.force === true };
+  }
+
+  @Get('sync-status')
+  @ApiOperation({
+    summary: 'Resumo dos jobs de faces ativos neste cliente (queued/running)',
+  })
+  getBatchSyncStatus(@CurrentUser() user: JwtPayload) {
+    const clientId = this.faceSync.ensureClientTenantPublic(user);
+    return this.faceSync.getRegistrationSyncAllStatus(user, clientId);
+  }
+
   @Post(':registrationId/sync')
   @ApiOperation({ summary: 'Enfileirar sync da face (202 + jobId)' })
   syncOne(
@@ -111,6 +177,7 @@ export class ClientFaceSyncController {
       registrationId,
       clientId,
       user.sub,
+      { resetReaderProgress: true },
     );
   }
 
@@ -129,11 +196,14 @@ export class ClientFaceSyncController {
 
   @Get('sync-all/progress')
   @ApiOperation({
-    summary: 'SSE — observa a fila de sync em lote (token na query)',
+    summary:
+      'SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query)',
   })
+  @ApiQuery({ name: 'force', required: false })
   async syncAllProgress(
     @CurrentUser() user: JwtPayload,
     @Res() res: Response,
+    @Query('force') force?: string,
   ): Promise<void> {
     writeSseHeaders(res);
     try {
@@ -141,6 +211,7 @@ export class ClientFaceSyncController {
       const jobIds = await this.faceSync.enqueueAllPendingRegistrations(
         user,
         clientId,
+        force === '1' || force === 'true',
       );
       await observeDeviceSyncJobs(this.queue, res, jobIds);
     } catch (e: unknown) {

@@ -421,27 +421,39 @@ export async function updateRegistrationDeviceSync(
   return row;
 }
 
+/** Aprovados com foto — pendentes por padrão; `includeSynced` inclui os já synced. */
+export async function listApprovedRegistrationsForDeviceSync(
+  db: AppDb,
+  clientId: string,
+  options?: { includeSynced?: boolean },
+): Promise<RegistrationRow[]> {
+  const conditions = [
+    eq(registrations.clientId, clientId),
+    eq(registrations.status, 'approved'),
+    isNotNull(registrations.faceImageKey),
+    isNotNull(registrations.faceId),
+  ];
+  if (!options?.includeSynced) {
+    conditions.push(
+      incompleteDeviceSyncSql(
+        registrations.deviceSyncStatus,
+        registrations.deviceSyncError,
+      ),
+    );
+  }
+  return db
+    .select()
+    .from(registrations)
+    .where(and(...conditions))
+    .orderBy(desc(registrations.submittedAt));
+}
+
 /** Aprovados com foto pendente, falha ou sync parcial. */
 export async function listApprovedRegistrationsPendingDeviceSync(
   db: AppDb,
   clientId: string,
 ): Promise<RegistrationRow[]> {
-  return db
-    .select()
-    .from(registrations)
-    .where(
-      and(
-        eq(registrations.clientId, clientId),
-        eq(registrations.status, 'approved'),
-        isNotNull(registrations.faceImageKey),
-        isNotNull(registrations.faceId),
-        incompleteDeviceSyncSql(
-          registrations.deviceSyncStatus,
-          registrations.deviceSyncError,
-        ),
-      ),
-    )
-    .orderBy(desc(registrations.submittedAt));
+  return listApprovedRegistrationsForDeviceSync(db, clientId);
 }
 
 /** Clientes com cadastros aprovados presos em pending_sync (reconciliação pós-restart). */

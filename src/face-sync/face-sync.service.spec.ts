@@ -2,6 +2,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
+import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import type { RegistrationRow } from '../database/queries/registrations.queries';
@@ -13,6 +14,16 @@ import {
   FaceSyncService,
   type FaceSyncProgressEvent,
 } from './face-sync.service';
+
+function clientUser(): JwtPayload {
+  return {
+    sub: 'user-1',
+    email: 'a@b.c',
+    role: 'client_admin',
+    contextType: 'client',
+    clientId: 'client-1',
+  };
+}
 
 function registration(
   overrides: Partial<RegistrationRow> = {},
@@ -28,10 +39,27 @@ function registration(
 
 describe('FaceSyncService', () => {
   let service: FaceSyncService;
-  let queue: { enqueue: jest.Mock };
+  let queue: { enqueue: jest.Mock; toDto: jest.Mock; listActiveFace: jest.Mock };
 
   beforeEach(async () => {
-    queue = { enqueue: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+    queue = {
+      enqueue: jest.fn().mockResolvedValue({
+        id: 'job-1',
+        kind: 'face.person',
+        status: 'queued',
+        force: false,
+        targetId: 'reg-1',
+        processed: 0,
+        total: 1,
+        error: null,
+        payload: { entityKind: 'registration' },
+      }),
+      toDto: jest.fn((row: { id: string; status?: string }) => ({
+        jobId: row.id,
+        status: row.status ?? 'queued',
+      })),
+      listActiveFace: jest.fn().mockResolvedValue([]),
+    };
     const module = await Test.createTestingModule({
       providers: [
         FaceSyncService,
@@ -154,5 +182,119 @@ describe('FaceSyncService', () => {
       deviceSyncStatus: 'synced',
       deviceSyncError: 'Sincronizado parcialmente (1 de 2 leitor(es)).',
     });
+  });
+
+  it('enqueueAllPendingRegistrations incremental lista só incompletos sem reset', async () => {
+    const list = jest
+      .spyOn(registrationsQueries, 'listApprovedRegistrationsForDeviceSync')
+      .mockResolvedValue([registration({ id: 'reg-pending' })]);
+    const enqueue = jest
+      .spyOn(service, 'enqueueApprovedRegistrationJob')
+      .mockResolvedValue({ jobId: 'job-1' } as never);
+
+    const ids = await service.enqueueAllPendingRegistrations(
+      clientUser(),
+      'client-1',
+      false,
+    );
+
+    expect(list).toHaveBeenCalledWith({}, 'client-1', { includeSynced: false });
+    expect(enqueue).toHaveBeenCalledWith('reg-pending', 'client-1', 'user-1', {
+      resetReaderProgress: false,
+    });
+    expect(ids).toEqual(['job-1']);
+  });
+
+  it('enqueueAllPendingRegistrations force inclui synced e reseta progresso', async () => {
+    const list = jest
+      .spyOn(registrationsQueries, 'listApprovedRegistrationsForDeviceSync')
+      .mockResolvedValue([registration({ id: 'reg-synced' })]);
+    const enqueue = jest
+      .spyOn(service, 'enqueueApprovedRegistrationJob')
+      .mockResolvedValue({ jobId: 'job-force' } as never);
+
+    const ids = await service.enqueueAllPendingRegistrations(
+      clientUser(),
+      'client-1',
+      true,
+    );
+
+    expect(list).toHaveBeenCalledWith({}, 'client-1', { includeSynced: true });
+    expect(enqueue).toHaveBeenCalledWith('reg-synced', 'client-1', 'user-1', {
+      resetReaderProgress: true,
+    });
+    expect(ids).toEqual(['job-force']);
+  });
+
+  it('enqueueApprovedRegistrationJob incremental não reseta progresso do leitor', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(
+        registration({
+          status: 'approved',
+          faceImageKey: 'photo',
+          faceId: 10,
+        }),
+      );
+    jest
+      .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
+      .mockResolvedValue(registration());
+
+    await service.enqueueApprovedRegistrationJob('reg-1', 'client-1', 'user-1');
+
+    const [arg] = queue.enqueue.mock.calls[0] as [
+      {
+        force?: boolean;
+        dedupeKey: string;
+        payload: { resetReaderProgress?: boolean };
+      },
+    ];
+    expect(arg.payload.resetReaderProgress).toBe(false);
+    expect(arg.force).toBe(false);
+    expect(arg.dedupeKey).toBe('face.person:client-1:registration:reg-1');
+  });
+
+  it('enqueueApprovedRegistrationJob force reseta progresso do leitor', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(
+        registration({
+          status: 'approved',
+          faceImageKey: 'photo',
+          faceId: 10,
+        }),
+      );
+    jest
+      .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
+      .mockResolvedValue(registration());
+
+    await service.enqueueApprovedRegistrationJob('reg-1', 'client-1', 'user-1', {
+      resetReaderProgress: true,
+    });
+
+    const [arg] = queue.enqueue.mock.calls[0] as [
+      {
+        force?: boolean;
+        dedupeKey: string;
+        payload: { resetReaderProgress?: boolean };
+      },
+    ];
+    expect(arg.payload.resetReaderProgress).toBe(true);
+    expect(arg.force).toBe(true);
+    expect(arg.dedupeKey).toBe(
+      'face.person:client-1:registration:reg-1:force',
+    );
+  });
+
+  it('getRegistrationSyncAllStatus resume queued e running', async () => {
+    queue.listActiveFace.mockResolvedValue([
+      { id: 'j1', status: 'queued' },
+      { id: 'j2', status: 'running' },
+      { id: 'j3', status: 'queued' },
+    ]);
+
+    await expect(
+      service.getRegistrationSyncAllStatus(clientUser(), 'client-1'),
+    ).resolves.toEqual({ queued: 2, running: 1 });
   });
 });

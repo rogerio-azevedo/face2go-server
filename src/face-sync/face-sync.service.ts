@@ -706,6 +706,7 @@ export class FaceSyncService {
   async enqueueAllPendingRegistrations(
     user: JwtPayload,
     clientId: string,
+    force = false,
   ): Promise<string[]> {
     if (user.role === 'client_admin' || user.role === 'client_operator') {
       this.ensureClientTenant(user);
@@ -713,9 +714,10 @@ export class FaceSyncService {
       await this.ensureCompanyCanAccessClient(user, clientId);
     }
     const rows =
-      await registrationsQueries.listApprovedRegistrationsPendingDeviceSync(
+      await registrationsQueries.listApprovedRegistrationsForDeviceSync(
         this.database.db,
         clientId,
+        { includeSynced: force },
       );
     const jobIds: string[] = [];
     for (const row of rows) {
@@ -723,6 +725,7 @@ export class FaceSyncService {
         row.id,
         clientId,
         user.sub,
+        { resetReaderProgress: force },
       );
       jobIds.push(job.jobId);
     }
@@ -794,7 +797,9 @@ export class FaceSyncService {
     registrationId: string,
     clientId: string,
     createdBy?: string,
+    options?: { resetReaderProgress?: boolean },
   ) {
+    const resetReaderProgress = options?.resetReaderProgress === true;
     const row = await registrationsQueries.getRegistrationByIdForClient(
       this.database.db,
       registrationId,
@@ -824,7 +829,10 @@ export class FaceSyncService {
       clientId,
       targetId: registrationId,
       createdBy,
-      dedupeKey: `face.person:${clientId}:registration:${registrationId}`,
+      force: resetReaderProgress,
+      dedupeKey: resetReaderProgress
+        ? `face.person:${clientId}:registration:${registrationId}:force`
+        : `face.person:${clientId}:registration:${registrationId}`,
       total: 1,
       payload: {
         entityKind: 'registration',
@@ -833,6 +841,7 @@ export class FaceSyncService {
         photoKey: row.faceImageKey,
         logContext: `reg=${registrationId}`,
         previousDeviceSyncError: row.deviceSyncError,
+        resetReaderProgress,
       } satisfies FacePersonJobPayload,
     });
     return {
@@ -921,6 +930,22 @@ export class FaceSyncService {
   async listActiveFaceJobs(clientId: string) {
     const rows = await this.queue.listActiveFace(clientId);
     return rows.map((row) => this.queue.toDto(row));
+  }
+
+  async getRegistrationSyncAllStatus(
+    user: JwtPayload,
+    clientId: string,
+  ): Promise<{ queued: number; running: number }> {
+    if (user.role === 'client_admin' || user.role === 'client_operator') {
+      this.ensureClientTenant(user);
+    } else {
+      await this.ensureCompanyCanAccessClient(user, clientId);
+    }
+    const jobs = await this.listActiveFaceJobs(clientId);
+    return {
+      queued: jobs.filter((job) => job.status === 'queued').length,
+      running: jobs.filter((job) => job.status === 'running').length,
+    };
   }
 
   async syncAllPendingForClientTenant(
