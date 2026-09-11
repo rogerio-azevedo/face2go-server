@@ -1,3 +1,23 @@
+export const ACCESS_BLOCKED_ATTEMPT = 'access.blocked.attempt';
+
+export type AccessBlockedAttemptPayload = {
+  accessId: string;
+  faceId: number;
+  clientId: string;
+  clientName: string;
+  companyId: string;
+  personName: string | null;
+  personId: string | null;
+  personType: 'student' | 'responsible' | 'member' | 'guest' | null;
+  blockReason: string | null;
+  readerId: string;
+  readerName: string;
+  readerDirection: 'in' | 'out' | null;
+  eventDate: Date | null;
+  snapR2Key: string | null;
+  snapUrl?: string | null;
+};
+
 export const ACCESS_FACIAL_RECORDED = 'access.facial.recorded';
 
 export type AccessFacialRecordedPayload = {

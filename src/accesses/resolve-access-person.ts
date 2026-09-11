@@ -5,7 +5,7 @@ import * as pickupQueries from '../database/queries/pickup-authorizations.querie
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import type { ResolvedAccessPerson } from '../common/access-person.types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { registrations } from '../database/schema';
 
 export async function resolveAccessPersonByFaceId(
@@ -25,6 +25,8 @@ export async function resolveAccessPersonByFaceId(
         personId: responsible.id,
         personType: 'responsible',
         personName: responsible.name,
+        isBlocked: responsible.blockedAt != null,
+        blockReason: responsible.blockReason ?? null,
       };
     }
   } catch {
@@ -42,6 +44,8 @@ export async function resolveAccessPersonByFaceId(
         personId: student.id,
         personType: 'student',
         personName: student.name,
+        isBlocked: student.blockedAt != null,
+        blockReason: student.blockReason ?? null,
       };
     }
   } catch {
@@ -59,6 +63,8 @@ export async function resolveAccessPersonByFaceId(
         personId: member.id,
         personType: 'member',
         personName: member.name,
+        isBlocked: member.blockedAt != null,
+        blockReason: member.blockReason ?? null,
       };
     }
   } catch {
@@ -67,13 +73,18 @@ export async function resolveAccessPersonByFaceId(
 
   try {
     const [registration] = await db
-      .select({ id: registrations.id, name: registrations.name })
+      .select({
+        id: registrations.id,
+        name: registrations.name,
+        status: registrations.status,
+        blockReason: registrations.blockReason,
+      })
       .from(registrations)
       .where(
         and(
           eq(registrations.clientId, clientId),
           eq(registrations.faceId, faceId),
-          eq(registrations.status, 'approved'),
+          inArray(registrations.status, ['approved', 'blocked']),
         ),
       )
       .limit(1);
@@ -83,6 +94,8 @@ export async function resolveAccessPersonByFaceId(
         personId: registration.id,
         personType: 'guest',
         personName: name,
+        isBlocked: registration.status === 'blocked',
+        blockReason: registration.blockReason ?? null,
       };
     }
   } catch {

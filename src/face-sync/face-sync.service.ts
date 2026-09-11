@@ -229,6 +229,7 @@ export class FaceSyncService {
     validFrom?: Date;
     validUntil?: Date;
     photoOnly?: boolean;
+    blocked?: boolean;
     resetReaderProgress?: boolean;
     previousDeviceSyncError?: string | null;
     readerIds?: string[];
@@ -239,6 +240,7 @@ export class FaceSyncService {
     const { clientId, faceId, name, imageBuffer, logContext, photoKey } =
       params;
     const photoOnly = params.photoOnly === true;
+    const blocked = params.blocked === true;
     const timeSectionIds =
       params.timeSectionIds && params.timeSectionIds.length > 0
         ? params.timeSectionIds
@@ -458,7 +460,7 @@ export class FaceSyncService {
                 );
               }
 
-              if (!photoOnly) {
+              if (!photoOnly && !blocked) {
                 await this.accessTimeZone.ensureZonesOnSingleReader(
                   plain,
                   timeSectionIds,
@@ -474,7 +476,7 @@ export class FaceSyncService {
                 timeSectionIds,
                 validDateStart,
                 validDateEnd,
-                { photoOnly },
+                { photoOnly, blocked },
               );
             }
 
@@ -641,9 +643,13 @@ export class FaceSyncService {
       registrationId,
       clientId,
     );
-    if (!row || row.status !== 'approved' || !row.isActive) {
+    if (
+      !row ||
+      !row.isActive ||
+      (row.status !== 'approved' && row.status !== 'blocked')
+    ) {
       throw new NotFoundException(
-        'Cadastro não encontrado, excluído ou não está aprovado.',
+        'Cadastro não encontrado, excluído ou sem face para sincronizar.',
       );
     }
     if (!row.faceImageKey) {
@@ -687,6 +693,7 @@ export class FaceSyncService {
         photoKey: row.faceImageKey,
         logContext: `reg=${registrationId}`,
         previousDeviceSyncError: row.deviceSyncError,
+        blocked: row.status === 'blocked',
       });
 
     await registrationsQueries.updateRegistrationDeviceSync(
@@ -762,6 +769,7 @@ export class FaceSyncService {
       validFrom: payload.validFrom?.toISOString(),
       validUntil: payload.validUntil?.toISOString(),
       photoOnly: payload.photoOnly,
+      blocked: payload.blocked,
       resetReaderProgress: payload.resetReaderProgress ?? true,
       previousDeviceSyncError: payload.previousDeviceSyncError,
       logContext: payload.logContext,
@@ -799,7 +807,7 @@ export class FaceSyncService {
     registrationId: string,
     clientId: string,
     createdBy?: string,
-    options?: { resetReaderProgress?: boolean },
+    options?: { resetReaderProgress?: boolean; blocked?: boolean },
   ) {
     const resetReaderProgress = options?.resetReaderProgress === true;
     const row = await registrationsQueries.getRegistrationByIdForClient(
@@ -807,9 +815,13 @@ export class FaceSyncService {
       registrationId,
       clientId,
     );
-    if (!row || row.status !== 'approved' || !row.isActive) {
+    if (
+      !row ||
+      !row.isActive ||
+      (row.status !== 'approved' && row.status !== 'blocked')
+    ) {
       throw new NotFoundException(
-        'Cadastro não encontrado, excluído ou não está aprovado.',
+        'Cadastro não encontrado, excluído ou sem face para sincronizar.',
       );
     }
     if (!row.faceImageKey) {
@@ -844,6 +856,7 @@ export class FaceSyncService {
         logContext: `reg=${registrationId}`,
         previousDeviceSyncError: row.deviceSyncError,
         resetReaderProgress,
+        blocked: options?.blocked === true || row.status === 'blocked',
       } satisfies FacePersonJobPayload,
     });
     return {
@@ -865,9 +878,13 @@ export class FaceSyncService {
       registrationId,
       clientId,
     );
-    if (!row || row.status !== 'approved' || !row.isActive) {
+    if (
+      !row ||
+      !row.isActive ||
+      (row.status !== 'approved' && row.status !== 'blocked')
+    ) {
       throw new NotFoundException(
-        'Cadastro não encontrado, excluído ou não está aprovado.',
+        'Cadastro não encontrado, excluído ou sem face para sincronizar.',
       );
     }
     return {

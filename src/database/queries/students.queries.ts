@@ -120,6 +120,9 @@ export async function listStudentsByClass(
       accessSchedule: students.accessSchedule,
       situacaoMatricula: students.situacaoMatricula,
       isActive: students.isActive,
+      blockReason: students.blockReason,
+      blockedAt: students.blockedAt,
+      blockedByUserId: students.blockedByUserId,
       createdAt: students.createdAt,
       updatedAt: students.updatedAt,
     })
@@ -167,6 +170,8 @@ export async function findStudentByFaceIdAndClientId(
       id: students.id,
       name: students.name,
       photoKey: students.photoKey,
+      blockReason: students.blockReason,
+      blockedAt: students.blockedAt,
     })
     .from(students)
     .where(
@@ -272,6 +277,9 @@ export async function updateStudent(
       | 'accessSchedule'
       | 'situacaoMatricula'
       | 'isActive'
+      | 'blockReason'
+      | 'blockedAt'
+      | 'blockedByUserId'
     >
   >,
 ) {
@@ -282,6 +290,20 @@ export async function updateStudent(
     .where(and(eq(students.id, id), eq(students.clientId, clientId)))
     .returning();
   return row;
+}
+
+export async function blockStudent(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  blockedByUserId: string,
+  reason: string,
+) {
+  return updateStudent(db, id, clientId, {
+    blockReason: reason,
+    blockedAt: new Date(),
+    blockedByUserId,
+  });
 }
 
 export async function updateStudentFace(
@@ -369,6 +391,7 @@ export type StudentForGlobalSyncRow = {
   name: string;
   faceId: number;
   photoKey: string;
+  blocked: boolean;
 };
 
 /** Alunos com foto e sync pendente, falho ou parcial — elegíveis para sync global. */
@@ -382,6 +405,7 @@ export async function listStudentsForGlobalSync(
       name: students.name,
       faceId: students.faceId,
       photoKey: students.photoKey,
+      blockedAt: students.blockedAt,
     })
     .from(students)
     .where(
@@ -397,9 +421,18 @@ export async function listStudentsForGlobalSync(
     )
     .orderBy(asc(students.name));
 
-  return rows.filter(
-    (r): r is StudentForGlobalSyncRow => r.faceId != null && r.photoKey != null,
-  );
+  return rows
+    .filter(
+      (r): r is typeof r & { faceId: number; photoKey: string } =>
+        r.faceId != null && r.photoKey != null,
+    )
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      faceId: r.faceId,
+      photoKey: r.photoKey,
+      blocked: r.blockedAt != null,
+    }));
 }
 
 export type DeactivateStudentsNotInListResult = {

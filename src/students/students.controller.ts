@@ -16,6 +16,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { BlockPersonDto } from '../validation/dto/block-person.dto';
 import { StudentsService } from './students.service';
 
 @ApiTags('students')
@@ -102,6 +103,20 @@ export class StudentsController {
       clientId,
       studentId,
     );
+  }
+
+  @Post(':studentId/block')
+  @ApiOperation({
+    summary:
+      'Bloquear aluno: envia a face ao leitor no perfil Bloqueados e registra o motivo',
+  })
+  block(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() body: BlockPersonDto,
+  ) {
+    return this.studentsService.block(user, clientId, studentId, body);
   }
 
   @Post(':studentId/face/sync')

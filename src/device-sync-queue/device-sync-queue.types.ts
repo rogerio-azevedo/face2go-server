@@ -15,6 +15,7 @@ export type FacePersonJobPayload = {
   validFrom?: string;
   validUntil?: string;
   photoOnly?: boolean;
+  blocked?: boolean;
   resetReaderProgress?: boolean;
   previousDeviceSyncError?: string | null;
   readerIds?: string[];

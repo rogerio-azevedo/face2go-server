@@ -33,6 +33,18 @@ export class FacialAccess {
   @Prop({ type: String, default: null })
   personType!: 'student' | 'responsible' | 'member' | 'guest' | null;
 
+  @Prop({ type: String, default: 'granted' })
+  status!: 'granted' | 'denied';
+
+  @Prop({ type: Number, default: null })
+  errorCode!: number | null;
+
+  @Prop({ type: Number, default: null })
+  userType!: number | null;
+
+  @Prop({ type: Number, default: null })
+  cardType!: number | null;
+
   @Prop({ type: String, required: true })
   eventCode!: string;
 

@@ -16,6 +16,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { BlockPersonDto } from '../validation/dto/block-person.dto';
 import { ResponsiblesService } from './responsibles.service';
 
 @ApiTags('responsibles')
@@ -161,6 +162,20 @@ export class ResponsiblesController {
       studentId,
       body,
     );
+  }
+
+  @Post(':responsibleId/block')
+  @ApiOperation({
+    summary:
+      'Bloquear responsável: envia a face ao leitor no perfil Bloqueados e registra o motivo',
+  })
+  block(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+    @Body() body: BlockPersonDto,
+  ) {
+    return this.responsiblesService.block(user, clientId, responsibleId, body);
   }
 
   @Post(':responsibleId/face/sync')

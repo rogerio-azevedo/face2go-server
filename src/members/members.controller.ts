@@ -14,6 +14,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { BlockPersonDto } from '../validation/dto/block-person.dto';
 import { MembersService } from './members.service';
 
 @ApiTags('members')
@@ -129,6 +130,20 @@ export class MembersController {
     @Param('memberId', ParseUUIDPipe) memberId: string,
   ) {
     return this.membersService.delete(user, clientId, memberId);
+  }
+
+  @Post('members/:memberId/block')
+  @ApiOperation({
+    summary:
+      'Bloquear membro: envia a face ao leitor no perfil Bloqueados e registra o motivo',
+  })
+  block(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Body() body: BlockPersonDto,
+  ) {
+    return this.membersService.block(user, clientId, memberId, body);
   }
 
   @Post('members/:memberId/face/sync')

@@ -4,14 +4,20 @@ export const registrationStatusSchema = z.enum([
   'draft',
   'approved',
   'rejected',
+  'blocked',
 ]);
 
 export const registrationListFilterSchema = z.enum([
   'draft',
   'approved',
   'rejected',
+  'blocked',
   'deleted',
 ]);
+
+export const blockRegistrationSchema = z.object({
+  reason: z.string().trim().min(3).max(2000),
+});
 
 export const listRegistrationsQuerySchema = z.object({
   status: registrationListFilterSchema.optional(),

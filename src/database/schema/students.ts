@@ -13,6 +13,7 @@ import {
   pgEnum,
 } from 'drizzle-orm/pg-core';
 
+import { users } from './auth';
 import { clients } from './clients';
 import { deviceSyncStatusEnum } from './registrations';
 import { schoolClasses } from './schools';
@@ -52,6 +53,11 @@ export const students = pgTable(
     accessSchedule: jsonb('access_schedule').$type<StudentAccessScheduleJson>(),
     situacaoMatricula: situacaoMatriculaEnum('situacao_matricula'),
     isActive: boolean('is_active').default(true).notNull(),
+    blockReason: text('block_reason'),
+    blockedAt: timestamp('blocked_at'),
+    blockedByUserId: text('blocked_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

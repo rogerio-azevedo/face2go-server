@@ -140,6 +140,70 @@ Equipe Face2Go`;
       `E-mail de leitor offline enviado para ${to} (leitor="${readerName}")`,
     );
   }
+
+  async sendBlockedAttemptEmail(
+    to: string,
+    adminName: string | null,
+    personName: string,
+    blockReason: string | null,
+    readerName: string,
+    clientName: string,
+    eventDate: Date | null,
+  ): Promise<void> {
+    const greeting = adminName?.trim() ? `Olá, ${adminName.trim()}` : 'Olá';
+    const when = (eventDate ?? new Date()).toLocaleString('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'America/Sao_Paulo',
+    });
+    const dashboardUrl = `${this.frontendUrl}/client/dashboard`;
+    const reason = blockReason?.trim() || 'Não informado';
+
+    if (!this.sender.isConfigured()) {
+      this.logger.warn(
+        `[${this.sender.provider.toUpperCase()} desabilitado] Tentativa bloqueada de "${personName}" no leitor "${readerName}" — destinatário ${to}`,
+      );
+      return;
+    }
+
+    const subject = `Face2Go — tentativa de acesso de pessoa bloqueada`;
+    const text = `${greeting},
+
+Uma pessoa bloqueada tentou acessar o leitor "${readerName}" (${clientName}).
+
+Pessoa: ${personName}
+Motivo do bloqueio: ${reason}
+Quando: ${when}
+
+A porta não foi aberta.
+
+${dashboardUrl}
+
+Equipe Face2Go`;
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a2e;">
+  <p>${greeting},</p>
+  <p>Uma pessoa bloqueada tentou acessar o leitor <strong>${escapeHtml(readerName)}</strong> (${escapeHtml(clientName)}).</p>
+  <p><strong>Pessoa:</strong> ${escapeHtml(personName)}<br/>
+  <strong>Motivo do bloqueio:</strong> ${escapeHtml(reason)}<br/>
+  <strong>Quando:</strong> ${escapeHtml(when)}</p>
+  <p>A porta não foi aberta.</p>
+  <p>
+    <a href="${dashboardUrl}" style="display:inline-block;padding:12px 24px;background:#00c7b7;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">
+      Abrir painel
+    </a>
+  </p>
+  <p>Equipe Face2Go</p>
+</body>
+</html>`;
+
+    await this.sender.send({ to, subject, text, html });
+    this.logger.log(
+      `E-mail de tentativa bloqueada enviado para ${to} (pessoa="${personName}")`,
+    );
+  }
 }
 
 function escapeHtml(value: string): string {

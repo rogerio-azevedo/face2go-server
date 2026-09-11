@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import {
@@ -16,6 +16,7 @@ export async function listMembersWithFaceByClient(db: AppDb, clientId: string) {
       name: clientMembers.name,
       faceId: clientMembers.faceId,
       photoKey: clientMembers.photoKey,
+      blockedAt: clientMembers.blockedAt,
     })
     .from(clientMembers)
     .where(
@@ -38,12 +39,13 @@ export async function listApprovedRegistrationsWithFaceByClient(
       name: registrations.name,
       faceId: registrations.faceId,
       photoKey: registrations.faceImageKey,
+      status: registrations.status,
     })
     .from(registrations)
     .where(
       and(
         eq(registrations.clientId, clientId),
-        eq(registrations.status, 'approved'),
+        inArray(registrations.status, ['approved', 'blocked']),
         isNotNull(registrations.faceImageKey),
         isNotNull(registrations.faceId),
       ),
@@ -60,6 +62,7 @@ export async function listStudentsWithFaceByClient(
       name: students.name,
       faceId: students.faceId,
       photoKey: students.photoKey,
+      blockedAt: students.blockedAt,
     })
     .from(students)
     .where(
@@ -82,6 +85,7 @@ export async function listResponsiblesWithFaceByClient(
       name: responsibles.name,
       faceId: responsibles.faceId,
       photoKey: responsibles.photoKey,
+      blockedAt: responsibles.blockedAt,
     })
     .from(responsibles)
     .where(

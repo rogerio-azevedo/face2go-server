@@ -165,6 +165,7 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
       validFrom: payload.validFrom ? new Date(payload.validFrom) : undefined,
       validUntil: payload.validUntil ? new Date(payload.validUntil) : undefined,
       photoOnly: payload.photoOnly,
+      blocked: payload.blocked,
       resetReaderProgress: payload.resetReaderProgress,
       previousDeviceSyncError: payload.previousDeviceSyncError,
       readerIds: payload.readerIds,
@@ -212,6 +213,7 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
         timeSectionIds: person.timeSectionIds,
         validFrom: person.validFrom,
         validUntil: person.validUntil,
+        blocked: person.blocked,
         logContext: `reader-rebuild=${job.targetId}:${person.id}`,
         readerIds: [job.targetId],
         resetReaderProgress: false,
@@ -255,6 +257,7 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
         imageBuffer: buffer,
         photoKey: person.photoKey,
         timeSectionIds: person.timeSectionIds,
+        blocked: person.blocked,
         logContext: `school-batch=${entityKind}:${person.id}`,
         resetReaderProgress: false,
       });

@@ -9,7 +9,10 @@ import { Types } from 'mongoose';
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
 import { resolveAccessPersonByFaceId } from './resolve-access-person';
-import { ACCESS_FACIAL_RECORDED } from '../notifications/notifications.events';
+import {
+  ACCESS_BLOCKED_ATTEMPT,
+  ACCESS_FACIAL_RECORDED,
+} from '../notifications/notifications.events';
 import type { VideoEvent } from '../face-listener/face-listener.types';
 import { R2StorageService } from '../storage/r2-storage.service';
 import type { ReaderStreamContextLike } from './reader-stream-context.type';
@@ -47,6 +50,7 @@ export type AccessListItemDto = {
   snapPath: string | null;
   snapR2Key: string | null;
   readerDirection: 'in' | 'out' | null;
+  status: 'granted' | 'denied';
 };
 
 export type FacialAccessPhotoUrlDto = {
@@ -134,9 +138,7 @@ export class AccessesService {
     if (userId === undefined || userId === null || String(userId) === '') {
       return;
     }
-    if (data.Status != null && data.Status !== 1) {
-      return;
-    }
+    const denied = data.Status != null && data.Status !== 1;
 
     const rawSim = data.Similarity;
     const similarityNum =
@@ -145,7 +147,10 @@ export class AccessesService {
         : rawSim != null && String(rawSim).trim() !== ''
           ? Number(rawSim)
           : NaN;
-    if (!Number.isFinite(similarityNum) || similarityNum <= 0) {
+    if (
+      !denied &&
+      (!Number.isFinite(similarityNum) || similarityNum <= 0)
+    ) {
       return;
     }
 
@@ -184,6 +189,8 @@ export class AccessesService {
     let personId: string | null = null;
     let personType: 'student' | 'responsible' | 'member' | 'guest' | null =
       null;
+    let isBlocked = false;
+    let blockReason: string | null = null;
 
     try {
       const resolved = await resolveAccessPersonByFaceId(
@@ -195,11 +202,17 @@ export class AccessesService {
         personName = resolved.personName;
         personId = resolved.personId;
         personType = resolved.personType;
+        isBlocked = resolved.isBlocked === true;
+        blockReason = resolved.blockReason ?? null;
       }
     } catch (err: unknown) {
       this.logger.warn(
         `Lookup person identity falhou (faceId=${faceIdNum}, client=${ctx.clientId}): ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+
+    if (denied && !personId) {
+      return;
     }
 
     const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);
@@ -214,9 +227,13 @@ export class AccessesService {
       personName,
       personId,
       personType,
+      status: (denied ? 'denied' : 'granted') as 'granted' | 'denied',
+      errorCode: data.ErrorCode ?? null,
+      userType: data.UserType ?? null,
+      cardType: data.CardType ?? null,
       eventCode: event.code,
       eventAction: String(event.action),
-      similarity: similarityNum,
+      similarity: Number.isFinite(similarityNum) ? similarityNum : null,
       eventDate: eventDate ?? null,
       snapPath,
       snapR2Key,
@@ -261,19 +278,40 @@ export class AccessesService {
         this.persistedEventKeys.set(dedupKey, Date.now());
       }
 
-      this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
-        accessId: String(doc._id),
-        faceId: faceIdNum,
-        clientId: ctx.clientId,
-        companyId: ctx.companyId,
-        personName,
-        personId,
-        personType,
-        readerId: ctx.id,
-        readerName: ctx.name,
-        readerDirection: ctx.direction ?? null,
-        eventDate: eventDate ?? null,
-      });
+      if (denied) {
+        if (isBlocked) {
+          this.eventEmitter.emit(ACCESS_BLOCKED_ATTEMPT, {
+            accessId: String(doc._id),
+            faceId: faceIdNum,
+            clientId: ctx.clientId,
+            clientName: ctx.clientName,
+            companyId: ctx.companyId,
+            personName,
+            personId,
+            personType,
+            blockReason,
+            readerId: ctx.id,
+            readerName: ctx.name,
+            readerDirection: ctx.direction ?? null,
+            eventDate: eventDate ?? null,
+            snapR2Key,
+          });
+        }
+      } else {
+        this.eventEmitter.emit(ACCESS_FACIAL_RECORDED, {
+          accessId: String(doc._id),
+          faceId: faceIdNum,
+          clientId: ctx.clientId,
+          companyId: ctx.companyId,
+          personName,
+          personId,
+          personType,
+          readerId: ctx.id,
+          readerName: ctx.name,
+          readerDirection: ctx.direction ?? null,
+          eventDate: eventDate ?? null,
+        });
+      }
     } catch (err: unknown) {
       this.logger.error(
         `Mongo upsert facial_access (snap) falhou: ${err instanceof Error ? err.message : String(err)}`,
@@ -306,7 +344,9 @@ export class AccessesService {
       }
     }
 
-    const filter: Record<string, unknown> = { companyId };
+    const filter: Record<string, unknown> = {
+      companyId,
+    };
     if (options.clientId) {
       filter.clientId = options.clientId;
     }
@@ -380,6 +420,7 @@ export class AccessesService {
               readerDirection?: 'in' | 'out' | null;
             }
           ).readerDirection ?? null,
+        status: d.status === 'denied' ? 'denied' : 'granted',
       };
     });
 

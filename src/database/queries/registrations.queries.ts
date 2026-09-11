@@ -4,6 +4,7 @@ import {
   desc,
   eq,
   ilike,
+  inArray,
   isNotNull,
   or,
   sql,
@@ -173,7 +174,11 @@ export async function getRegistrationByIdForClient(
   return row;
 }
 
-export type RegistrationStatus = 'draft' | 'approved' | 'rejected';
+export type RegistrationStatus =
+  | 'draft'
+  | 'approved'
+  | 'rejected'
+  | 'blocked';
 
 export type RegistrationListFilter = RegistrationStatus | 'deleted';
 
@@ -263,6 +268,7 @@ export async function countSubmittedRegistrationsByStatus(
     draft: 0,
     approved: 0,
     rejected: 0,
+    blocked: 0,
     deleted: 0,
   };
   for (const row of rows) {
@@ -273,7 +279,8 @@ export async function countSubmittedRegistrationsByStatus(
     if (
       row.status === 'draft' ||
       row.status === 'approved' ||
-      row.status === 'rejected'
+      row.status === 'rejected' ||
+      row.status === 'blocked'
     ) {
       counts[row.status] = Number(row.total);
     }
@@ -358,6 +365,36 @@ export async function rejectRegistration(
   return row;
 }
 
+export async function blockRegistration(
+  db: AppDb,
+  registrationId: string,
+  clientId: string,
+  blockedByUserId: string,
+  reason: string,
+): Promise<RegistrationRow | undefined> {
+  const now = new Date();
+  const [row] = await db
+    .update(registrations)
+    .set({
+      status: 'blocked',
+      blockReason: reason,
+      blockedAt: now,
+      blockedByUserId,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(registrations.id, registrationId),
+        eq(registrations.clientId, clientId),
+        inArray(registrations.status, ['draft', 'approved']),
+        isNotNull(registrations.submittedAt),
+        eq(registrations.isActive, true),
+      ),
+    )
+    .returning();
+  return row;
+}
+
 /** Incrementa e retorna o próximo face_id por cliente (1, 2, …). Atômico no Postgres. */
 export async function bumpClientFaceCounter(
   db: AppDb,
@@ -400,7 +437,7 @@ export async function setRegistrationFaceAfterApprove(
       and(
         eq(registrations.id, registrationId),
         eq(registrations.clientId, clientId),
-        eq(registrations.status, 'approved'),
+        inArray(registrations.status, ['approved', 'blocked']),
       ),
     )
     .returning();

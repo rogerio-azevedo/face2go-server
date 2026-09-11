@@ -394,6 +394,8 @@ export async function findResponsibleByFaceIdAndClientId(
       id: responsibles.id,
       name: responsibles.name,
       photoKey: responsibles.photoKey,
+      blockReason: responsibles.blockReason,
+      blockedAt: responsibles.blockedAt,
     })
     .from(responsibles)
     .where(
@@ -606,6 +608,9 @@ export async function updateResponsible(
       | 'deviceSyncError'
       | 'pushToken'
       | 'isActive'
+      | 'blockReason'
+      | 'blockedAt'
+      | 'blockedByUserId'
     >
   >,
 ) {
@@ -615,6 +620,20 @@ export async function updateResponsible(
     .where(and(eq(responsibles.id, id), eq(responsibles.clientId, clientId)))
     .returning();
   return rows[0];
+}
+
+export async function blockResponsible(
+  db: AppDb,
+  id: string,
+  clientId: string,
+  blockedByUserId: string,
+  reason: string,
+) {
+  return updateResponsible(db, id, clientId, {
+    blockReason: reason,
+    blockedAt: new Date(),
+    blockedByUserId,
+  });
 }
 
 export async function updateResponsibleFace(
@@ -884,6 +903,7 @@ export type ResponsibleForGlobalSyncRow = {
   name: string;
   faceId: number;
   photoKey: string;
+  blocked: boolean;
 };
 
 /** Responsáveis com foto e sync pendente, falho ou parcial — elegíveis para sync global. */
@@ -897,6 +917,7 @@ export async function listResponsiblesForGlobalSync(
       name: responsibles.name,
       faceId: responsibles.faceId,
       photoKey: responsibles.photoKey,
+      blockedAt: responsibles.blockedAt,
     })
     .from(responsibles)
     .where(
@@ -912,10 +933,18 @@ export async function listResponsiblesForGlobalSync(
     )
     .orderBy(asc(responsibles.name));
 
-  return rows.filter(
-    (r): r is ResponsibleForGlobalSyncRow =>
-      r.faceId != null && r.photoKey != null,
-  );
+  return rows
+    .filter(
+      (r): r is typeof r & { faceId: number; photoKey: string } =>
+        r.faceId != null && r.photoKey != null,
+    )
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      faceId: r.faceId,
+      photoKey: r.photoKey,
+      blocked: r.blockedAt != null,
+    }));
 }
 
 /** Mapa responsibleId → índices de zona (via alunos vinculados). */

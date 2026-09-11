@@ -366,32 +366,62 @@ async function setRepFaceFilt(
 const FIND_CARD_PAGE_SIZE = 50;
 const DEVICE_USERS_MAX_PAGES = 200;
 
+/** Perfil nativo "Geral" no AccessUser.cgi. */
+export const INTELBRAS_USER_TYPE_GENERAL = 0;
+/** Perfil nativo "Bloqueados" no AccessUser.cgi — face reconhecida, porta não abre. */
+export const INTELBRAS_USER_TYPE_BLOCKED = 1;
+
 export type IntelbrasAccessUser = {
   UserID: string;
   UserName?: string;
+  UserType?: number;
+  Authority?: number;
+  UserStatus?: number;
+  RoleID?: number;
   timeSectionIndices: number[];
+  doors: number[];
+  specialDaysSchedule: number[];
   ValidFrom?: string;
   ValidTo?: string;
 };
 
+function parseOptionalInt(value: string | undefined): number | undefined {
+  if (value == null || value.trim() === '') return undefined;
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function pushIndexedNumber(
+  key: string,
+  value: string,
+  prefix: string,
+  dest: number[],
+): boolean {
+  if (!key.startsWith(`${prefix}[`)) return false;
+  const n = parseInt(value, 10);
+  if (Number.isFinite(n)) dest.push(n);
+  return true;
+}
+
 /**
  * Parse de `AccessUser.cgi?action=list`. RecNo não vem neste CGI —
- * só UserID, nome, zonas e validade.
+ * UserID, perfil, zonas, validade e campos vizinhos do dump real.
  */
 export function parseAccessUserListText(
   text: string,
 ): IntelbrasAccessUser | null {
   const fields: Record<string, string> = {};
   const sections: number[] = [];
+  const doors: number[] = [];
+  const specialDays: number[] = [];
   for (const line of text.split('\n')) {
     const m = /^Users\[\d+\]\.(\S+)=(.*)$/.exec(line.trim());
     if (!m) continue;
     const key = m[1];
     const value = m[2] ?? '';
-    const ts = /^TimeSections\[(\d+)\]$/.exec(key);
-    if (ts) {
-      const zone = parseInt(value, 10);
-      if (Number.isFinite(zone)) sections.push(zone);
+    if (pushIndexedNumber(key, value, 'TimeSections', sections)) continue;
+    if (pushIndexedNumber(key, value, 'Doors', doors)) continue;
+    if (pushIndexedNumber(key, value, 'SpecialDaysSchedule', specialDays)) {
       continue;
     }
     fields[key] = value;
@@ -401,7 +431,13 @@ export function parseAccessUserListText(
   return {
     UserID: userId,
     UserName: fields.UserName,
+    UserType: parseOptionalInt(fields.UserType),
+    Authority: parseOptionalInt(fields.Authority),
+    UserStatus: parseOptionalInt(fields.UserStatus),
+    RoleID: parseOptionalInt(fields.RoleID),
     timeSectionIndices: [...new Set(sections)].sort((a, b) => a - b),
+    doors: [...new Set(doors)].sort((a, b) => a - b),
+    specialDaysSchedule: [...new Set(specialDays)].sort((a, b) => a - b),
     ValidFrom: fields.ValidFrom,
     ValidTo: fields.ValidTo,
   };
@@ -445,6 +481,90 @@ export async function intelbrasFindAccessUserByUserId(
       return null;
     }
     syncLogError('findAccessUser', err, { reader: label, userId });
+    throw err;
+  }
+}
+
+function accessUserToUpdatePayload(
+  existing: IntelbrasAccessUser,
+  userType: number,
+  fallbackName?: string,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    UserID: existing.UserID,
+    UserName:
+      existing.UserName?.trim() ||
+      normalizeNameForFacialReader(fallbackName?.trim() || 'USUARIO') ||
+      'USUARIO',
+    UserType: userType,
+    ValidFrom: existing.ValidFrom ?? DEFAULT_INTELBRAS_VALID_DATE_START,
+    ValidTo: existing.ValidTo ?? DEFAULT_INTELBRAS_VALID_DATE_END,
+  };
+  if (existing.Authority != null) payload.Authority = existing.Authority;
+  if (existing.UserStatus != null) payload.UserStatus = existing.UserStatus;
+  if (existing.RoleID != null) payload.RoleID = existing.RoleID;
+  if (existing.timeSectionIndices.length > 0) {
+    payload.TimeSections = existing.timeSectionIndices;
+  }
+  if (existing.doors.length > 0) payload.Doors = existing.doors;
+  if (existing.specialDaysSchedule.length > 0) {
+    payload.SpecialDaysSchedule = existing.specialDaysSchedule;
+  }
+  return payload;
+}
+
+/**
+ * Aplica o perfil nativo (UserType) sem perder zona/validade/portas.
+ * Read-modify-write via AccessUser.cgi updateMulti; insertMulti se o usuário
+ * ainda não existir no leitor.
+ */
+export async function intelbrasSetUserTypeOnReader(
+  reader: PlainReaderCredential,
+  faceId: string,
+  userType: number,
+  options?: { userName?: string },
+): Promise<void> {
+  const label = readerLabel(reader);
+  const auth = digestAuthForReader(reader);
+  const base = deviceUrl(reader);
+  const existing = await intelbrasFindAccessUserByUserId(reader, faceId);
+  const userPayload = existing
+    ? accessUserToUpdatePayload(existing, userType, options?.userName)
+    : {
+        UserID: faceId,
+        UserName:
+          normalizeNameForFacialReader(options?.userName?.trim() || 'USUARIO') ||
+          'USUARIO',
+        UserType: userType,
+        ValidFrom: DEFAULT_INTELBRAS_VALID_DATE_START,
+        ValidTo: DEFAULT_INTELBRAS_VALID_DATE_END,
+      };
+  const action = existing ? 'updateMulti' : 'insertMulti';
+  const url = `${base}/cgi-bin/AccessUser.cgi?action=${action}`;
+
+  syncLog('setUserType:inicio', {
+    reader: label,
+    faceId,
+    userType,
+    action,
+  });
+
+  try {
+    const response = await digestRequest(auth, {
+      method: 'POST',
+      url,
+      data: { UserList: [userPayload] },
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const status = response.status ?? 0;
+    if (status >= 400) {
+      throw new Error(
+        `HTTP ${status}: ${truncateForLog(response.data) || 'erro'}`,
+      );
+    }
+    syncLog('setUserType:ok', { reader: label, faceId, userType, action });
+  } catch (err) {
+    syncLogError('setUserType', err, { reader: label, faceId, userType });
     throw err;
   }
 }
@@ -698,6 +818,8 @@ function buildAccessCardUpdateParams(args: {
 export type IntelbrasUpsertFaceOptions = {
   /** Só troca a foto — pula busca/update do cartão (validado no leitor real). */
   photoOnly?: boolean;
+  /** Aplica perfil nativo Bloqueados (UserType=1) após cartão + foto. */
+  blocked?: boolean;
 };
 
 export async function intelbrasUpsertFaceOnReader(
@@ -935,6 +1057,15 @@ export async function intelbrasUpsertFaceOnReader(
           });
         }
       }
+    }
+
+    if (options?.blocked) {
+      await intelbrasSetUserTypeOnReader(
+        reader,
+        faceId,
+        INTELBRAS_USER_TYPE_BLOCKED,
+        { userName: normalizedName },
+      );
     }
 
     syncLog('upsertFace:concluido', { reader: label, faceId });

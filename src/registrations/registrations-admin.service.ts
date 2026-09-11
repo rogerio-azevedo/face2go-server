@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import * as clientsQueries from '../database/queries/clients.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { DatabaseService } from '../database/database.service';
 import { PermissionsService } from '../permissions/permissions.service';
@@ -18,7 +19,10 @@ import { R2StorageService } from '../storage/r2-storage.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { zodFirstMessage } from '../validation/zod-utils';
 import type { ListRegistrationsQuery } from '../validation/registrations.schema';
-import { updateRegistrationSchema } from '../validation/registrations.schema';
+import {
+  blockRegistrationSchema,
+  updateRegistrationSchema,
+} from '../validation/registrations.schema';
 import { normalizeAdditionalDataForClientType } from './registration-additional-data';
 import {
   buildPaginatedResult,
@@ -130,6 +134,9 @@ export class RegistrationsAdminService {
       submittedAt: row.submittedAt,
       approvedAt: row.approvedAt,
       rejectionNotes: row.rejectionNotes,
+      blockReason: row.blockReason ?? null,
+      blockedAt: row.blockedAt ? row.blockedAt.toISOString() : null,
+      blockedByUserId: row.blockedByUserId ?? null,
       createdAt: row.createdAt,
       hasFacePhoto: Boolean(row.faceImageKey),
       faceUrl,
@@ -361,6 +368,136 @@ export class RegistrationsAdminService {
     const hasFacialReaders =
       await this.faceSync.hasActiveFacialReaders(clientId);
     return await this.mapRow(updated, hasFacialReaders);
+  }
+
+  async blockForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    registrationId: string,
+    body: unknown,
+  ) {
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.blockShared(clientId, registrationId, user.sub, body);
+  }
+
+  async blockForClientTenant(
+    user: JwtPayload,
+    registrationId: string,
+    body: unknown,
+  ) {
+    const clientId = this.ensureClientTenant(user);
+    return this.blockShared(clientId, registrationId, user.sub, body);
+  }
+
+  private async blockShared(
+    clientId: string,
+    registrationId: string,
+    decidedByUserId: string,
+    body: unknown,
+  ) {
+    const parsed = blockRegistrationSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const reason = parsed.data.reason;
+
+    const existing = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!existing || !existing.isActive || !existing.submittedAt) {
+      throw new NotFoundException(
+        'Cadastro não encontrado ou já foi processado.',
+      );
+    }
+    if (existing.status === 'blocked') {
+      throw new BadRequestException('Cadastro já está bloqueado.');
+    }
+    if (existing.status !== 'draft' && existing.status !== 'approved') {
+      throw new BadRequestException(
+        'Só é possível bloquear cadastros aguardando ou aprovados.',
+      );
+    }
+    if (!existing.faceImageKey) {
+      throw new BadRequestException(
+        'Cadastro sem foto — não é possível enviar a face ao leitor.',
+      );
+    }
+
+    const updated = await registrationsQueries.blockRegistration(
+      this.database.db,
+      registrationId,
+      clientId,
+      decidedByUserId,
+      reason,
+    );
+    if (!updated) {
+      throw new NotFoundException(
+        'Cadastro não encontrado ou já foi processado.',
+      );
+    }
+
+    let rowOut = updated;
+    if (rowOut.faceId == null) {
+      const faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      const linked = await registrationsQueries.setRegistrationFaceAfterApprove(
+        this.database.db,
+        registrationId,
+        clientId,
+        faceId,
+      );
+      if (!linked) {
+        throw new BadRequestException('Falha ao atribuir face_id ao cadastro.');
+      }
+      rowOut = linked;
+    }
+
+    try {
+      await membersQueries.setMemberBlockByRegistrationId(
+        this.database.db,
+        clientId,
+        registrationId,
+        {
+          blockReason: reason,
+          blockedAt: rowOut.blockedAt ?? new Date(),
+          blockedByUserId: decidedByUserId,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Falha ao marcar membro bloqueado reg=${registrationId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    try {
+      await this.faceSync.enqueueApprovedRegistrationJob(
+        registrationId,
+        clientId,
+        decidedByUserId,
+        { resetReaderProgress: true, blocked: true },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `enqueue pós-bloqueio reg=${registrationId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    const refreshed = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
+    return await this.mapRow(refreshed ?? rowOut, hasFacialReaders);
   }
 
   private ensureCompanyAdmin(user: JwtPayload) {

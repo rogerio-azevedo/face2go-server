@@ -2,6 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import {
+  blockRegistrationSchema,
   listRegistrationsQuerySchema,
   updateRegistrationSchema,
 } from '../registrations.schema';
@@ -51,4 +52,8 @@ export class ListRegistrationsQueryDto extends createZodDto(
 
 export class UpdateRegistrationDto extends createZodDto(
   updateRegistrationSchema,
+) {}
+
+export class BlockRegistrationDto extends createZodDto(
+  blockRegistrationSchema,
 ) {}

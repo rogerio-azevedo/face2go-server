@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as vehicleQueries from '../database/queries/vehicles.queries';
@@ -27,6 +28,7 @@ import {
   parseListPaginationParams,
   type ListPaginationParams,
 } from '../common/pagination';
+import { blockPersonSchema } from '../validation/block-person.schema';
 import {
   createResponsibleSchema,
   linkResponsibleStudentSchema,
@@ -614,6 +616,7 @@ export class ResponsiblesService {
       logContext: `responsible-sync=${responsibleId}`,
       resetReaderProgress: false,
       previousDeviceSyncError: row.deviceSyncError,
+      blocked: responsible.blockedAt != null,
       persistResult: async (sync) => {
         await responsiblesQueries.updateResponsibleFace(
           this.database.db,
@@ -643,6 +646,118 @@ export class ResponsiblesService {
         }
       },
     });
+  }
+
+  async block(
+    user: JwtPayload,
+    clientId: string,
+    responsibleId: string,
+    body: unknown,
+  ) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const parsed = blockPersonSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const reason = parsed.data.reason;
+
+    const existing = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+    if (existing.blockedAt) {
+      throw new BadRequestException('Responsável já está bloqueado.');
+    }
+    if (!existing.photoKey) {
+      throw new BadRequestException(
+        'Sem foto cadastrada — não é possível enviar a face ao leitor.',
+      );
+    }
+
+    let faceId = existing.faceId;
+    if (faceId == null) {
+      faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      await responsiblesQueries.updateResponsibleFace(
+        this.database.db,
+        responsibleId,
+        clientId,
+        { faceId },
+      );
+    }
+
+    const updated = await responsiblesQueries.blockResponsible(
+      this.database.db,
+      responsibleId,
+      clientId,
+      user.sub,
+      reason,
+    );
+    if (!updated) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      responsibleId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    try {
+      await this.faceSync.enqueuePersonSync({
+        clientId,
+        entityKind: 'responsible',
+        entityId: responsibleId,
+        faceId,
+        name: updated.name,
+        photoKey: updated.photoKey ?? existing.photoKey,
+        timeSectionIds: [],
+        logContext: `responsible-block=${responsibleId}`,
+        resetReaderProgress: true,
+        blocked: true,
+        persistResult: async (sync) => {
+          await responsiblesQueries.updateResponsibleFace(
+            this.database.db,
+            responsibleId,
+            clientId,
+            {
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+          );
+        },
+      });
+    } catch (err: unknown) {
+      this.log.warn(
+        `enqueue pós-bloqueio responsible=${responsibleId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    return {
+      ...updated,
+      email: updated.userId
+        ? await responsiblesQueries.getResponsibleEmailByUserId(
+            this.database.db,
+            updated.userId,
+          )
+        : null,
+      photoUrl: await this.optionalPhotoUrl(updated.photoKey),
+    };
   }
 
   async delete(

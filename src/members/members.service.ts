@@ -28,6 +28,7 @@ import {
   parseListPaginationParams,
   type ListPaginationParams,
 } from '../common/pagination';
+import { blockPersonSchema } from '../validation/block-person.schema';
 import {
   createClientRoleSchema,
   createMemberSchema,
@@ -67,6 +68,9 @@ function mapMemberRow(
     deviceSyncError: row.deviceSyncError,
     additionalData: row.additionalData,
     isActive: row.isActive,
+    blockReason: row.blockReason ?? null,
+    blockedAt: row.blockedAt ? row.blockedAt.toISOString() : null,
+    blockedByUserId: row.blockedByUserId ?? null,
     canEnrollStudentFace: row.canEnrollStudentFace,
     canEnrollMemberFace: row.canEnrollMemberFace,
     createdAt: row.createdAt.toISOString(),
@@ -661,6 +665,7 @@ export class MembersService {
       logContext: `member-sync=${memberId}`,
       resetReaderProgress: false,
       previousDeviceSyncError: row.deviceSyncError,
+      blocked: row.blockedAt != null,
       persistResult: async (sync) => {
         await membersQueries.updateMemberFace(
           this.database.db,
@@ -690,6 +695,124 @@ export class MembersService {
         }
       },
     });
+  }
+
+  async block(
+    user: JwtPayload,
+    clientId: string,
+    memberId: string,
+    body: unknown,
+  ) {
+    await this.assertManageClient(user, clientId);
+    const parsed = blockPersonSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const reason = parsed.data.reason;
+
+    const existing = await membersQueries.getMemberById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    if (existing.blockedAt) {
+      throw new BadRequestException('Membro já está bloqueado.');
+    }
+    if (!existing.photoKey) {
+      throw new BadRequestException(
+        'Sem foto cadastrada — não é possível enviar a face ao leitor.',
+      );
+    }
+
+    let faceId = existing.faceId;
+    if (faceId == null) {
+      faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      await membersQueries.updateMemberFace(
+        this.database.db,
+        memberId,
+        clientId,
+        { faceId },
+      );
+    }
+
+    const updated = await membersQueries.updateMember(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        blockReason: reason,
+        blockedAt: new Date(),
+        blockedByUserId: user.sub,
+      },
+    );
+    if (!updated) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+
+    await membersQueries.updateMemberFace(
+      this.database.db,
+      memberId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    try {
+      await this.faceSync.enqueuePersonSync({
+        clientId,
+        entityKind: 'member',
+        entityId: memberId,
+        faceId,
+        name: updated.name,
+        photoKey: updated.photoKey ?? existing.photoKey,
+        timeSectionIds: [],
+        logContext: `member-block=${memberId}`,
+        resetReaderProgress: true,
+        blocked: true,
+        persistResult: async (sync) => {
+          await membersQueries.updateMemberFace(
+            this.database.db,
+            memberId,
+            clientId,
+            {
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+          );
+        },
+      });
+    } catch (err: unknown) {
+      this.log.warn(
+        `enqueue pós-bloqueio member=${memberId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    const row = await membersQueries.getMemberWithRoleById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    return mapMemberRow(
+      row,
+      await this.optionalPhotoUrl(row.photoKey),
+      await this.faceSync.hasActiveFacialReaders(clientId),
+    );
   }
 
   async delete(user: JwtPayload, clientId: string, memberId: string) {

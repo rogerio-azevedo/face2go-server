@@ -404,6 +404,9 @@ export async function updateMember(
       | 'canEnrollStudentFace'
       | 'canEnrollMemberFace'
       | 'userId'
+      | 'blockReason'
+      | 'blockedAt'
+      | 'blockedByUserId'
     >
   >,
 ) {
@@ -424,6 +427,34 @@ export async function linkUserToMember(
   userId: string,
 ) {
   return updateMember(db, memberId, clientId, { userId });
+}
+
+export async function setMemberBlockByRegistrationId(
+  db: AppDb,
+  clientId: string,
+  registrationId: string,
+  input: {
+    blockReason: string;
+    blockedAt: Date;
+    blockedByUserId: string;
+  },
+) {
+  const [row] = await db
+    .update(clientMembers)
+    .set({
+      blockReason: input.blockReason,
+      blockedAt: input.blockedAt,
+      blockedByUserId: input.blockedByUserId,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(clientMembers.clientId, clientId),
+        eq(clientMembers.registrationId, registrationId),
+      ),
+    )
+    .returning();
+  return row ?? null;
 }
 
 export async function updateMemberFace(
@@ -468,6 +499,8 @@ export async function findMemberByFaceIdAndClientId(
       id: clientMembers.id,
       name: clientMembers.name,
       photoKey: clientMembers.photoKey,
+      blockReason: clientMembers.blockReason,
+      blockedAt: clientMembers.blockedAt,
       roleSlug: clientRoles.slug,
       roleName: clientRoles.name,
     })

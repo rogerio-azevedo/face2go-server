@@ -1,6 +1,35 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/device-sync-jobs/{jobId}": {
+      "get": {
+        "operationId": "DeviceSyncJobsController_getJob",
+        "parameters": [
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status de um job de sync de dispositivo",
+        "tags": [
+          "device-sync-jobs"
+        ]
+      }
+    },
     "/companies/{id}/features": {
       "get": {
         "operationId": "CompanyFeaturesController_list",
@@ -108,7 +137,7 @@
             "bearer": []
           }
         ],
-        "summary": "Sincronizar placa do veículo com as câmeras LPR Intelbras do cliente",
+        "summary": "Enfileirar sync da placa com as câmeras LPR (jobId)",
         "tags": [
           "company-lpr-plate-sync"
         ]
@@ -137,7 +166,7 @@
             "bearer": []
           }
         ],
-        "summary": "SSE — progresso da sincronização em lote de placas LPR (token na query aceito)",
+        "summary": "SSE — observa a fila de sync de placas (token na query aceito)",
         "tags": [
           "company-lpr-plate-sync"
         ]
@@ -166,7 +195,7 @@
             "bearer": []
           }
         ],
-        "summary": "Sincronizar placa com as câmeras LPR Intelbras do meu cliente",
+        "summary": "Enfileirar sync da placa (jobId)",
         "tags": [
           "client-lpr-plate-sync"
         ]
@@ -186,7 +215,7 @@
             "bearer": []
           }
         ],
-        "summary": "SSE — progresso da sincronização em lote (token na query)",
+        "summary": "SSE — observa a fila de sync de placas (token na query)",
         "tags": [
           "client-lpr-plate-sync"
         ]
@@ -1306,137 +1335,6 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users": {
-      "get": {
-        "operationId": "ReadersController_getDeviceUsers",
-        "parameters": [
-          {
-            "name": "readerId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "offset",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "search",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Listar usuários cadastrados no dispositivo (direto da memória)",
-        "tags": [
-          "readers"
-        ]
-      }
-    },
-    "/readers/{readerId}/device-users/batch-delete": {
-      "post": {
-        "operationId": "ReadersDeviceUsersController_batchDeleteDeviceUsers",
-        "parameters": [
-          {
-            "name": "readerId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BatchDeleteDeviceUsersDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Remover vários usuários da memória do dispositivo",
-        "tags": [
-          "readers"
-        ]
-      }
-    },
-    "/readers/{readerId}/device-users/remove-orphans": {
-      "post": {
-        "operationId": "ReadersDeviceUsersController_removeOrphans",
-        "parameters": [
-          {
-            "name": "readerId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RemoveDeviceUserOrphansDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Remover do leitor os usuários que não existem no Face2Go (órfãos)",
-        "tags": [
-          "readers"
-        ]
-      }
-    },
     "/readers/monitor/status": {
       "get": {
         "operationId": "ReadersController_monitorStatus",
@@ -1666,9 +1564,274 @@
         ]
       }
     },
+    "/readers/{readerId}/device-users": {
+      "get": {
+        "operationId": "ReadersDeviceUsersController_getDeviceUsers",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar usuários cadastrados no dispositivo (direto da memória)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/batch-delete": {
+      "post": {
+        "operationId": "ReadersDeviceUsersController_batchDeleteDeviceUsers",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteDeviceUsersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover vários usuários da memória do dispositivo",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/remove-orphans": {
+      "post": {
+        "operationId": "ReadersDeviceUsersController_removeOrphans",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveDeviceUserOrphansDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover do leitor os usuários que não existem no Face2Go (órfãos)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/wipe-all": {
+      "post": {
+        "operationId": "ReadersDeviceUsersController_wipeAll",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Apagar todos os usuários da memória deste leitor (clientes não-escola)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/sync-status": {
+      "get": {
+        "operationId": "ReadersDeviceUsersController_getSyncStatus",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Jobs de sync de faces ativos neste cliente (queued/running)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/sync-all": {
+      "post": {
+        "operationId": "ReadersDeviceUsersController_enqueueSyncAll",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueDeviceSyncBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileira sync neste leitor e devolve o job (não bloqueia)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
+    "/readers/{readerId}/device-users/sync-all/progress": {
+      "get": {
+        "operationId": "ReadersDeviceUsersController_syncAllProgress",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "force",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — observa sync neste leitor (query force=1 reenvia todos; token na query aceito)",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
     "/readers/{readerId}/device-users/{userId}": {
       "delete": {
-        "operationId": "ReadersController_removeDeviceUser",
+        "operationId": "ReadersDeviceUsersController_removeDeviceUser",
         "parameters": [
           {
             "name": "readerId",
@@ -1705,7 +1868,7 @@
     },
     "/readers/{readerId}/device-users/{userId}/face": {
       "get": {
-        "operationId": "ReadersController_getDeviceUserFace",
+        "operationId": "ReadersDeviceUsersController_getDeviceUserFace",
         "parameters": [
           {
             "name": "readerId",
@@ -1820,6 +1983,318 @@
         "summary": "Listar acessos faciais (MongoDB), por empresa",
         "tags": [
           "accesses"
+        ]
+      }
+    },
+    "/clients/{clientId}/faces/sync-all": {
+      "post": {
+        "operationId": "CompanyFaceSyncController_enqueueSyncAll",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueDeviceSyncBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileira sync em lote dos cadastros (não bloqueia)",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/clients/{clientId}/faces/sync-status": {
+      "get": {
+        "operationId": "CompanyFaceSyncController_getBatchSyncStatus",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resumo dos jobs de faces ativos neste cliente (queued/running)",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/clients/{clientId}/faces/{registrationId}/sync": {
+      "post": {
+        "operationId": "CompanyFaceSyncController_syncOne",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileirar sync da face de um cadastro aprovado (202 + jobId)",
+        "tags": [
+          "company-face-sync"
+        ]
+      },
+      "get": {
+        "operationId": "CompanyFaceSyncController_getSyncStatus",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status do sync facial de um cadastro aprovado",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/clients/{clientId}/faces/sync-all/progress": {
+      "get": {
+        "operationId": "CompanyFaceSyncController_syncAllProgress",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "force",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query aceito)",
+        "tags": [
+          "company-face-sync"
+        ]
+      }
+    },
+    "/client/faces/sync-all": {
+      "post": {
+        "operationId": "ClientFaceSyncController_enqueueSyncAll",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueDeviceSyncBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileira sync em lote dos cadastros (não bloqueia)",
+        "tags": [
+          "client-face-sync"
+        ]
+      }
+    },
+    "/client/faces/sync-status": {
+      "get": {
+        "operationId": "ClientFaceSyncController_getBatchSyncStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resumo dos jobs de faces ativos neste cliente (queued/running)",
+        "tags": [
+          "client-face-sync"
+        ]
+      }
+    },
+    "/client/faces/{registrationId}/sync": {
+      "post": {
+        "operationId": "ClientFaceSyncController_syncOne",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileirar sync da face (202 + jobId)",
+        "tags": [
+          "client-face-sync"
+        ]
+      },
+      "get": {
+        "operationId": "ClientFaceSyncController_getSyncStatus",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Status do sync facial de um cadastro",
+        "tags": [
+          "client-face-sync"
+        ]
+      }
+    },
+    "/client/faces/sync-all/progress": {
+      "get": {
+        "operationId": "ClientFaceSyncController_syncAllProgress",
+        "parameters": [
+          {
+            "name": "force",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query)",
+        "tags": [
+          "client-face-sync"
         ]
       }
     },
@@ -2431,7 +2906,9 @@
               "enum": [
                 "draft",
                 "approved",
-                "rejected"
+                "rejected",
+                "blocked",
+                "deleted"
               ]
             }
           },
@@ -2535,6 +3012,45 @@
         ]
       }
     },
+    "/client/registrations/{registrationId}/block": {
+      "post": {
+        "operationId": "ClientRegistrationsController_block",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockRegistrationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bloquear cadastro: envia a face ao leitor no perfil Bloqueados e registra o motivo",
+        "tags": [
+          "client-registrations"
+        ]
+      }
+    },
     "/client/registrations/{registrationId}/reject": {
       "post": {
         "operationId": "ClientRegistrationsController_reject",
@@ -2564,6 +3080,101 @@
         ]
       }
     },
+    "/client/registrations/{registrationId}": {
+      "patch": {
+        "operationId": "ClientRegistrationsController_update",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegistrationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Editar cadastro aprovado do meu cliente",
+        "tags": [
+          "client-registrations"
+        ]
+      },
+      "delete": {
+        "operationId": "ClientRegistrationsController_softDelete",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir cadastro aprovado (soft delete) e remover face dos leitores",
+        "tags": [
+          "client-registrations"
+        ]
+      }
+    },
+    "/client/registrations/{registrationId}/restore": {
+      "post": {
+        "operationId": "ClientRegistrationsController_restore",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Restaurar cadastro excluído e resincronizar face nos leitores",
+        "tags": [
+          "client-registrations"
+        ]
+      }
+    },
     "/clients/{clientId}/registrations": {
       "get": {
         "operationId": "CompanyRegistrationsController_list",
@@ -2585,7 +3196,9 @@
               "enum": [
                 "draft",
                 "approved",
-                "rejected"
+                "rejected",
+                "blocked",
+                "deleted"
               ]
             }
           },
@@ -2705,6 +3318,53 @@
         ]
       }
     },
+    "/clients/{clientId}/registrations/{registrationId}/block": {
+      "post": {
+        "operationId": "CompanyRegistrationsController_block",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockRegistrationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bloquear cadastro: envia a face ao leitor no perfil Bloqueados e registra o motivo",
+        "tags": [
+          "company-registrations"
+        ]
+      }
+    },
     "/clients/{clientId}/registrations/{registrationId}/reject": {
       "post": {
         "operationId": "CompanyRegistrationsController_reject",
@@ -2742,9 +3402,91 @@
         ]
       }
     },
-    "/clients/{clientId}/faces/{registrationId}/sync": {
+    "/clients/{clientId}/registrations/{registrationId}": {
+      "patch": {
+        "operationId": "CompanyRegistrationsController_update",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRegistrationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Editar cadastro aprovado",
+        "tags": [
+          "company-registrations"
+        ]
+      },
+      "delete": {
+        "operationId": "CompanyRegistrationsController_softDelete",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir cadastro aprovado (soft delete) e remover face dos leitores",
+        "tags": [
+          "company-registrations"
+        ]
+      }
+    },
+    "/clients/{clientId}/registrations/{registrationId}/restore": {
       "post": {
-        "operationId": "CompanyFaceSyncController_syncOne",
+        "operationId": "CompanyRegistrationsController_restore",
         "parameters": [
           {
             "name": "clientId",
@@ -2773,104 +3515,9 @@
             "bearer": []
           }
         ],
-        "summary": "Sincronizar face de um cadastro aprovado com os leitores do cliente",
+        "summary": "Restaurar cadastro excluído e resincronizar face nos leitores",
         "tags": [
-          "company-face-sync"
-        ]
-      }
-    },
-    "/clients/{clientId}/faces/sync-all/progress": {
-      "get": {
-        "operationId": "CompanyFaceSyncController_syncAllProgress",
-        "parameters": [
-          {
-            "name": "clientId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "force",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query aceito)",
-        "tags": [
-          "company-face-sync"
-        ]
-      }
-    },
-    "/client/faces/{registrationId}/sync": {
-      "post": {
-        "operationId": "ClientFaceSyncController_syncOne",
-        "parameters": [
-          {
-            "name": "registrationId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Sincronizar face com os leitores do meu cliente",
-        "tags": [
-          "client-face-sync"
-        ]
-      }
-    },
-    "/client/faces/sync-all/progress": {
-      "get": {
-        "operationId": "ClientFaceSyncController_syncAllProgress",
-        "parameters": [
-          {
-            "name": "force",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "SSE — observa a fila de sync em lote (query force=1 reenvia todos; token na query)",
-        "tags": [
-          "client-face-sync"
+          "company-registrations"
         ]
       }
     },
@@ -4498,9 +5145,9 @@
         ]
       }
     },
-    "/clients/{clientId}/students/face/global-sync/progress": {
+    "/clients/{clientId}/students/face/global-sync/status": {
       "get": {
-        "operationId": "StudentsController_globalSyncProgress",
+        "operationId": "StudentsController_getGlobalSyncStatus",
         "parameters": [
           {
             "name": "clientId",
@@ -4521,7 +5168,36 @@
             "bearer": []
           }
         ],
-        "summary": "SSE — progresso da sincronização global de alunos (token na query)",
+        "summary": "Jobs de sync de faces ativos neste cliente (escola)",
+        "tags": [
+          "students"
+        ]
+      }
+    },
+    "/clients/{clientId}/students/face/global-sync": {
+      "post": {
+        "operationId": "StudentsController_enqueueGlobalSync",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileira sync global de alunos pendentes (não bloqueia)",
         "tags": [
           "students"
         ]
@@ -4870,9 +5546,9 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/face/global-sync/progress": {
+    "/clients/{clientId}/responsibles/face/global-sync/status": {
       "get": {
-        "operationId": "ResponsiblesController_globalSyncProgress",
+        "operationId": "ResponsiblesController_getGlobalSyncStatus",
         "parameters": [
           {
             "name": "clientId",
@@ -4893,7 +5569,36 @@
             "bearer": []
           }
         ],
-        "summary": "SSE — progresso da sincronização global de responsáveis (token na query)",
+        "summary": "Jobs de sync de faces ativos neste cliente (escola)",
+        "tags": [
+          "responsibles"
+        ]
+      }
+    },
+    "/clients/{clientId}/responsibles/face/global-sync": {
+      "post": {
+        "operationId": "ResponsiblesController_enqueueGlobalSync",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enfileira sync global de responsáveis pendentes (não bloqueia)",
         "tags": [
           "responsibles"
         ]
@@ -8996,124 +9701,6 @@
           "emergency-events"
         ]
       }
-    },
-    "/clients/{clientId}/faces/sync-all": {
-      "post": {
-        "operationId": "CompanyFaceSyncController_enqueueSyncAll",
-        "parameters": [
-          {
-            "name": "clientId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnqueueDeviceSyncBodyDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Enfileira sync em lote dos cadastros (não bloqueia)",
-        "tags": [
-          "company-face-sync"
-        ]
-      }
-    },
-    "/clients/{clientId}/faces/sync-status": {
-      "get": {
-        "operationId": "CompanyFaceSyncController_getBatchSyncStatus",
-        "parameters": [
-          {
-            "name": "clientId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Resumo dos jobs de faces ativos neste cliente (queued/running)",
-        "tags": [
-          "company-face-sync"
-        ]
-      }
-    },
-    "/client/faces/sync-all": {
-      "post": {
-        "operationId": "ClientFaceSyncController_enqueueSyncAll",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnqueueDeviceSyncBodyDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Enfileira sync em lote dos cadastros (não bloqueia)",
-        "tags": [
-          "client-face-sync"
-        ]
-      }
-    },
-    "/client/faces/sync-status": {
-      "get": {
-        "operationId": "ClientFaceSyncController_getBatchSyncStatus",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Resumo dos jobs de faces ativos neste cliente (queued/running)",
-        "tags": [
-          "client-face-sync"
-        ]
-      }
     }
   },
   "info": {
@@ -9541,6 +10128,89 @@
             "maxLength": 255
           }
         }
+      },
+      "BatchDeleteDeviceUsersDto": {
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "userIds"
+        ]
+      },
+      "RemoveDeviceUserOrphansDto": {
+        "type": "object",
+        "properties": {
+          "dryRun": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "EnqueueDeviceSyncBodyDto": {
+        "type": "object",
+        "properties": {
+          "force": {
+            "default": false,
+            "type": "boolean"
+          }
+        }
+      },
+      "BlockRegistrationDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "UpdateRegistrationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "document": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 32
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 32
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "additionalData": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "name",
+          "document",
+          "phone",
+          "email"
+        ]
       },
       "EnrollmentSummaryDto": {
         "type": "object",
@@ -10090,39 +10760,6 @@
           "note": {
             "type": "string",
             "maxLength": 500
-          }
-        }
-      },
-      "BatchDeleteDeviceUsersDto": {
-        "type": "object",
-        "properties": {
-          "userIds": {
-            "minItems": 1,
-            "maxItems": 100,
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "userIds"
-        ]
-      },
-      "RemoveDeviceUserOrphansDto": {
-        "type": "object",
-        "properties": {
-          "dryRun": {
-            "type": "boolean",
-            "default": false
-          }
-        }
-      },
-      "EnqueueDeviceSyncBodyDto": {
-        "type": "object",
-        "properties": {
-          "force": {
-            "type": "boolean"
           }
         }
       }

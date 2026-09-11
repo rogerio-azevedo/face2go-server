@@ -15,6 +15,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
+  BlockRegistrationDto,
   ListRegistrationsQueryDto,
   UpdateRegistrationDto,
 } from '../validation/dto/registrations.dto';
@@ -65,6 +66,25 @@ export class CompanyRegistrationsController {
       user,
       clientId,
       registrationId,
+    );
+  }
+
+  @Post(':registrationId/block')
+  @ApiOperation({
+    summary:
+      'Bloquear cadastro: envia a face ao leitor no perfil Bloqueados e registra o motivo',
+  })
+  block(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() body: BlockRegistrationDto,
+  ) {
+    return this.registrationsAdmin.blockForCompanyUser(
+      user,
+      clientId,
+      registrationId,
+      body,
     );
   }
 

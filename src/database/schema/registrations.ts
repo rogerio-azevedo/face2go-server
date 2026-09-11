@@ -19,6 +19,7 @@ export const registrationStatusEnum = pgEnum('registration_status', [
   'draft',
   'approved',
   'rejected',
+  'blocked',
 ]);
 
 export const deviceSyncStatusEnum = pgEnum('device_sync_status', [
@@ -79,6 +80,11 @@ export const registrations = pgTable(
     }),
     approvedAt: timestamp('approved_at'),
     rejectionNotes: text('rejection_notes'),
+    blockReason: text('block_reason'),
+    blockedAt: timestamp('blocked_at'),
+    blockedByUserId: text('blocked_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     submittedAt: timestamp('submitted_at'),
     /** ID numérico no leitor facial (único dentro do mesmo cliente). */
     faceId: integer('face_id'),

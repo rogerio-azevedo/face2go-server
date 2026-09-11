@@ -18,6 +18,8 @@ export type FaceSyncRequestedPayload = {
   validUntil?: Date;
   /** Pula cartão/permissões — só troca a foto no leitor. */
   photoOnly?: boolean;
+  /** Aplica perfil Bloqueados (UserType=1) no leitor Intelbras. */
+  blocked?: boolean;
   /** Foto nova: apaga progresso por leitor. Default no enqueue: true. */
   resetReaderProgress?: boolean;
   /** Erro parcial anterior — seed dos leitores que já deram certo. */

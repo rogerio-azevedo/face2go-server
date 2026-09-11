@@ -94,7 +94,7 @@ export async function listPersonsByFaceIds(
           and(
             eq(registrations.clientId, clientId),
             inArray(registrations.faceId, unique),
-            eq(registrations.status, 'approved'),
+            inArray(registrations.status, ['approved', 'blocked']),
           ),
         ),
     ]);
@@ -211,7 +211,7 @@ export async function listClientFaceIds(
         and(
           eq(registrations.clientId, clientId),
           isNotNull(registrations.faceId),
-          eq(registrations.status, 'approved'),
+          inArray(registrations.status, ['approved', 'blocked']),
         ),
       ),
     db

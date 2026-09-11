@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as schoolClassQueries from '../database/queries/school-classes.queries';
 import * as studentClassesQueries from '../database/queries/student-classes.queries';
@@ -21,6 +22,7 @@ import {
   parseListPaginationParams,
   type ListPaginationParams,
 } from '../common/pagination';
+import { blockPersonSchema } from '../validation/block-person.schema';
 import {
   createStudentSchema,
   linkStudentClassSchema,
@@ -478,6 +480,7 @@ export class StudentsService {
       logContext: `student-sync=${studentId}`,
       resetReaderProgress: false,
       previousDeviceSyncError: student.deviceSyncError,
+      blocked: student.blockedAt != null,
       persistResult: async (sync) => {
         await studentsQueries.updateStudentFace(
           this.database.db,
@@ -492,6 +495,110 @@ export class StudentsService {
         );
       },
     });
+  }
+
+  async block(
+    user: JwtPayload,
+    clientId: string,
+    studentId: string,
+    body: unknown,
+  ) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    const parsed = blockPersonSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const reason = parsed.data.reason;
+
+    const existing = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+    if (existing.blockedAt) {
+      throw new BadRequestException('Aluno já está bloqueado.');
+    }
+    if (!existing.photoKey) {
+      throw new BadRequestException(
+        'Sem foto cadastrada — não é possível enviar a face ao leitor.',
+      );
+    }
+
+    let faceId = existing.faceId;
+    if (faceId == null) {
+      faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      await studentsQueries.updateStudentFace(
+        this.database.db,
+        studentId,
+        clientId,
+        { faceId },
+      );
+    }
+
+    const updated = await studentsQueries.blockStudent(
+      this.database.db,
+      studentId,
+      clientId,
+      user.sub,
+      reason,
+    );
+    if (!updated) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+
+    await studentsQueries.updateStudentFace(
+      this.database.db,
+      studentId,
+      clientId,
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+
+    try {
+      await this.faceSync.enqueuePersonSync({
+        clientId,
+        entityKind: 'student',
+        entityId: studentId,
+        faceId,
+        name: updated.name,
+        photoKey: updated.photoKey ?? existing.photoKey,
+        timeSectionIds: [],
+        logContext: `student-block=${studentId}`,
+        resetReaderProgress: true,
+        blocked: true,
+        persistResult: async (sync) => {
+          await studentsQueries.updateStudentFace(
+            this.database.db,
+            studentId,
+            clientId,
+            {
+              deviceSyncStatus: sync.deviceSyncStatus,
+              deviceSyncedAt:
+                sync.deviceSyncStatus === 'synced' ? new Date() : null,
+              deviceSyncError: sync.deviceSyncError,
+            },
+          );
+        },
+      });
+    } catch (err: unknown) {
+      this.log.warn(
+        `enqueue pós-bloqueio student=${studentId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    const [withClasses] = await this.attachClassesToStudents([updated]);
+    return this.mapStudentWithPhoto(withClasses);
   }
 
   async delete(

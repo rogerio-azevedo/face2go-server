@@ -52,6 +52,11 @@ export const responsibles = pgTable('responsibles', {
   /** Token Expo Push (app do responsável). */
   pushToken: text('push_token'),
   isActive: boolean('is_active').default(true).notNull(),
+  blockReason: text('block_reason'),
+  blockedAt: timestamp('blocked_at'),
+  blockedByUserId: text('blocked_by_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

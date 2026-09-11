@@ -18,6 +18,7 @@ export type RebuildPerson = {
   timeSectionIds: number[];
   validFrom?: Date;
   validUntil?: Date;
+  blocked?: boolean;
 };
 
 type PendingRow = {
@@ -28,6 +29,7 @@ type PendingRow = {
   entityKind: FaceSyncEntityKind;
   validFrom?: Date;
   validUntil?: Date;
+  blocked?: boolean;
 };
 
 @Injectable()
@@ -85,7 +87,7 @@ export class FaceReaderRebuildService {
         photoKey: string | null;
       },
       entityKind: FaceSyncEntityKind,
-      extra?: { validFrom?: Date; validUntil?: Date },
+      extra?: { validFrom?: Date; validUntil?: Date; blocked?: boolean },
     ) => {
       if (row.faceId == null || !row.photoKey) return;
       if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) return;
@@ -98,13 +100,18 @@ export class FaceReaderRebuildService {
         entityKind,
         validFrom: extra?.validFrom,
         validUntil: extra?.validUntil,
+        blocked: extra?.blocked,
       });
     };
 
-    for (const row of members) push(row, 'member');
-    for (const row of schoolStudents) push(row, 'student');
-    for (const row of schoolResponsibles) push(row, 'responsible');
-    for (const row of regs) push(row, 'registration');
+    for (const row of members)
+      push(row, 'member', { blocked: row.blockedAt != null });
+    for (const row of schoolStudents)
+      push(row, 'student', { blocked: row.blockedAt != null });
+    for (const row of schoolResponsibles)
+      push(row, 'responsible', { blocked: row.blockedAt != null });
+    for (const row of regs)
+      push(row, 'registration', { blocked: row.status === 'blocked' });
     for (const row of invites) {
       push({ ...row, name: row.name?.trim() || 'VISITANTE' }, 'invite_guest', {
         validFrom: row.validFrom ?? undefined,
@@ -147,6 +154,7 @@ export class FaceReaderRebuildService {
       };
       people.push({
         ...pending,
+        blocked: row.blocked,
         timeSectionIds: await this.resolveTimeSections(clientId, pending),
       });
     }

@@ -11,6 +11,7 @@ import type { Namespace, Socket } from 'socket.io';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { PermissionsService } from '../permissions/permissions.service';
 import type { ReaderOfflineDetectedEvent } from '../face-listener/face-listener.events';
+import type { AccessBlockedAttemptPayload } from '../notifications/notifications.events';
 import type {
   PanicCreatedEvent,
   PanicEventPayload,
@@ -192,6 +193,14 @@ export class MonitoringGateway
     this.server
       .to(this.clientRoom(payload.clientId))
       .emit('reader:offline', payload);
+  }
+
+  emitBlockedAttempt(payload: AccessBlockedAttemptPayload): void {
+    if (!this.server) return;
+    this.server
+      .to(this.clientRoom(payload.clientId))
+      .emit('access:blocked-attempt', payload);
+    this.emitToCompany(payload.companyId, 'access:blocked-attempt', payload);
   }
 }
 
