@@ -1,7 +1,10 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-import { listRegistrationsQuerySchema } from '../registrations.schema';
+import {
+  listRegistrationsQuerySchema,
+  updateRegistrationSchema,
+} from '../registrations.schema';
 
 const createRegistrationLinkSchema = z
   .object({
@@ -44,4 +47,8 @@ export class CreateRegistrationLinkDto extends createZodDto(
 
 export class ListRegistrationsQueryDto extends createZodDto(
   listRegistrationsQuerySchema,
+) {}
+
+export class UpdateRegistrationDto extends createZodDto(
+  updateRegistrationSchema,
 ) {}

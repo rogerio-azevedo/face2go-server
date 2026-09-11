@@ -175,10 +175,15 @@ export async function getRegistrationByIdForClient(
 
 export type RegistrationStatus = 'draft' | 'approved' | 'rejected';
 
-export type RegistrationStatusCounts = Record<RegistrationStatus, number>;
+export type RegistrationListFilter = RegistrationStatus | 'deleted';
+
+export type RegistrationStatusCounts = Record<
+  RegistrationStatus | 'deleted',
+  number
+>;
 
 export type RegistrationListQueryOptions = {
-  status?: RegistrationStatus;
+  status?: RegistrationListFilter;
   search?: string;
   offset?: number;
   limit?: number;
@@ -210,8 +215,13 @@ function submittedRegistrationsWhere(
     eq(registrations.clientId, clientId),
     isNotNull(registrations.submittedAt),
   ];
-  if (options.status) {
-    conds.push(eq(registrations.status, options.status));
+  if (options.status === 'deleted') {
+    conds.push(eq(registrations.isActive, false));
+  } else {
+    conds.push(eq(registrations.isActive, true));
+    if (options.status) {
+      conds.push(eq(registrations.status, options.status));
+    }
   }
   const searchCond = registrationSearchCondition(options.search);
   if (searchCond) conds.push(searchCond);
@@ -237,6 +247,7 @@ export async function countSubmittedRegistrationsByStatus(
   const rows = await db
     .select({
       status: registrations.status,
+      isActive: registrations.isActive,
       total: count(),
     })
     .from(registrations)
@@ -246,15 +257,24 @@ export async function countSubmittedRegistrationsByStatus(
         isNotNull(registrations.submittedAt),
       ),
     )
-    .groupBy(registrations.status);
+    .groupBy(registrations.status, registrations.isActive);
 
   const counts: RegistrationStatusCounts = {
     draft: 0,
     approved: 0,
     rejected: 0,
+    deleted: 0,
   };
   for (const row of rows) {
-    if (row.status in counts) {
+    if (!row.isActive) {
+      counts.deleted += Number(row.total);
+      continue;
+    }
+    if (
+      row.status === 'draft' ||
+      row.status === 'approved' ||
+      row.status === 'rejected'
+    ) {
       counts[row.status] = Number(row.total);
     }
   }
@@ -387,6 +407,59 @@ export async function setRegistrationFaceAfterApprove(
   return row;
 }
 
+export async function updateRegistrationProfile(
+  db: AppDb,
+  registrationId: string,
+  clientId: string,
+  patch: {
+    name: string;
+    document: string;
+    phone: string;
+    email: string;
+    additionalData: RegistrationRow['additionalData'];
+  },
+): Promise<RegistrationRow | undefined> {
+  const now = new Date();
+  const [row] = await db
+    .update(registrations)
+    .set({
+      name: patch.name,
+      document: patch.document,
+      phone: patch.phone,
+      email: patch.email,
+      additionalData: patch.additionalData,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(registrations.id, registrationId),
+        eq(registrations.clientId, clientId),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+export async function setRegistrationActive(
+  db: AppDb,
+  registrationId: string,
+  clientId: string,
+  isActive: boolean,
+): Promise<RegistrationRow | undefined> {
+  const now = new Date();
+  const [row] = await db
+    .update(registrations)
+    .set({ isActive, updatedAt: now })
+    .where(
+      and(
+        eq(registrations.id, registrationId),
+        eq(registrations.clientId, clientId),
+      ),
+    )
+    .returning();
+  return row;
+}
+
 export async function updateRegistrationDeviceSync(
   db: AppDb,
   registrationId: string,
@@ -430,6 +503,7 @@ export async function listApprovedRegistrationsForDeviceSync(
   const conditions = [
     eq(registrations.clientId, clientId),
     eq(registrations.status, 'approved'),
+    eq(registrations.isActive, true),
     isNotNull(registrations.faceImageKey),
     isNotNull(registrations.faceId),
   ];
@@ -466,6 +540,7 @@ export async function listClientIdsWithPendingDeviceSync(
     .where(
       and(
         eq(registrations.status, 'approved'),
+        eq(registrations.isActive, true),
         eq(registrations.deviceSyncStatus, 'pending_sync'),
         isNotNull(registrations.faceImageKey),
         isNotNull(registrations.faceId),

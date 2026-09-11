@@ -641,9 +641,9 @@ export class FaceSyncService {
       registrationId,
       clientId,
     );
-    if (!row || row.status !== 'approved') {
+    if (!row || row.status !== 'approved' || !row.isActive) {
       throw new NotFoundException(
-        'Cadastro não encontrado ou não está aprovado.',
+        'Cadastro não encontrado, excluído ou não está aprovado.',
       );
     }
     if (!row.faceImageKey) {
@@ -745,11 +745,11 @@ export class FaceSyncService {
    * Agenda o sync fora da request HTTP. O status `pending_sync` já deve ter
    * sido gravado pelo chamador.
    */
-  enqueuePersonSync(payload: FaceSyncRequestedPayload): {
-    deviceSyncStatus: 'pending_sync';
-    deviceSyncError: null;
+  async enqueuePersonSync(payload: FaceSyncRequestedPayload): Promise<{
+    deviceSyncStatus: 'pending_sync' | 'sync_failed';
+    deviceSyncError: string | null;
     jobId?: string;
-  } {
+  }> {
     const entityId =
       payload.entityId ?? `${payload.clientId}:${payload.faceId}`;
     const entityKind = payload.entityKind ?? 'registration';
@@ -768,29 +768,31 @@ export class FaceSyncService {
       userId: payload.userId,
       requestedByMemberId: payload.requestedByMemberId,
     };
-    void this.queue
-      .enqueue({
+    try {
+      const job = await this.queue.enqueue({
         kind: 'face.person',
         clientId: payload.clientId,
         targetId: entityId,
         dedupeKey: `face.person:${payload.clientId}:${entityKind}:${entityId}`,
         payload: jobPayload,
         total: 1,
-      })
-      .then((job) => {
-        this.persistHooks.set(job.id, payload.persistResult);
-      })
-      .catch((err: unknown) => {
-        this.log.warn(
-          `enqueuePersonSync falhou: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        void payload.persistResult({
-          deviceSyncStatus: 'sync_failed',
-          deviceSyncError:
-            err instanceof Error ? err.message : 'Falha ao enfileirar sync.',
-        });
       });
-    return { deviceSyncStatus: 'pending_sync', deviceSyncError: null };
+      this.persistHooks.set(job.id, payload.persistResult);
+      return {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncError: null,
+        jobId: job.id,
+      };
+    } catch (err: unknown) {
+      const deviceSyncError =
+        err instanceof Error ? err.message : 'Falha ao enfileirar sync.';
+      this.log.warn(`enqueuePersonSync falhou: ${deviceSyncError}`);
+      await payload.persistResult({
+        deviceSyncStatus: 'sync_failed',
+        deviceSyncError,
+      });
+      return { deviceSyncStatus: 'sync_failed', deviceSyncError };
+    }
   }
 
   async enqueueApprovedRegistrationJob(
@@ -805,9 +807,9 @@ export class FaceSyncService {
       registrationId,
       clientId,
     );
-    if (!row || row.status !== 'approved') {
+    if (!row || row.status !== 'approved' || !row.isActive) {
       throw new NotFoundException(
-        'Cadastro não encontrado ou não está aprovado.',
+        'Cadastro não encontrado, excluído ou não está aprovado.',
       );
     }
     if (!row.faceImageKey) {
@@ -863,9 +865,9 @@ export class FaceSyncService {
       registrationId,
       clientId,
     );
-    if (!row || row.status !== 'approved') {
+    if (!row || row.status !== 'approved' || !row.isActive) {
       throw new NotFoundException(
-        'Cadastro não encontrado ou não está aprovado.',
+        'Cadastro não encontrado, excluído ou não está aprovado.',
       );
     }
     return {

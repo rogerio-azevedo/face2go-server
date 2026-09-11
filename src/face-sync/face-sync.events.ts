@@ -9,7 +9,8 @@ export type FaceSyncRequestedPayload = {
   clientId: string;
   faceId: number;
   name: string;
-  imageBuffer: Buffer;
+  /** Só necessário no caminho inline legado; o worker baixa pelo photoKey. */
+  imageBuffer?: Buffer;
   photoKey?: string;
   timeSectionIds?: number[];
   logContext?: string;

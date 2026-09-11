@@ -13,10 +13,13 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import { DatabaseService } from '../database/database.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { MembersService } from '../members/members.service';
+import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { zodFirstMessage } from '../validation/zod-utils';
 import type { ListRegistrationsQuery } from '../validation/registrations.schema';
+import { updateRegistrationSchema } from '../validation/registrations.schema';
+import { normalizeAdditionalDataForClientType } from './registration-additional-data';
 import {
   buildPaginatedResult,
   parseListPaginationParams,
@@ -36,6 +39,7 @@ export class RegistrationsAdminService {
     private readonly r2: R2StorageService,
     private readonly faceSync: FaceSyncService,
     private readonly membersService: MembersService,
+    private readonly personProfile: PersonProfileService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -122,6 +126,7 @@ export class RegistrationsAdminService {
       email: row.email,
       additionalData: row.additionalData,
       status: row.status,
+      isActive: row.isActive,
       submittedAt: row.submittedAt,
       approvedAt: row.approvedAt,
       rejectionNotes: row.rejectionNotes,
@@ -165,7 +170,7 @@ export class RegistrationsAdminService {
       limit: pageSize,
     };
 
-    const [rows, total, counts, hasFacialReaders] = await Promise.all([
+    const [rows, total, counts, hasFacialReaders, client] = await Promise.all([
       registrationsQueries.listSubmittedRegistrationsForClient(
         this.database.db,
         clientId,
@@ -181,6 +186,7 @@ export class RegistrationsAdminService {
         clientId,
       ),
       this.faceSync.hasActiveFacialReaders(clientId),
+      clientsQueries.getClientByIdOnly(this.database.db, clientId),
     ]);
 
     const data = await Promise.all(
@@ -189,6 +195,7 @@ export class RegistrationsAdminService {
     return {
       ...buildPaginatedResult(data, total, page, pageSize),
       counts,
+      clientType: client?.type ?? null,
     };
   }
 
@@ -354,5 +361,270 @@ export class RegistrationsAdminService {
     const hasFacialReaders =
       await this.faceSync.hasActiveFacialReaders(clientId);
     return await this.mapRow(updated, hasFacialReaders);
+  }
+
+  private ensureCompanyAdmin(user: JwtPayload) {
+    if (user.role !== 'company_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+  }
+
+  private ensureClientAdmin(user: JwtPayload) {
+    if (user.role !== 'client_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+  }
+
+  async updateForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    registrationId: string,
+    body: unknown,
+  ) {
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.updateShared(clientId, registrationId, body);
+  }
+
+  async updateForClientTenant(
+    user: JwtPayload,
+    registrationId: string,
+    body: unknown,
+  ) {
+    const clientId = this.ensureClientTenant(user);
+    return this.updateShared(clientId, registrationId, body);
+  }
+
+  private async updateShared(
+    clientId: string,
+    registrationId: string,
+    body: unknown,
+  ) {
+    const parsed = updateRegistrationSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const row = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Cadastro não encontrado.');
+    }
+    if (!row.isActive) {
+      throw new BadRequestException(
+        'Cadastro excluído. Restaure antes de editar.',
+      );
+    }
+    if (row.status !== 'approved') {
+      throw new BadRequestException(
+        'Só é possível editar cadastros aprovados.',
+      );
+    }
+
+    const client = await clientsQueries.getClientByIdOnly(
+      this.database.db,
+      clientId,
+    );
+    if (!client) {
+      throw new NotFoundException('Cliente não encontrado.');
+    }
+
+    const additionalData = normalizeAdditionalDataForClientType(
+      client.type,
+      parsed.data.additionalData,
+    );
+
+    const updated = await registrationsQueries.updateRegistrationProfile(
+      this.database.db,
+      registrationId,
+      clientId,
+      {
+        name: parsed.data.name,
+        document: parsed.data.document,
+        phone: parsed.data.phone,
+        email: parsed.data.email,
+        additionalData,
+      },
+    );
+    if (!updated) {
+      throw new NotFoundException('Cadastro não encontrado.');
+    }
+
+    try {
+      await this.membersService.syncProfileFromRegistration(updated);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Falha ao sincronizar membro após edição reg=${registrationId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
+    return this.mapRow(updated, hasFacialReaders);
+  }
+
+  async softDeleteForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    registrationId: string,
+  ) {
+    this.ensureCompanyAdmin(user);
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.softDeleteShared(clientId, registrationId);
+  }
+
+  async softDeleteForClientTenant(user: JwtPayload, registrationId: string) {
+    this.ensureClientAdmin(user);
+    const clientId = this.ensureClientTenant(user);
+    return this.softDeleteShared(clientId, registrationId);
+  }
+
+  private async softDeleteShared(clientId: string, registrationId: string) {
+    const row = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Cadastro não encontrado.');
+    }
+    if (!row.isActive) {
+      throw new BadRequestException('Cadastro já está excluído.');
+    }
+    if (row.status !== 'approved') {
+      throw new BadRequestException(
+        'Só é possível excluir cadastros aprovados.',
+      );
+    }
+
+    const member = await this.membersService.getByRegistrationId(
+      clientId,
+      registrationId,
+    );
+
+    if (row.faceId != null) {
+      const removeFromReader =
+        await this.personProfile.shouldRemoveFaceFromReader(
+          row.faceId,
+          clientId,
+          { memberId: member?.id },
+        );
+      if (removeFromReader) {
+        await this.faceSync.removePersonFromReaders({
+          clientId,
+          faceId: row.faceId,
+          logContext: `delete-registration=${registrationId}`,
+          requireAll: true,
+        });
+      }
+    }
+
+    await this.membersService.setActiveByRegistrationId(
+      clientId,
+      registrationId,
+      false,
+    );
+
+    const updated = await registrationsQueries.setRegistrationActive(
+      this.database.db,
+      registrationId,
+      clientId,
+      false,
+    );
+    if (!updated) {
+      throw new NotFoundException('Cadastro não encontrado.');
+    }
+
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
+    return this.mapRow(updated, hasFacialReaders);
+  }
+
+  async restoreForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    registrationId: string,
+  ) {
+    this.ensureCompanyAdmin(user);
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.restoreShared(clientId, registrationId, user.sub);
+  }
+
+  async restoreForClientTenant(user: JwtPayload, registrationId: string) {
+    this.ensureClientAdmin(user);
+    const clientId = this.ensureClientTenant(user);
+    return this.restoreShared(clientId, registrationId, user.sub);
+  }
+
+  private async restoreShared(
+    clientId: string,
+    registrationId: string,
+    decidedByUserId: string,
+  ) {
+    const row = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Cadastro não encontrado.');
+    }
+    if (row.isActive) {
+      throw new BadRequestException('Cadastro não está excluído.');
+    }
+
+    const updated = await registrationsQueries.setRegistrationActive(
+      this.database.db,
+      registrationId,
+      clientId,
+      true,
+    );
+    if (!updated) {
+      throw new NotFoundException('Cadastro não encontrado.');
+    }
+
+    try {
+      await this.membersService.setActiveByRegistrationId(
+        clientId,
+        registrationId,
+        true,
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Falha ao reativar membro reg=${registrationId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    if (updated.faceImageKey && updated.faceId != null) {
+      try {
+        await this.faceSync.enqueueApprovedRegistrationJob(
+          registrationId,
+          clientId,
+          decidedByUserId,
+          { resetReaderProgress: true },
+        );
+      } catch (err: unknown) {
+        this.logger.warn(
+          `enqueue pós-restauração reg=${registrationId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    const restored = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    const hasFacialReaders =
+      await this.faceSync.hasActiveFacialReaders(clientId);
+    return this.mapRow(restored ?? updated, hasFacialReaders);
   }
 }

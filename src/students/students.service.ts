@@ -438,6 +438,7 @@ export class StudentsService {
   ): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed' | 'pending_sync';
     deviceSyncError: string | null;
+    jobId?: string;
   }> {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
     const student = await studentsQueries.getStudentById(
@@ -452,21 +453,6 @@ export class StudentsService {
       throw new BadRequestException('Sem foto cadastrada para sincronizar.');
     }
 
-    let buffer: Buffer;
-    try {
-      const got = await this.r2Storage.getObjectBytes(student.photoKey);
-      buffer = got.buffer;
-    } catch {
-      throw new BadRequestException(
-        'Não foi possível obter a foto armazenada.',
-      );
-    }
-    if (buffer.length < 256) {
-      throw new BadRequestException(
-        'Imagem armazenada inválida ou muito pequena.',
-      );
-    }
-
     await studentsQueries.updateStudentFace(
       this.database.db,
       studentId,
@@ -478,14 +464,13 @@ export class StudentsService {
       },
     );
 
-    this.faceSync.enqueuePersonSync({
+    return this.faceSync.enqueuePersonSync({
       clientId,
       entityKind: 'student',
       entityId: studentId,
       faceId: student.faceId,
       name: student.name,
-      imageBuffer: buffer,
-      photoKey: student.photoKey ?? undefined,
+      photoKey: student.photoKey,
       timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
         clientId,
         studentId,
@@ -507,11 +492,6 @@ export class StudentsService {
         );
       },
     });
-
-    return {
-      deviceSyncStatus: 'pending_sync',
-      deviceSyncError: null,
-    };
   }
 
   async delete(

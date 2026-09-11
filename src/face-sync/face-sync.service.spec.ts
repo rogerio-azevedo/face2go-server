@@ -31,6 +31,8 @@ function registration(
   return {
     id: 'reg-1',
     name: 'Maria',
+    status: 'approved',
+    isActive: true,
     deviceSyncStatus: 'synced',
     deviceSyncError: null,
     ...overrides,
@@ -136,26 +138,30 @@ describe('FaceSyncService', () => {
     });
   });
 
-  it('enqueuePersonSync assume resetReaderProgress true (foto nova)', () => {
-    service.enqueuePersonSync({
+  it('enqueuePersonSync assume resetReaderProgress true (foto nova)', async () => {
+    const result = await service.enqueuePersonSync({
       clientId: 'c1',
       faceId: 1,
       name: 'Maria',
-      imageBuffer: Buffer.from('x'),
       persistResult: () => Promise.resolve(),
     });
     const [arg] = queue.enqueue.mock.calls[0] as [
       { payload: { resetReaderProgress?: boolean } },
     ];
     expect(arg.payload.resetReaderProgress).toBe(true);
+    expect(result).toEqual({
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncError: null,
+      jobId: 'job-1',
+    });
+    expect(service.takePersistHook('job-1')).toBeDefined();
   });
 
-  it('enqueuePersonSync preserva resetReaderProgress false (retry)', () => {
-    service.enqueuePersonSync({
+  it('enqueuePersonSync preserva resetReaderProgress false (retry)', async () => {
+    await service.enqueuePersonSync({
       clientId: 'c1',
       faceId: 1,
       name: 'Maria',
-      imageBuffer: Buffer.from('x'),
       resetReaderProgress: false,
       persistResult: () => Promise.resolve(),
     });
@@ -163,6 +169,26 @@ describe('FaceSyncService', () => {
       { payload: { resetReaderProgress?: boolean } },
     ];
     expect(arg.payload.resetReaderProgress).toBe(false);
+  });
+
+  it('enqueuePersonSync persiste sync_failed quando a fila recusa', async () => {
+    queue.enqueue.mockRejectedValueOnce(new Error('fila cheia'));
+    const persistResult = jest.fn().mockResolvedValue(undefined);
+    await expect(
+      service.enqueuePersonSync({
+        clientId: 'c1',
+        faceId: 1,
+        name: 'Maria',
+        persistResult,
+      }),
+    ).resolves.toEqual({
+      deviceSyncStatus: 'sync_failed',
+      deviceSyncError: 'fila cheia',
+    });
+    expect(persistResult).toHaveBeenCalledWith({
+      deviceSyncStatus: 'sync_failed',
+      deviceSyncError: 'fila cheia',
+    });
   });
 
   it('getApprovedRegistrationSyncStatus devolve o resumo do cadastro', async () => {

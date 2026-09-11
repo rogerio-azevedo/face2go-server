@@ -116,6 +116,35 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
         error: message,
         finishedAt: new Date(),
       });
+      await this.persistFailedFacePerson(job, message);
+    }
+  }
+
+  private async persistFailedFacePerson(
+    job: DeviceSyncJobRow,
+    message: string,
+  ): Promise<void> {
+    if (job.kind !== 'face.person') return;
+    const payload = job.payload as FacePersonJobPayload;
+    const outcome: FaceSyncOutcome = {
+      deviceSyncStatus: 'sync_failed',
+      deviceSyncError: message,
+    };
+    try {
+      const hook = this.faceSync.takePersistHook(job.id);
+      if (hook) await hook(outcome);
+      else if (payload.entityKind) {
+        await this.persist.persistFacePerson(
+          job.clientId,
+          job.targetId,
+          payload,
+          outcome,
+        );
+      }
+    } catch (persistErr) {
+      this.log.warn(
+        `job=${job.id} persist sync_failed: ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`,
+      );
     }
   }
 

@@ -565,6 +565,7 @@ export class ResponsiblesService {
   ): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed' | 'pending_sync';
     deviceSyncError: string | null;
+    jobId?: string;
   }> {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
     const row = await responsiblesQueries.getResponsibleWithFaceStatus(
@@ -588,21 +589,6 @@ export class ResponsiblesService {
       throw new NotFoundException('Responsável não encontrado.');
     }
 
-    let buffer: Buffer;
-    try {
-      const got = await this.r2Storage.getObjectBytes(row.photoKey);
-      buffer = got.buffer;
-    } catch {
-      throw new BadRequestException(
-        'Não foi possível obter a foto armazenada.',
-      );
-    }
-    if (buffer.length < 256) {
-      throw new BadRequestException(
-        'Imagem armazenada inválida ou muito pequena.',
-      );
-    }
-
     await responsiblesQueries.updateResponsibleFace(
       this.database.db,
       responsibleId,
@@ -614,14 +600,13 @@ export class ResponsiblesService {
       },
     );
 
-    this.faceSync.enqueuePersonSync({
+    return this.faceSync.enqueuePersonSync({
       clientId,
       entityKind: 'responsible',
       entityId: responsibleId,
       faceId: row.faceId,
       name: responsible.name,
-      imageBuffer: buffer,
-      photoKey: row.photoKey ?? undefined,
+      photoKey: row.photoKey,
       timeSectionIds: await this.accessTimeZone.resolveResponsibleTimeSections(
         clientId,
         responsibleId,
@@ -658,11 +643,6 @@ export class ResponsiblesService {
         }
       },
     });
-
-    return {
-      deviceSyncStatus: 'pending_sync',
-      deviceSyncError: null,
-    };
   }
 
   async delete(

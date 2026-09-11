@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -12,7 +14,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { ListRegistrationsQueryDto } from '../validation/dto/registrations.dto';
+import {
+  ListRegistrationsQueryDto,
+  UpdateRegistrationDto,
+} from '../validation/dto/registrations.dto';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
 @ApiTags('client-registrations')
@@ -64,5 +69,47 @@ export class ClientRegistrationsController {
       registrationId,
       body,
     );
+  }
+
+  @Patch(':registrationId')
+  @ApiOperation({ summary: 'Editar cadastro aprovado do meu cliente' })
+  update(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() dto: UpdateRegistrationDto,
+  ) {
+    return this.registrationsAdmin.updateForClientTenant(
+      user,
+      registrationId,
+      dto,
+    );
+  }
+
+  @Delete(':registrationId')
+  @Roles('client_admin')
+  @ApiOperation({
+    summary:
+      'Excluir cadastro aprovado (soft delete) e remover face dos leitores',
+  })
+  softDelete(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.softDeleteForClientTenant(
+      user,
+      registrationId,
+    );
+  }
+
+  @Post(':registrationId/restore')
+  @Roles('client_admin')
+  @ApiOperation({
+    summary: 'Restaurar cadastro excluído e resincronizar face nos leitores',
+  })
+  restore(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.restoreForClientTenant(user, registrationId);
   }
 }

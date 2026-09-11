@@ -621,6 +621,7 @@ export class MembersService {
   ): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed' | 'pending_sync';
     deviceSyncError: string | null;
+    jobId?: string;
   }> {
     await this.assertManageClient(user, clientId);
     const row = await membersQueries.getMemberWithFaceStatus(
@@ -635,21 +636,6 @@ export class MembersService {
       throw new BadRequestException('Sem foto cadastrada para sincronizar.');
     }
 
-    let buffer: Buffer;
-    try {
-      const got = await this.r2Storage.getObjectBytes(row.photoKey);
-      buffer = got.buffer;
-    } catch {
-      throw new BadRequestException(
-        'Não foi possível obter a foto armazenada.',
-      );
-    }
-    if (buffer.length < 256) {
-      throw new BadRequestException(
-        'Imagem armazenada inválida ou muito pequena.',
-      );
-    }
-
     await membersQueries.updateMemberFace(
       this.database.db,
       memberId,
@@ -661,14 +647,13 @@ export class MembersService {
       },
     );
 
-    this.faceSync.enqueuePersonSync({
+    return this.faceSync.enqueuePersonSync({
       clientId,
       entityKind: 'member',
       entityId: memberId,
       faceId: row.faceId,
       name: row.name,
-      imageBuffer: buffer,
-      photoKey: row.photoKey ?? undefined,
+      photoKey: row.photoKey,
       timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
         clientId,
         memberId,
@@ -705,11 +690,6 @@ export class MembersService {
         }
       },
     });
-
-    return {
-      deviceSyncStatus: 'pending_sync' as const,
-      deviceSyncError: null,
-    };
   }
 
   async delete(user: JwtPayload, clientId: string, memberId: string) {
@@ -840,5 +820,51 @@ export class MembersService {
       additionalData: registration.additionalData,
       isActive: true,
     });
+  }
+
+  async getByRegistrationId(clientId: string, registrationId: string) {
+    const member = await membersQueries.getMemberByRegistrationId(
+      this.database.db,
+      registrationId,
+    );
+    if (!member || member.clientId !== clientId) return null;
+    return member;
+  }
+
+  async setActiveByRegistrationId(
+    clientId: string,
+    registrationId: string,
+    isActive: boolean,
+  ) {
+    const member = await membersQueries.getMemberByRegistrationId(
+      this.database.db,
+      registrationId,
+    );
+    if (!member || member.clientId !== clientId) return null;
+    return membersQueries.updateMember(this.database.db, member.id, clientId, {
+      isActive,
+    });
+  }
+
+  async syncProfileFromRegistration(
+    registration: registrationsQueries.RegistrationRow,
+  ) {
+    const member = await membersQueries.getMemberByRegistrationId(
+      this.database.db,
+      registration.id,
+    );
+    if (!member || member.clientId !== registration.clientId) return null;
+    return membersQueries.updateMember(
+      this.database.db,
+      member.id,
+      registration.clientId,
+      {
+        name: registration.name?.trim() || member.name,
+        email: registration.email,
+        phone: registration.phone,
+        document: registration.document,
+        additionalData: registration.additionalData,
+      },
+    );
   }
 }

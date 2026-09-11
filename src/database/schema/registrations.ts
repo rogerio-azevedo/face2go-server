@@ -73,6 +73,7 @@ export const registrations = pgTable(
       room?: string;
     } | null>(),
     status: registrationStatusEnum('status').notNull().default('draft'),
+    isActive: boolean('is_active').default(true).notNull(),
     approvedByUserId: text('approved_by_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),

@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -12,7 +14,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { ListRegistrationsQueryDto } from '../validation/dto/registrations.dto';
+import {
+  ListRegistrationsQueryDto,
+  UpdateRegistrationDto,
+} from '../validation/dto/registrations.dto';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
 @ApiTags('company-registrations')
@@ -76,6 +81,57 @@ export class CompanyRegistrationsController {
       clientId,
       registrationId,
       body,
+    );
+  }
+
+  @Patch(':registrationId')
+  @ApiOperation({ summary: 'Editar cadastro aprovado' })
+  update(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() dto: UpdateRegistrationDto,
+  ) {
+    return this.registrationsAdmin.updateForCompanyUser(
+      user,
+      clientId,
+      registrationId,
+      dto,
+    );
+  }
+
+  @Delete(':registrationId')
+  @Roles('company_admin')
+  @ApiOperation({
+    summary:
+      'Excluir cadastro aprovado (soft delete) e remover face dos leitores',
+  })
+  softDelete(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.softDeleteForCompanyUser(
+      user,
+      clientId,
+      registrationId,
+    );
+  }
+
+  @Post(':registrationId/restore')
+  @Roles('company_admin')
+  @ApiOperation({
+    summary: 'Restaurar cadastro excluído e resincronizar face nos leitores',
+  })
+  restore(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.restoreForCompanyUser(
+      user,
+      clientId,
+      registrationId,
     );
   }
 }

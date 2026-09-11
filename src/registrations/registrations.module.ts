@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { FaceSyncModule } from '../face-sync/face-sync.module';
 import { MembersModule } from '../members/members.module';
+import { PeopleModule } from '../people/people.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { StorageModule } from '../storage/storage.module';
 import { ClientRegistrationLinksController } from './client-registration-links.controller';
@@ -21,6 +22,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
     StorageModule,
     FaceSyncModule,
     MembersModule,
+    PeopleModule,
   ],
   controllers: [
     ClientRegistrationLinksController,
