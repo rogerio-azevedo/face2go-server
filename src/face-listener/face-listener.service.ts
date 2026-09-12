@@ -29,6 +29,7 @@ import {
   hikvisionOpenStreamRequest,
   hikvisionSearchAcsEvents,
   parseHikvisionAlertStreamPart,
+  resolveHikvisionDevicePictureUrl,
   toHikvisionConnection,
 } from '../integrations/hikvision';
 import type {
@@ -1232,9 +1233,10 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     const pictureUrl =
       typeof data.SnapPath === 'string' ? data.SnapPath.trim() : '';
     if (pictureUrl) {
-      const absoluteUrl = pictureUrl.startsWith('http')
-        ? pictureUrl
-        : `${connection.baseUrl}${pictureUrl.startsWith('/') ? '' : '/'}${pictureUrl}`;
+      const absoluteUrl = resolveHikvisionDevicePictureUrl(
+        pictureUrl,
+        connection.baseUrl,
+      );
       try {
         const imageResponse = await hikvisionIsapiRequest(connection, {
           method: 'GET',

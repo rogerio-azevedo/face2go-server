@@ -3,4 +3,5 @@ export * from './hikvision-device.client';
 export * from './hikvision-error.util';
 export * from './hikvision-events.client';
 export * from './hikvision-isapi-request';
+export * from './hikvision-picture-url.util';
 export * from './hikvision-valid-date.util';

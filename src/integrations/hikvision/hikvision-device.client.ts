@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
 import { hikvisionIsapiRequest } from './hikvision-isapi-request';
+import { resolveHikvisionDevicePictureUrl } from './hikvision-picture-url.util';
 import {
   DEFAULT_HIKVISION_VALID_DATE_END,
   DEFAULT_HIKVISION_VALID_DATE_START,
@@ -1366,9 +1367,10 @@ export async function hikvisionGetFaceImage(
     return { photoBase64: null };
   }
 
-  const absoluteUrl = pictureUrl.startsWith('http')
-    ? pictureUrl
-    : `${connection.baseUrl}${pictureUrl.startsWith('/') ? '' : '/'}${pictureUrl}`;
+  const absoluteUrl = resolveHikvisionDevicePictureUrl(
+    pictureUrl,
+    connection.baseUrl,
+  );
 
   try {
     const imageResponse = await hikvisionIsapiRequest(connection, {
