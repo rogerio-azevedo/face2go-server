@@ -12,6 +12,7 @@ import { DatabaseService } from '../database/database.service';
 import * as invitesQueries from '../database/queries/invites.queries';
 import * as clientInviteLinksQueries from '../database/queries/client-invite-links.queries';
 import * as clientUsersQueries from '../database/queries/client-users.queries';
+import * as usersQueries from '../database/queries/users.queries';
 import {
   clients,
   clientMembers,
@@ -37,6 +38,7 @@ import type {
 } from './interfaces/user-context.interface';
 import type { AuthServiceContract } from './interfaces/auth-service.interface';
 import type { JoinContextInput } from '../validation/join-context.schema';
+import { normalizeEmail } from './utils/auth-identifiers';
 import type { RegisterInput } from '../validation/register.schema';
 import type { RequestPasswordInput } from '../validation/request-password.schema';
 import type { ResetPasswordInput } from '../validation/reset-password.schema';
@@ -599,9 +601,10 @@ export class AuthService implements AuthServiceContract {
       throw new BadRequestException('Empresa inativa.');
     }
 
-    const existing = await this.database.db.query.users.findFirst({
-      where: eq(users.email, data.email),
-    });
+    const existing = await usersQueries.findUserByEmail(
+      this.database.db,
+      data.email,
+    );
 
     if (existing) {
       return this.linkExistingUserToCompany(existing, data, invite, company.id);
@@ -619,7 +622,7 @@ export class AuthService implements AuthServiceContract {
       const userId = crypto.randomUUID();
       await this.database.db.insert(users).values({
         id: userId,
-        email: data.email,
+        email: normalizeEmail(data.email),
         password: hashed,
         name: data.name,
         role: 'member',
@@ -662,9 +665,10 @@ export class AuthService implements AuthServiceContract {
       throw new BadRequestException('Empresa inativa.');
     }
 
-    const existing = await this.database.db.query.users.findFirst({
-      where: eq(users.email, data.email),
-    });
+    const existing = await usersQueries.findUserByEmail(
+      this.database.db,
+      data.email,
+    );
 
     if (existing) {
       return this.linkExistingUserToClient(existing, data, invite, client.id);
@@ -676,7 +680,7 @@ export class AuthService implements AuthServiceContract {
       const userId = crypto.randomUUID();
       await this.database.db.insert(users).values({
         id: userId,
-        email: data.email,
+        email: normalizeEmail(data.email),
         password: hashed,
         name: data.name,
         role: 'member',

@@ -1,16 +1,17 @@
-import { and, asc, eq, isNull, ne } from 'drizzle-orm';
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
 
+import { normalizeEmail } from '../../auth/utils/auth-identifiers';
 import type { AppDb } from '../database.types';
 import { companyUsers, users } from '../schema';
 
 export type UserRow = typeof users.$inferSelect;
 
 export async function findUserByEmail(db: AppDb, email: string) {
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeEmail(email);
   const [row] = await db
     .select()
     .from(users)
-    .where(eq(users.email, normalized))
+    .where(sql`lower(${users.email}) = ${normalized}`)
     .limit(1);
   return row ?? null;
 }

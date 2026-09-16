@@ -25,12 +25,13 @@ import {
   normalizeHikvisionFaceJpeg,
   detectImageFormat,
 } from '../../face-sync/hikvision-face-image.util';
-import { normalizeNameForFacialReader } from '../../face-sync/normalize-name-for-reader';
 import {
   syncLog,
   syncLogError,
   truncateForLog,
 } from '../../face-sync/intelbras-sync-debug.util';
+import { normalizeNameForFacialReader } from '../../face-sync/normalize-name-for-reader';
+import { recoverUnauthorizedIfExists } from '../../face-sync/recover-unauthorized-if-exists.util';
 
 export const HIKVISION_FACE_LIB_TYPE = 'blackFD';
 export const HIKVISION_FACE_FDID = '1';
@@ -1439,6 +1440,17 @@ export async function hikvisionSyncFace(
     syncLog('hikvision:verifyFaceOk', { employeeNo });
   } catch (error) {
     syncLogError('hikvision:syncFace', error, { employeeNo });
+    const alreadyThere = await recoverUnauthorizedIfExists(error, async () => {
+      const user = await hikvisionGetUserInfoByEmployeeNo(
+        connection,
+        employeeNo,
+      );
+      return user != null;
+    });
+    if (alreadyThere) {
+      syncLog('hikvision:jaNoLeitorAposUnauthorized', { employeeNo });
+      return;
+    }
     throw error;
   }
 }

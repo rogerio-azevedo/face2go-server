@@ -13,6 +13,7 @@ import {
   buildTimeSectionsRecordUpdaterParams,
 } from './intelbras-time-schedule.util';
 import { normalizeNameForFacialReader } from '../../face-sync/normalize-name-for-reader';
+import { recoverUnauthorizedIfExists } from '../../face-sync/recover-unauthorized-if-exists.util';
 import {
   extractHttpError,
   readerLabel,
@@ -24,6 +25,7 @@ import {
   describeIntelbrasFacialHttpError,
   isDuplicateFaceEnrollmentError,
 } from './intelbras-error-codes.util';
+import { intelbrasFaceFindIndicatesExists } from './intelbras-face-find.util';
 import { buildEnableRepFaceFiltSetConfigQuery } from './intelbras-rep-face-filt.util';
 
 export type PlainReaderCredential = {
@@ -940,35 +942,19 @@ export async function intelbrasUpsertFaceOnReader(
       syncLog('upsertFace:photoOnly', { reader: label, faceId });
     }
 
-    const checkFaceUrl = `${base}/cgi-bin/FaceInfoManager.cgi?action=startFind&Condition.UserID=${faceId}`;
     let faceExists = false;
 
     syncLog('upsertFace:checkFace:inicio', {
       reader: label,
       faceId,
-      checkFaceUrl,
     });
 
     try {
-      const faceResp = await digestRequest(auth, {
-        method: 'GET',
-        url: checkFaceUrl,
-      });
-      const payload = faceResp.data as { Total?: number } | undefined;
-      if (
-        payload &&
-        typeof payload === 'object' &&
-        payload.Total !== undefined &&
-        Number(payload.Total) > 0
-      ) {
-        faceExists = true;
-      }
+      faceExists = await intelbrasFaceExistsOnReader(reader, faceIdNumeric);
       syncLog('upsertFace:checkFace:ok', {
         reader: label,
         faceId,
         faceExists,
-        total: payload?.Total,
-        body: truncateForLog(faceResp.data),
       });
     } catch (err) {
       syncLogError('upsertFace:checkFace', err, { reader: label, faceId });
@@ -1075,8 +1061,34 @@ export async function intelbrasUpsertFaceOnReader(
       faceId,
       timeSectionIds,
     });
+    const alreadyThere = await recoverUnauthorizedIfExists(err, () =>
+      intelbrasFaceExistsOnReader(reader, faceIdNumeric),
+    );
+    if (alreadyThere) {
+      syncLog('upsertFace:jaNoLeitorAposUnauthorized', {
+        reader: label,
+        faceId,
+      });
+      return;
+    }
     throw err;
   }
+}
+
+/** FaceInfoManager startFind — true se o UserID já tem foto no leitor. */
+export async function intelbrasFaceExistsOnReader(
+  reader: PlainReaderCredential,
+  faceIdNumeric: number | string,
+): Promise<boolean> {
+  const auth = digestAuthForReader(reader);
+  const base = deviceUrl(reader);
+  const faceId = String(faceIdNumeric);
+  const checkFaceUrl = `${base}/cgi-bin/FaceInfoManager.cgi?action=startFind&Condition.UserID=${faceId}`;
+  const faceResp = await digestRequest(auth, {
+    method: 'GET',
+    url: checkFaceUrl,
+  });
+  return intelbrasFaceFindIndicatesExists(faceResp.data);
 }
 
 function attachReaderSyncStepError(err: unknown, step: string): Error {

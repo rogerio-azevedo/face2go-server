@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { clientUsers, companyUsers, users } from '../schema';
@@ -75,6 +75,84 @@ export async function getClientUserLink(
     )
     .limit(1);
   return row;
+}
+
+export async function getClientUserRow(
+  db: AppDb,
+  clientUserId: string,
+  clientId: string,
+) {
+  const [row] = await db
+    .select()
+    .from(clientUsers)
+    .where(
+      and(
+        eq(clientUsers.id, clientUserId),
+        eq(clientUsers.clientId, clientId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+export async function updateClientUserRole(
+  db: AppDb,
+  clientUserId: string,
+  clientId: string,
+  role: 'client_admin' | 'client_operator',
+) {
+  const [row] = await db
+    .update(clientUsers)
+    .set({ role })
+    .where(
+      and(
+        eq(clientUsers.id, clientUserId),
+        eq(clientUsers.clientId, clientId),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+export async function setClientUserActive(
+  db: AppDb,
+  clientUserId: string,
+  clientId: string,
+  isActive: boolean,
+) {
+  const [row] = await db
+    .update(clientUsers)
+    .set({ isActive })
+    .where(
+      and(
+        eq(clientUsers.id, clientUserId),
+        eq(clientUsers.clientId, clientId),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+export async function countActiveClientAdmins(
+  db: AppDb,
+  clientId: string,
+  excludeClientUserId?: string,
+) {
+  const base = [
+    eq(clientUsers.clientId, clientId),
+    eq(clientUsers.role, 'client_admin'),
+    eq(clientUsers.isActive, true),
+  ];
+  if (excludeClientUserId) {
+    base.push(ne(clientUsers.id, excludeClientUserId));
+  }
+
+  const rows = await db
+    .select({ id: clientUsers.id })
+    .from(clientUsers)
+    .where(and(...base));
+
+  return rows.length;
 }
 
 export async function getCompanyUserLink(

@@ -15,6 +15,7 @@ import { CompaniesModule } from './companies/companies.module';
 import { CompanyFeaturesModule } from './company-features/company-features.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CompanyUsersModule } from './company-users/company-users.module';
+import { ClientUsersModule } from './client-users/client-users.module';
 import { validateEnv, type EnvVars } from './config/env.validation';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -86,6 +87,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     RegistrationsModule,
     ReportsModule,
     CompanyUsersModule,
+    ClientUsersModule,
     SchoolClassesModule,
     ShiftsModule,
     StudentsModule,

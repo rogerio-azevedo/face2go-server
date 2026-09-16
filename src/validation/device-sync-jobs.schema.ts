@@ -12,6 +12,8 @@ export const deviceSyncJobDtoSchema = z.object({
   error: z.string().nullable(),
 });
 
-export const enqueueDeviceSyncBodySchema = z.object({
-  force: z.boolean().optional().default(false),
-});
+export const enqueueDeviceSyncBodySchema = z
+  .object({
+    force: z.boolean().optional().default(false),
+  })
+  .default({ force: false });

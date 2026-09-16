@@ -19,6 +19,12 @@ export {
   PatchClientInviteDto,
 } from './client-invites.dto';
 export {
+  PatchClientUserActiveDto,
+  PatchClientUserPasswordDto,
+  PatchClientUserProfileDto,
+  PatchClientUserRoleDto,
+} from './client-users.dto';
+export {
   CreateCompanyDto,
   GenerateCompanyInviteDto,
   PatchCompanyDto,

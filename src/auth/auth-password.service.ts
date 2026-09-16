@@ -8,6 +8,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 
 import { DatabaseService } from '../database/database.service';
+import * as usersQueries from '../database/queries/users.queries';
 import * as verificationTokensQueries from '../database/queries/verification-tokens.queries';
 import { responsibles, users } from '../database/schema';
 import { EmailService } from '../email/email.service';
@@ -29,12 +30,7 @@ export class AuthPasswordService {
     const db = this.database.db;
 
     if (parsed.kind === 'email') {
-      const [row] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, parsed.value))
-        .limit(1);
-      return row;
+      return usersQueries.findUserByEmail(db, parsed.value);
     }
 
     if (parsed.value.length !== 11) {

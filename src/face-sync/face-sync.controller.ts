@@ -71,18 +71,21 @@ export class CompanyFaceSyncController {
 
   @Post(':registrationId/sync')
   @ApiOperation({
-    summary: 'Enfileirar sync da face de um cadastro aprovado (202 + jobId)',
+    summary:
+      'Enfileirar sync da face de um cadastro aprovado (202 + jobId; body force reenvia a todos os leitores)',
   })
   async syncOne(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() dto: EnqueueDeviceSyncBodyDto,
   ) {
     await this.faceSync.ensureCompanyCanAccessClientPublic(user, clientId);
     return this.faceSync.enqueueApprovedRegistrationJob(
       registrationId,
       clientId,
       user.sub,
+      { resetReaderProgress: dto.force === true },
     );
   }
 
@@ -171,16 +174,21 @@ export class ClientFaceSyncController {
   }
 
   @Post(':registrationId/sync')
-  @ApiOperation({ summary: 'Enfileirar sync da face (202 + jobId)' })
+  @ApiOperation({
+    summary:
+      'Enfileirar sync da face (202 + jobId; body force reenvia a todos os leitores)',
+  })
   syncOne(
     @CurrentUser() user: JwtPayload,
     @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() dto: EnqueueDeviceSyncBodyDto,
   ) {
     const clientId = this.faceSync.ensureClientTenantPublic(user);
     return this.faceSync.enqueueApprovedRegistrationJob(
       registrationId,
       clientId,
       user.sub,
+      { resetReaderProgress: dto.force === true },
     );
   }
 
