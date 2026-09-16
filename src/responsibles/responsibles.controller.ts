@@ -178,6 +178,19 @@ export class ResponsiblesController {
     return this.responsiblesService.block(user, clientId, responsibleId, body);
   }
 
+  @Post(':responsibleId/unblock')
+  @ApiOperation({
+    summary:
+      'Desbloquear responsável: restaura a face no leitor com os horários normais',
+  })
+  unblock(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+  ) {
+    return this.responsiblesService.unblock(user, clientId, responsibleId);
+  }
+
   @Post(':responsibleId/face/sync')
   @ApiOperation({
     summary: 'Sincronizar face do responsável com os leitores Intelbras',

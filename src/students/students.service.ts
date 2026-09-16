@@ -601,6 +601,99 @@ export class StudentsService {
     return this.mapStudentWithPhoto(withClasses);
   }
 
+  async unblock(user: JwtPayload, clientId: string, studentId: string) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+
+    const existing = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+    if (!existing.blockedAt) {
+      throw new BadRequestException('Aluno não está bloqueado.');
+    }
+
+    const updated = await studentsQueries.unblockStudent(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!updated) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+
+    const photoKey = updated.photoKey ?? existing.photoKey;
+    let faceId = updated.faceId ?? existing.faceId;
+    if (photoKey && faceId == null) {
+      faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      await studentsQueries.updateStudentFace(
+        this.database.db,
+        studentId,
+        clientId,
+        { faceId },
+      );
+    }
+
+    if (photoKey && faceId != null) {
+      await studentsQueries.updateStudentFace(
+        this.database.db,
+        studentId,
+        clientId,
+        {
+          deviceSyncStatus: 'pending_sync',
+          deviceSyncedAt: null,
+          deviceSyncError: null,
+        },
+      );
+
+      try {
+        await this.faceSync.enqueuePersonSync({
+          clientId,
+          entityKind: 'student',
+          entityId: studentId,
+          faceId,
+          name: updated.name,
+          photoKey,
+          timeSectionIds: await this.accessTimeZone.resolveStudentTimeSections(
+            clientId,
+            studentId,
+          ),
+          logContext: `student-unblock=${studentId}`,
+          resetReaderProgress: true,
+          blocked: false,
+          persistResult: async (sync) => {
+            await studentsQueries.updateStudentFace(
+              this.database.db,
+              studentId,
+              clientId,
+              {
+                deviceSyncStatus: sync.deviceSyncStatus,
+                deviceSyncedAt:
+                  sync.deviceSyncStatus === 'synced' ? new Date() : null,
+                deviceSyncError: sync.deviceSyncError,
+              },
+            );
+          },
+        });
+      } catch (err: unknown) {
+        this.log.warn(
+          `enqueue pós-desbloqueio student=${studentId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    const [withClasses] = await this.attachClassesToStudents([updated]);
+    return this.mapStudentWithPhoto(withClasses);
+  }
+
   async delete(
     user: JwtPayload,
     clientId: string,

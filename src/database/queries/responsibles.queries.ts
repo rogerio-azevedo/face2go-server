@@ -636,6 +636,18 @@ export async function blockResponsible(
   });
 }
 
+export async function unblockResponsible(
+  db: AppDb,
+  id: string,
+  clientId: string,
+) {
+  return updateResponsible(db, id, clientId, {
+    blockReason: null,
+    blockedAt: null,
+    blockedByUserId: null,
+  });
+}
+
 export async function updateResponsibleFace(
   db: AppDb,
   id: string,

@@ -119,6 +119,19 @@ export class StudentsController {
     return this.studentsService.block(user, clientId, studentId, body);
   }
 
+  @Post(':studentId/unblock')
+  @ApiOperation({
+    summary:
+      'Desbloquear aluno: restaura a face no leitor com os horários normais',
+  })
+  unblock(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+  ) {
+    return this.studentsService.unblock(user, clientId, studentId);
+  }
+
   @Post(':studentId/face/sync')
   @ApiOperation({
     summary: 'Sincronizar face do aluno com os leitores Intelbras',

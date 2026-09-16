@@ -457,6 +457,18 @@ export async function setMemberBlockByRegistrationId(
   return row ?? null;
 }
 
+export async function unblockMember(
+  db: AppDb,
+  memberId: string,
+  clientId: string,
+) {
+  return updateMember(db, memberId, clientId, {
+    blockReason: null,
+    blockedAt: null,
+    blockedByUserId: null,
+  });
+}
+
 export async function updateMemberFace(
   db: AppDb,
   memberId: string,

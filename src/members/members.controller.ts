@@ -146,6 +146,19 @@ export class MembersController {
     return this.membersService.block(user, clientId, memberId, body);
   }
 
+  @Post('members/:memberId/unblock')
+  @ApiOperation({
+    summary:
+      'Desbloquear membro: restaura a face no leitor com os horários normais',
+  })
+  unblock(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+  ) {
+    return this.membersService.unblock(user, clientId, memberId);
+  }
+
   @Post('members/:memberId/face/sync')
   @ApiOperation({
     summary: 'Sincronizar face do membro com os leitores Intelbras',

@@ -815,6 +815,110 @@ export class MembersService {
     );
   }
 
+  async unblock(user: JwtPayload, clientId: string, memberId: string) {
+    await this.assertManageClient(user, clientId);
+
+    const existing = await membersQueries.getMemberById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    if (!existing.blockedAt) {
+      throw new BadRequestException('Membro não está bloqueado.');
+    }
+
+    const updated = await membersQueries.unblockMember(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!updated) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+
+    const photoKey = updated.photoKey ?? existing.photoKey;
+    let faceId = updated.faceId ?? existing.faceId;
+    if (photoKey && faceId == null) {
+      faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      await membersQueries.updateMemberFace(
+        this.database.db,
+        memberId,
+        clientId,
+        { faceId },
+      );
+    }
+
+    if (photoKey && faceId != null) {
+      await membersQueries.updateMemberFace(
+        this.database.db,
+        memberId,
+        clientId,
+        {
+          deviceSyncStatus: 'pending_sync',
+          deviceSyncedAt: null,
+          deviceSyncError: null,
+        },
+      );
+
+      try {
+        await this.faceSync.enqueuePersonSync({
+          clientId,
+          entityKind: 'member',
+          entityId: memberId,
+          faceId,
+          name: updated.name,
+          photoKey,
+          timeSectionIds: await this.accessTimeZone.resolveMemberTimeSections(
+            clientId,
+            memberId,
+          ),
+          logContext: `member-unblock=${memberId}`,
+          resetReaderProgress: true,
+          blocked: false,
+          persistResult: async (sync) => {
+            await membersQueries.updateMemberFace(
+              this.database.db,
+              memberId,
+              clientId,
+              {
+                deviceSyncStatus: sync.deviceSyncStatus,
+                deviceSyncedAt:
+                  sync.deviceSyncStatus === 'synced' ? new Date() : null,
+                deviceSyncError: sync.deviceSyncError,
+              },
+            );
+          },
+        });
+      } catch (err: unknown) {
+        this.log.warn(
+          `enqueue pós-desbloqueio member=${memberId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    const row = await membersQueries.getMemberWithRoleById(
+      this.database.db,
+      memberId,
+      clientId,
+    );
+    if (!row) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+    return mapMemberRow(
+      row,
+      await this.optionalPhotoUrl(row.photoKey),
+      await this.faceSync.hasActiveFacialReaders(clientId),
+    );
+  }
+
   async delete(user: JwtPayload, clientId: string, memberId: string) {
     if (user.role !== 'company_admin') {
       throw new ForbiddenException('Sem permissão.');

@@ -308,6 +308,27 @@ export async function hikvisionProbeAlertStreamSupported(
   }
 }
 
+const HIKVISION_PLAUSIBLE_TIME_MIN_MS = Date.UTC(2020, 0, 1);
+const HIKVISION_PLAUSIBLE_TIME_SKEW_MS = 24 * 60 * 60 * 1000;
+
+/** Unix seconds do evento; relógio de fábrica (2015) cai no horário do servidor. */
+export function resolveHikvisionEventUnixSeconds(
+  eventTime: string | undefined,
+  nowMs: number = Date.now(),
+): number {
+  if (eventTime) {
+    const ms = Date.parse(eventTime);
+    if (
+      Number.isFinite(ms) &&
+      ms >= HIKVISION_PLAUSIBLE_TIME_MIN_MS &&
+      Math.abs(ms - nowMs) <= HIKVISION_PLAUSIBLE_TIME_SKEW_MS
+    ) {
+      return Math.floor(ms / 1000);
+    }
+  }
+  return Math.floor(nowMs / 1000);
+}
+
 /** Converte evento Hikvision para VideoEvent (AccessesService). */
 export function hikvisionEventToVideoEvent(event: HikvisionAccessEvent): {
   code: string;
@@ -315,13 +336,7 @@ export function hikvisionEventToVideoEvent(event: HikvisionAccessEvent): {
   index: number;
   data: Record<string, unknown>;
 } {
-  let createTime: number | undefined;
-  if (event.time) {
-    const ms = Date.parse(event.time);
-    if (Number.isFinite(ms)) {
-      createTime = Math.floor(ms / 1000);
-    }
-  }
+  const createTime = resolveHikvisionEventUnixSeconds(event.time);
 
   return {
     code: 'AccessControl',
@@ -337,7 +352,8 @@ export function hikvisionEventToVideoEvent(event: HikvisionAccessEvent): {
       UTC: createTime,
       Type: event.eventType,
       SnapPath: event.pictureURL,
-      RecNo: event.serialNo,
+      // serialNo do HIK reinicia no reboot/NTP — não usar como RecNo
+      // senão o upsert some com o acesso novo (mesmo rec de um evento antigo).
     },
   };
 }

@@ -306,6 +306,14 @@ export async function blockStudent(
   });
 }
 
+export async function unblockStudent(db: AppDb, id: string, clientId: string) {
+  return updateStudent(db, id, clientId, {
+    blockReason: null,
+    blockedAt: null,
+    blockedByUserId: null,
+  });
+}
+
 export async function updateStudentFace(
   db: AppDb,
   id: string,

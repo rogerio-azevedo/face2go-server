@@ -24,13 +24,16 @@ import type {
 import * as readersQueries from '../database/queries/readers.queries';
 import {
   hikvisionAlertStreamUrl,
+  hikvisionCaptureLiveSnapshotWithReason,
   hikvisionEventToVideoEvent,
   hikvisionIsapiRequest,
   hikvisionOpenStreamRequest,
   hikvisionSearchAcsEvents,
+  isJpegBuffer,
   parseHikvisionAlertStreamPart,
   resolveHikvisionDevicePictureUrl,
   toHikvisionConnection,
+  type HikvisionAccessEvent,
 } from '../integrations/hikvision';
 import type {
   ReaderListenerStatus,
@@ -67,6 +70,13 @@ import {
   shouldLogPollFailure,
   shouldMarkPollOffline,
 } from './face-listener-hikvision-monitor.util';
+import {
+  applyHikvisionAlertPart,
+  classifyHikvisionAlertPart,
+  HIKVISION_ALERT_PENDING_FLUSH_MS,
+  isHikvisionAlertFaceAccess,
+  type HikvisionAlertPendingEvent,
+} from './hikvision-alert-pending.util';
 import { READER_OFFLINE_DETECTED } from './face-listener.events';
 import {
   decideOfflineNotifyAction,
@@ -105,6 +115,11 @@ type SnapPending = {
   image: Buffer | null;
   slices: SnapImageSliceMeta[];
 };
+
+type HikvisionAlertPending =
+  HikvisionAlertPendingEvent<HikvisionAccessEvent> & {
+    timer: NodeJS.Timeout;
+  };
 
 function toStreamContext(
   row: ReaderEventStreamRow,
@@ -149,6 +164,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   private multipartByReader = new Map<string, SnapMultipartAccumState>();
   private hikvisionMultipartByReader = new Map<string, MultipartAccumState>();
   private pendingByReader = new Map<string, SnapPending>();
+  private hikvisionPendingByReader = new Map<string, HikvisionAlertPending>();
   private hikvisionLastSerialByReader = new Map<string, number>();
   private processedHikvisionEventKeys = new Map<string, number>();
   private hikvisionIntegrationByReader = new Map<
@@ -229,6 +245,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       clearTimeout(timer);
     }
     this.offlineNotifyTimers.clear();
+    this.clearAllHikvisionAlertPending();
     this.offlineNotifiedAt.clear();
     for (const id of this.streamAbortByReader.keys()) {
       this.streamAbortByReader.get(id)?.abort();
@@ -604,6 +621,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     this.abortStream(readerId);
     this.multipartByReader.delete(readerId);
     this.hikvisionMultipartByReader.delete(readerId);
+    this.clearHikvisionAlertPending(readerId);
     this.pendingByReader.delete(readerId);
     this.hikvisionLastSerialByReader.delete(readerId);
     this.hikvisionIntegrationByReader.delete(readerId);
@@ -923,6 +941,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     const gen = this.bumpConnectGeneration(ctx.id);
     this.abortStream(ctx.id);
     this.clearHikvisionPollTimer(ctx.id);
+    this.clearHikvisionAlertPending(ctx.id);
 
     const connection = toHikvisionConnection({
       id: ctx.id,
@@ -959,6 +978,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     this.hikvisionAlertStreamFailCountByReader.delete(ctx.id);
     this.clearReconnectTimer(ctx.id);
     this.abortStream(ctx.id);
+    this.clearHikvisionAlertPending(ctx.id);
     this.subscribeHikvisionPoll(ctx, connection, gen);
   }
 
@@ -1188,21 +1208,103 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
     const parts = feedMultipartStream(state, chunk);
     for (const part of parts) {
-      const ct = part.contentType.toLowerCase();
-      if (!ct.includes('json') && !ct.startsWith('text/')) {
+      const kind = classifyHikvisionAlertPart(part.contentType, part.body);
+      if (kind === 'ignore') {
         continue;
       }
-      const event = parseHikvisionAlertStreamPart(part.body);
-      if (!event) continue;
-      void this.handleHikvisionAccessEvent(ctx, connection, event);
+      if (kind === 'json') {
+        const event = parseHikvisionAlertStreamPart(part.body);
+        if (!event || !isHikvisionAlertFaceAccess(event)) {
+          continue;
+        }
+        this.applyHikvisionAlertIncoming(ctx, connection, {
+          kind: 'event',
+          event,
+        });
+        continue;
+      }
+      this.applyHikvisionAlertIncoming(ctx, connection, {
+        kind: 'image',
+        image: part.body,
+      });
+    }
+  }
+
+  private applyHikvisionAlertIncoming(
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+    incoming:
+      | { kind: 'event'; event: HikvisionAccessEvent }
+      | { kind: 'image'; image: Buffer },
+  ): void {
+    const current = this.hikvisionPendingByReader.get(ctx.id) ?? null;
+    const { flush, hold } = applyHikvisionAlertPart(
+      current ? { event: current.event, image: current.image } : null,
+      incoming,
+    );
+
+    if (flush) {
+      this.clearHikvisionAlertPendingTimer(ctx.id);
+      this.hikvisionPendingByReader.delete(ctx.id);
+      void this.handleHikvisionAccessEvent(
+        ctx,
+        connection,
+        flush.event,
+        flush.image,
+      );
+    }
+
+    if (hold) {
+      this.clearHikvisionAlertPendingTimer(ctx.id);
+      const timer = setTimeout(() => {
+        const pend = this.hikvisionPendingByReader.get(ctx.id);
+        if (!pend) {
+          return;
+        }
+        this.hikvisionPendingByReader.delete(ctx.id);
+        void this.handleHikvisionAccessEvent(
+          ctx,
+          connection,
+          pend.event,
+          pend.image,
+        );
+      }, HIKVISION_ALERT_PENDING_FLUSH_MS);
+      this.hikvisionPendingByReader.set(ctx.id, {
+        event: hold.event,
+        image: hold.image,
+        timer,
+      });
+    }
+  }
+
+  private clearHikvisionAlertPendingTimer(readerId: string): void {
+    const pend = this.hikvisionPendingByReader.get(readerId);
+    if (pend) {
+      clearTimeout(pend.timer);
+    }
+  }
+
+  private clearHikvisionAlertPending(readerId: string): void {
+    this.clearHikvisionAlertPendingTimer(readerId);
+    this.hikvisionPendingByReader.delete(readerId);
+  }
+
+  private clearAllHikvisionAlertPending(): void {
+    for (const readerId of this.hikvisionPendingByReader.keys()) {
+      this.clearHikvisionAlertPending(readerId);
     }
   }
 
   private async handleHikvisionAccessEvent(
     ctx: ReaderStreamContext,
     connection: ReturnType<typeof toHikvisionConnection>,
-    event: Parameters<typeof hikvisionEventToVideoEvent>[0],
+    event: HikvisionAccessEvent,
+    inlineJpeg: Buffer | null = null,
   ): Promise<void> {
+    if (!isHikvisionAlertFaceAccess(event)) {
+      return;
+    }
+
     const dedupKey = `${ctx.id}:${event.serialNo ?? event.employeeNoString}:${event.time ?? ''}`;
     const now = Date.now();
     const prev = this.processedHikvisionEventKeys.get(dedupKey);
@@ -1215,21 +1317,48 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     const data = videoEvent.data;
     if (!data) return;
 
-    const similarity = data.Similarity;
-    const similarityNum =
-      typeof similarity === 'number'
-        ? similarity
-        : similarity != null && String(similarity).trim() !== ''
-          ? Number(similarity)
-          : NaN;
-    if (!Number.isFinite(similarityNum) || similarityNum <= 0) {
-      return;
+    const photo = await this.resolveHikvisionAccessPhoto(
+      ctx,
+      connection,
+      data,
+      inlineJpeg,
+    );
+
+    this.logger.log(
+      `[FaceListener] ${ctx.name} UserID=${event.employeeNoString ?? '—'} foto=${photo.source}`,
+    );
+
+    try {
+      await this.accessesService.recordSnapManagerAccess(
+        videoEvent,
+        ctx,
+        photo.image,
+      );
+      this.updateStatus(ctx.id, {
+        eventsReceived: (this.statuses.get(ctx.id)?.eventsReceived ?? 0) + 1,
+        lastEventAt: new Date(),
+      });
+      this.scheduleLastSeenPersist(ctx.id);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `[FaceListener] Persistência Hikvision falhou: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-    if (data.Status != null && data.Status !== 1) {
-      return;
+  }
+
+  private async resolveHikvisionAccessPhoto(
+    ctx: ReaderStreamContext,
+    connection: ReturnType<typeof toHikvisionConnection>,
+    data: Record<string, unknown>,
+    inlineJpeg: Buffer | null,
+  ): Promise<{
+    image: Buffer | null;
+    source: 'inline' | 'url' | 'live' | 'nenhuma';
+  }> {
+    if (isJpegBuffer(inlineJpeg)) {
+      return { image: inlineJpeg, source: 'inline' };
     }
 
-    let imageJpeg: Buffer | null = null;
     const pictureUrl =
       typeof data.SnapPath === 'string' ? data.SnapPath.trim() : '';
     if (pictureUrl) {
@@ -1243,35 +1372,33 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
           url: absoluteUrl,
           responseType: 'arraybuffer',
         });
-        const raw = imageResponse.data;
-        if (raw instanceof Buffer) {
-          imageJpeg = raw;
-        } else if (raw instanceof ArrayBuffer) {
-          imageJpeg = Buffer.from(raw);
+        const raw: unknown = imageResponse.data;
+        const fromUrl =
+          raw instanceof Buffer
+            ? raw
+            : raw instanceof ArrayBuffer
+              ? Buffer.from(raw)
+              : null;
+        if (isJpegBuffer(fromUrl)) {
+          return { image: fromUrl, source: 'url' };
         }
       } catch (err: unknown) {
-        this.logger.debug(
-          `[FaceListener] Snapshot Hikvision falhou: ${err instanceof Error ? err.message : String(err)}`,
+        const status = extractHttpStatus(err);
+        this.logger.warn(
+          `[FaceListener] Snapshot Hikvision falhou "${ctx.name}": HTTP ${status ?? '—'} ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
 
-    try {
-      await this.accessesService.recordSnapManagerAccess(
-        videoEvent,
-        ctx,
-        imageJpeg,
-      );
-      this.updateStatus(ctx.id, {
-        eventsReceived: (this.statuses.get(ctx.id)?.eventsReceived ?? 0) + 1,
-        lastEventAt: new Date(),
-      });
-      this.scheduleLastSeenPersist(ctx.id);
-    } catch (err: unknown) {
-      this.logger.warn(
-        `[FaceListener] Persistência Hikvision falhou: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    const live = await hikvisionCaptureLiveSnapshotWithReason(connection);
+    if (isJpegBuffer(live.buffer)) {
+      return { image: live.buffer, source: 'live' };
     }
+
+    this.logger.warn(
+      `[FaceListener] Snapshot ao vivo Hikvision falhou "${ctx.name}": ${live.error ?? 'sem JPEG'}`,
+    );
+    return { image: null, source: 'nenhuma' };
   }
 
   private scheduleLastSeenPersist(readerId: string): void {

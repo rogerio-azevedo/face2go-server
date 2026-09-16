@@ -760,6 +760,108 @@ export class ResponsiblesService {
     };
   }
 
+  async unblock(user: JwtPayload, clientId: string, responsibleId: string) {
+    await this.schoolAccess.assertManageSchoolClient(user, clientId);
+
+    const existing = await responsiblesQueries.getResponsibleById(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+    if (!existing.blockedAt) {
+      throw new BadRequestException('Responsável não está bloqueado.');
+    }
+
+    const updated = await responsiblesQueries.unblockResponsible(
+      this.database.db,
+      responsibleId,
+      clientId,
+    );
+    if (!updated) {
+      throw new NotFoundException('Responsável não encontrado.');
+    }
+
+    const photoKey = updated.photoKey ?? existing.photoKey;
+    let faceId = updated.faceId ?? existing.faceId;
+    if (photoKey && faceId == null) {
+      faceId = await registrationsQueries.bumpClientFaceCounter(
+        this.database.db,
+        clientId,
+      );
+      await responsiblesQueries.updateResponsibleFace(
+        this.database.db,
+        responsibleId,
+        clientId,
+        { faceId },
+      );
+    }
+
+    if (photoKey && faceId != null) {
+      await responsiblesQueries.updateResponsibleFace(
+        this.database.db,
+        responsibleId,
+        clientId,
+        {
+          deviceSyncStatus: 'pending_sync',
+          deviceSyncedAt: null,
+          deviceSyncError: null,
+        },
+      );
+
+      try {
+        await this.faceSync.enqueuePersonSync({
+          clientId,
+          entityKind: 'responsible',
+          entityId: responsibleId,
+          faceId,
+          name: updated.name,
+          photoKey,
+          timeSectionIds:
+            await this.accessTimeZone.resolveResponsibleTimeSections(
+              clientId,
+              responsibleId,
+            ),
+          logContext: `responsible-unblock=${responsibleId}`,
+          resetReaderProgress: true,
+          blocked: false,
+          persistResult: async (sync) => {
+            await responsiblesQueries.updateResponsibleFace(
+              this.database.db,
+              responsibleId,
+              clientId,
+              {
+                deviceSyncStatus: sync.deviceSyncStatus,
+                deviceSyncedAt:
+                  sync.deviceSyncStatus === 'synced' ? new Date() : null,
+                deviceSyncError: sync.deviceSyncError,
+              },
+            );
+          },
+        });
+      } catch (err: unknown) {
+        this.log.warn(
+          `enqueue pós-desbloqueio responsible=${responsibleId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    return {
+      ...updated,
+      email: updated.userId
+        ? await responsiblesQueries.getResponsibleEmailByUserId(
+            this.database.db,
+            updated.userId,
+          )
+        : null,
+      photoUrl: await this.optionalPhotoUrl(updated.photoKey),
+    };
+  }
+
   async delete(
     user: JwtPayload,
     clientId: string,
