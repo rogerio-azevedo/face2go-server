@@ -70,7 +70,7 @@ async function bootstrap() {
 bootstrap().catch((err: unknown) => {
   const logger = new AppLogger();
   logger.error(
-    'Falha ao iniciar aplicação',
+    'Falha ao iniciar aplicação.',
     err instanceof Error ? err.stack : String(err),
     'Bootstrap',
   );
