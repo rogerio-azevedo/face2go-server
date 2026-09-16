@@ -8,6 +8,7 @@ import {
   integer,
   pgEnum,
   uniqueIndex,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth';
@@ -66,6 +67,11 @@ export const clients = pgTable(
       .notNull(),
     /** Código da filial TOTVS IENH (1–3) para integração cadastral. */
     ienhFilialCode: integer('ienh_filial_code'),
+    /** Regras do formulário público de cadastro (obrigatório / opcional / oculto). */
+    registrationConfig: jsonb('registration_config').$type<Record<
+      string,
+      'required' | 'optional' | 'hidden'
+    > | null>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },

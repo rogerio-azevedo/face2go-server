@@ -1,3 +1,4 @@
+export * from './hikvision-acs-cfg.client';
 export * from './hikvision-connection.types';
 export * from './hikvision-device.client';
 export * from './hikvision-error.util';

@@ -11,23 +11,17 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { parseUploadedImageFile } from '../storage/uploaded-image.util';
+import { publicSubmitRegistrationSchema } from '../validation/registrations.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
-import { normalizeAdditionalDataForClientType } from './registration-additional-data';
+import { normalizeRegistrationFields } from './registration-additional-data';
+import { resolveRegistrationFieldsConfig } from './registration-fields-config';
 
 const presignBodySchema = z.object({
   registrationId: z.string().uuid(),
   mimeType: z.string().min(3),
 });
 
-const submitBodySchema = z.object({
-  registrationId: z.string().uuid(),
-  name: z.string().min(2).max(255),
-  document: z.string().min(5).max(32),
-  phone: z.string().min(8).max(32),
-  email: z.string().email(),
-  faceImageKey: z.string().min(1),
-  additionalData: z.record(z.string(), z.unknown()).optional(),
-});
+const submitBodySchema = publicSubmitRegistrationSchema;
 
 const uploadPhotoBodySchema = z.object({
   registrationId: z.string().uuid(),
@@ -71,6 +65,10 @@ export class PublicRegistrationService {
       clientName: bundle.client.name,
       clientType: bundle.client.type,
       logoUrl: bundle.client.logoUrl,
+      fields: resolveRegistrationFieldsConfig(
+        bundle.client.type,
+        bundle.client.registrationConfig,
+      ),
     };
   }
 
@@ -161,15 +159,23 @@ export class PublicRegistrationService {
       document,
       phone,
       email,
+      birthDate,
       faceImageKey,
       additionalData,
     } = parsed.data;
+    const truthDeclaredAt = new Date();
 
-    const clientType = bundle.client.type;
-    const additionalNormalized = normalizeAdditionalDataForClientType(
-      clientType,
-      additionalData,
+    const fieldsConfig = resolveRegistrationFieldsConfig(
+      bundle.client.type,
+      bundle.client.registrationConfig,
     );
+    const normalized = normalizeRegistrationFields(fieldsConfig, {
+      document,
+      phone,
+      email,
+      birthDate,
+      additionalData,
+    });
 
     const re = new RegExp(
       `^${escapeRegex(bundle.client.companyId)}/${escapeRegex(bundle.client.id)}/${escapeRegex(registrationId)}/face\\.(jpg|png|webp)$`,
@@ -197,11 +203,13 @@ export class PublicRegistrationService {
           registrationLinkId: bundle.link.id,
           clientId: bundle.client.id,
           name: name.trim(),
-          document: document.trim(),
-          phone: phone.trim(),
-          email: email.trim().toLowerCase(),
+          document: normalized.document,
+          phone: normalized.phone,
+          email: normalized.email,
+          birthDate: normalized.birthDate,
           faceImageKey,
-          additionalData: additionalNormalized,
+          additionalData: normalized.additionalData,
+          truthDeclaredAt,
         },
       );
       return {

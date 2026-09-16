@@ -540,3 +540,16 @@ export async function updateClientIenhFilialCode(
     });
   return row;
 }
+
+export async function updateClientRegistrationConfig(
+  db: AppDb,
+  clientId: string,
+  registrationConfig: Record<string, 'required' | 'optional' | 'hidden'> | null,
+) {
+  const [row] = await db
+    .update(clients)
+    .set({ registrationConfig, updatedAt: new Date() })
+    .where(eq(clients.id, clientId))
+    .returning();
+  return row;
+}

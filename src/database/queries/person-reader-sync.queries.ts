@@ -1,9 +1,37 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { personReaderSync } from '../schema';
 
 export type PersonReaderSyncStatus = 'synced' | 'sync_failed';
+
+/** Quantidade de leitores com status `synced` por faceId neste cliente. */
+export async function countSyncedPersonReaderSyncByFaceIds(
+  db: AppDb,
+  clientId: string,
+  faceIds: number[],
+): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  if (faceIds.length === 0) return map;
+  const rows = await db
+    .select({
+      faceId: personReaderSync.faceId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(personReaderSync)
+    .where(
+      and(
+        eq(personReaderSync.clientId, clientId),
+        inArray(personReaderSync.faceId, faceIds),
+        eq(personReaderSync.status, 'synced'),
+      ),
+    )
+    .groupBy(personReaderSync.faceId);
+  for (const row of rows) {
+    map.set(row.faceId, Number(row.count));
+  }
+  return map;
+}
 
 export async function listPersonReaderSyncByFace(
   db: AppDb,

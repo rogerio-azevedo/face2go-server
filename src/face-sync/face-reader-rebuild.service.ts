@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
 
+import { toIsoDateString } from '../common/utils/birth-date';
 import { DatabaseService } from '../database/database.service';
 import * as rebuildQueries from '../database/queries/device-reader-rebuild.queries';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
+import * as readersQueries from '../database/queries/readers.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import type { FaceSyncEntityKind } from '../device-sync-queue/device-sync-queue.types';
 import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
+import { isPersonAllowedOnReader } from './minor-restriction';
 import { AccessTimeZoneService } from './access-time-zone.service';
 
 export type RebuildPerson = {
@@ -19,6 +22,7 @@ export type RebuildPerson = {
   validFrom?: Date;
   validUntil?: Date;
   blocked?: boolean;
+  birthDate?: string | null;
 };
 
 type PendingRow = {
@@ -30,6 +34,7 @@ type PendingRow = {
   validFrom?: Date;
   validUntil?: Date;
   blocked?: boolean;
+  birthDate: string | null;
 };
 
 @Injectable()
@@ -45,6 +50,11 @@ export class FaceReaderRebuildService {
     options?: { skipSynced?: boolean },
   ): Promise<RebuildPerson[]> {
     const skipSynced = options?.skipSynced !== false;
+    const restrictMinors = await readersQueries.getReaderMinorRestriction(
+      this.database.db,
+      clientId,
+      readerId,
+    );
     const [
       members,
       regs,
@@ -85,12 +95,17 @@ export class FaceReaderRebuildService {
         name: string | null;
         faceId: number | null;
         photoKey: string | null;
+        birthDate?: unknown;
       },
       entityKind: FaceSyncEntityKind,
       extra?: { validFrom?: Date; validUntil?: Date; blocked?: boolean },
     ) => {
       if (row.faceId == null || !row.photoKey) return;
       if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) return;
+      const birthDate = toIsoDateString(row.birthDate ?? null);
+      if (!isPersonAllowedOnReader({ restrictMinors }, birthDate)) {
+        return;
+      }
       seen.add(row.faceId);
       pending.push({
         id: row.id,
@@ -101,6 +116,7 @@ export class FaceReaderRebuildService {
         validFrom: extra?.validFrom,
         validUntil: extra?.validUntil,
         blocked: extra?.blocked,
+        birthDate,
       });
     };
 
@@ -151,6 +167,7 @@ export class FaceReaderRebuildService {
         faceId: row.faceId,
         photoKey: row.photoKey,
         entityKind,
+        birthDate: null,
       };
       people.push({
         ...pending,

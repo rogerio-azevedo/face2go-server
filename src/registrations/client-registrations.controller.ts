@@ -75,6 +75,18 @@ export class ClientRegistrationsController {
     );
   }
 
+  @Post(':registrationId/unblock')
+  @ApiOperation({
+    summary:
+      'Desbloquear cadastro: restaura status aprovado e reenvia a face ao leitor com acesso normal',
+  })
+  unblock(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.unblockForClientTenant(user, registrationId);
+  }
+
   @Post(':registrationId/reject')
   @ApiOperation({ summary: 'Rejeitar cadastro' })
   reject(

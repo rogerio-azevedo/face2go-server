@@ -434,9 +434,9 @@ export async function setMemberBlockByRegistrationId(
   clientId: string,
   registrationId: string,
   input: {
-    blockReason: string;
-    blockedAt: Date;
-    blockedByUserId: string;
+    blockReason: string | null;
+    blockedAt: Date | null;
+    blockedByUserId: string | null;
   },
 ) {
   const [row] = await db

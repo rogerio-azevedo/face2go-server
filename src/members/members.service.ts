@@ -38,6 +38,7 @@ import {
 import { zodFirstMessage } from '../validation/zod-utils';
 import * as usersQueries from '../database/queries/users.queries';
 import { normalizeCpf } from '../auth/utils/auth-identifiers';
+import { toIsoDateString } from '../common/utils/birth-date';
 
 function mapMemberRow(
   row: membersQueries.MemberWithRoleRow,
@@ -1039,6 +1040,7 @@ export class MembersService {
       email: registration.email,
       phone: registration.phone,
       document: registration.document,
+      birthDate: toIsoDateString(registration.birthDate),
       photoKey: registration.faceImageKey,
       faceId: registration.faceId,
       deviceSyncStatus: registration.deviceSyncStatus,
@@ -1090,6 +1092,7 @@ export class MembersService {
         email: registration.email,
         phone: registration.phone,
         document: registration.document,
+        birthDate: toIsoDateString(registration.birthDate),
         additionalData: registration.additionalData,
       },
     );

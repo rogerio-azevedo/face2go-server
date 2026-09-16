@@ -322,6 +322,7 @@ export class IntelbrasPushProvisionService {
         port: row.port,
         username: row.username,
         passwordEncrypted: row.passwordEncrypted,
+        restrictMinors: row.restrictMinors === true,
       },
       cipher.decrypt(row.passwordEncrypted),
     );

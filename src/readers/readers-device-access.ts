@@ -100,6 +100,7 @@ export async function loadActiveDeviceReader(
         port: reader.port,
         username: reader.username,
         passwordEncrypted: reader.passwordEncrypted,
+        restrictMinors: reader.restrictMinors === true,
       },
       cipher.decrypt(reader.passwordEncrypted),
     ),

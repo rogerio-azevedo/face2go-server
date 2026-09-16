@@ -9,13 +9,17 @@ import {
 import { ConfigService } from '@nestjs/config';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
-import { mapReadersWithSyncGate } from '../common/concurrency/reader-sync-gate';
+import {
+  mapReadersWithSyncGate,
+  withReaderSyncGate,
+} from '../common/concurrency/reader-sync-gate';
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as readersQueries from '../database/queries/readers.queries';
+import * as personBirthDateQueries from '../database/queries/person-birth-date.queries';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
@@ -52,6 +56,10 @@ import {
 import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
 import { planPersonReaderSync } from './person-reader-sync.util';
 import { AccessTimeZoneService } from './access-time-zone.service';
+import {
+  isPersonAllowedOnReader,
+  partitionReadersByMinorRestriction,
+} from './minor-restriction';
 import {
   readerLabel,
   syncLog,
@@ -160,11 +168,24 @@ export class FaceSyncService {
 
   /** Indica se o cliente possui ao menos um leitor facial ativo com credenciais. */
   async hasActiveFacialReaders(clientId: string): Promise<boolean> {
-    const readers = await readersQueries.listReadersForFaceSyncByClient(
-      this.database.db,
-      clientId,
-    );
-    return readers.length > 0;
+    const { total } = await this.getReaderSyncCounts(clientId, []);
+    return total > 0;
+  }
+
+  /** Total de leitores de face + quantos já estão `synced` por faceId. */
+  async getReaderSyncCounts(
+    clientId: string,
+    faceIds: number[],
+  ): Promise<{ total: number; syncedByFace: Map<number, number> }> {
+    const [readers, syncedByFace] = await Promise.all([
+      readersQueries.listReadersForFaceSyncByClient(this.database.db, clientId),
+      personReaderSyncQueries.countSyncedPersonReaderSyncByFaceIds(
+        this.database.db,
+        clientId,
+        faceIds,
+      ),
+    ]);
+    return { total: readers.length, syncedByFace };
   }
 
   /** Próximo ID por cliente (após aprovação com foto). */
@@ -270,25 +291,53 @@ export class FaceSyncService {
         clientId,
       );
       const allowIds = params.readerIds?.filter((id) => id.trim());
-      const readers =
+      const scoped =
         allowIds && allowIds.length > 0
           ? allReaders.filter((r) => allowIds.includes(r.id))
           : allReaders;
 
-      syncLog('syncPersonOnReaders:leitores', {
-        clientId,
-        faceId,
-        total: readers.length,
-        readers: readers.map((r) => readerLabel(r)),
-      });
-
-      if (readers.length === 0) {
+      if (scoped.length === 0) {
         syncLog('syncPersonOnReaders:semLeitores', { clientId, faceId });
         return {
           deviceSyncStatus: 'sync_failed',
           deviceSyncError:
             'Nenhum leitor ativo com credenciais para este cliente.',
         };
+      }
+
+      const birthDate = await personBirthDateQueries.getBirthDateByFaceId(
+        this.database.db,
+        clientId,
+        faceId,
+      );
+      const { allowed: readers, restricted } =
+        partitionReadersByMinorRestriction(scoped, birthDate);
+
+      if (restricted.length > 0) {
+        await this.removePersonFromReaders({
+          clientId,
+          faceId,
+          logContext: `${logPrefix}minor-restriction`,
+          requireAll: false,
+          readerIds: restricted.map((r) => r.id),
+        });
+      }
+
+      syncLog('syncPersonOnReaders:leitores', {
+        clientId,
+        faceId,
+        total: readers.length,
+        restricted: restricted.length,
+        readers: readers.map((r) => readerLabel(r)),
+      });
+
+      if (readers.length === 0) {
+        syncLog('syncPersonOnReaders:todosRestritos', {
+          clientId,
+          faceId,
+          birthDate,
+        });
+        return { deviceSyncStatus: 'synced', deviceSyncError: null };
       }
 
       if (params.resetReaderProgress === true) {
@@ -452,6 +501,7 @@ export class FaceSyncService {
                 validDateEnd: params.validUntil
                   ? dateToHikvisionFormat(params.validUntil)
                   : undefined,
+                blocked,
               });
             } else {
               if (!intelbrasBase64) {
@@ -562,21 +612,41 @@ export class FaceSyncService {
     logContext?: string;
     /** Quando true (padrão), falha se algum leitor não remover a face. */
     requireAll?: boolean;
+    /** Quando informado, remove só destes leitores. */
+    readerIds?: string[];
   }): Promise<{ removed: number; total: number; failures: string[] }> {
     const { clientId, faceId, logContext, requireAll = true } = params;
-    const readers = await readersQueries.listReadersForFaceSyncByClient(
+    const allReaders = await readersQueries.listReadersForFaceSyncByClient(
       this.database.db,
       clientId,
     );
+    const allowIds = params.readerIds?.filter((id) => id.trim());
+    const readers =
+      allowIds && allowIds.length > 0
+        ? allReaders.filter((r) => allowIds.includes(r.id))
+        : allReaders;
     if (readers.length === 0) {
       return { removed: 0, total: 0, failures: [] };
     }
 
-    await personReaderSyncQueries.deletePersonReaderSyncByFace(
-      this.database.db,
-      clientId,
-      faceId,
-    );
+    if (allowIds && allowIds.length > 0) {
+      await Promise.all(
+        allowIds.map((readerId) =>
+          personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
+            this.database.db,
+            clientId,
+            faceId,
+            readerId,
+          ),
+        ),
+      );
+    } else {
+      await personReaderSyncQueries.deletePersonReaderSyncByFace(
+        this.database.db,
+        clientId,
+        faceId,
+      );
+    }
 
     const cipher = createReaderCredentialsCipher(
       this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
@@ -585,34 +655,36 @@ export class FaceSyncService {
     const failures: string[] = [];
 
     await Promise.all(
-      readers.map(async (r) => {
-        try {
-          const plain = toPlainReaderCredential(
-            r,
-            cipher.decrypt(r.passwordEncrypted),
-          );
-          if (r.brand === 'hikvision') {
-            const connection = toHikvisionConnection(plain);
-            const result = await hikvisionDeleteUser(
-              connection,
-              String(faceId),
+      readers.map((r) =>
+        withReaderSyncGate(r.id, async () => {
+          try {
+            const plain = toPlainReaderCredential(
+              r,
+              cipher.decrypt(r.passwordEncrypted),
             );
-            if (!result.success) {
-              throw new Error(
-                result.error ?? 'Falha ao remover usuário Hikvision',
+            if (r.brand === 'hikvision') {
+              const connection = toHikvisionConnection(plain);
+              const result = await hikvisionDeleteUser(
+                connection,
+                String(faceId),
               );
+              if (!result.success) {
+                throw new Error(
+                  result.error ?? 'Falha ao remover usuário Hikvision',
+                );
+              }
+            } else {
+              await intelbrasRemoveUserFromReader(plain, faceId);
             }
-          } else {
-            await intelbrasRemoveUserFromReader(plain, faceId);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            failures.push(`${r.name}: ${msg}`);
+            this.log.warn(
+              `${logPrefix}Falha ao remover face ${faceId} do leitor ${r.name}: ${msg}`,
+            );
           }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          failures.push(`${r.name}: ${msg}`);
-          this.log.warn(
-            `${logPrefix}Falha ao remover face ${faceId} do leitor ${r.name}: ${msg}`,
-          );
-        }
-      }),
+        }),
+      ),
     );
 
     const result = {
@@ -628,6 +700,81 @@ export class FaceSyncService {
     }
 
     return result;
+  }
+
+  /**
+   * Remove do leitor as faces inelegíveis quando a restrição de menor está ligada.
+   * Usa o union de faces já sincronizadas neste leitor + faces conhecidas do cliente.
+   */
+  async purgeIneligibleFacesFromReader(
+    clientId: string,
+    readerId: string,
+  ): Promise<number> {
+    const readers = await readersQueries.listReadersForFaceSyncByClient(
+      this.database.db,
+      clientId,
+    );
+    const reader = readers.find((r) => r.id === readerId);
+    if (!reader?.restrictMinors) return 0;
+
+    const [synced, known] = await Promise.all([
+      personReaderSyncQueries.listSyncedFaceIdsByReader(
+        this.database.db,
+        clientId,
+        readerId,
+      ),
+      personBirthDateQueries.listFaceIdsByClient(this.database.db, clientId),
+    ]);
+    const candidates = new Set<number>([...synced, ...known]);
+    if (candidates.size === 0) return 0;
+
+    const birthDates = await personBirthDateQueries.listBirthDatesByFaceIds(
+      this.database.db,
+      clientId,
+      [...candidates],
+    );
+    const ineligible = [...candidates].filter(
+      (faceId) =>
+        !isPersonAllowedOnReader(reader, birthDates.get(faceId) ?? null),
+    );
+    if (ineligible.length === 0) return 0;
+
+    const cipher = createReaderCredentialsCipher(
+      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+    );
+    const plain = toPlainReaderCredential(
+      reader,
+      cipher.decrypt(reader.passwordEncrypted),
+    );
+    let removed = 0;
+    for (const faceId of ineligible) {
+      try {
+        if (reader.brand === 'hikvision') {
+          const connection = toHikvisionConnection(plain);
+          const result = await hikvisionDeleteUser(connection, String(faceId));
+          if (!result.success) {
+            throw new Error(
+              result.error ?? 'Falha ao remover usuário Hikvision',
+            );
+          }
+        } else {
+          await intelbrasRemoveUserFromReader(plain, faceId);
+        }
+        removed += 1;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.log.warn(
+          `minor-purge reader=${reader.name} face=${faceId}: ${msg}`,
+        );
+      }
+      await personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
+        this.database.db,
+        clientId,
+        faceId,
+        readerId,
+      );
+    }
+    return removed;
   }
 
   /** Sincroniza um cadastro aprovado (foto no R2) com todos os leitores ativos do cliente. */
@@ -872,6 +1019,8 @@ export class FaceSyncService {
   ): Promise<{
     deviceSyncStatus: string;
     deviceSyncError: string | null;
+    readerSyncSynced: number | null;
+    readerSyncTotal: number | null;
   }> {
     const row = await registrationsQueries.getRegistrationByIdForClient(
       this.database.db,
@@ -887,9 +1036,18 @@ export class FaceSyncService {
         'Cadastro não encontrado, excluído ou sem face para sincronizar.',
       );
     }
+    const progress = await this.getReaderSyncCounts(
+      clientId,
+      row.faceId != null ? [row.faceId] : [],
+    );
     return {
       deviceSyncStatus: row.deviceSyncStatus ?? 'pending_sync',
       deviceSyncError: row.deviceSyncError ?? null,
+      readerSyncSynced:
+        row.faceId != null
+          ? (progress.syncedByFace.get(row.faceId) ?? 0)
+          : null,
+      readerSyncTotal: progress.total > 0 ? progress.total : null,
     };
   }
 
@@ -920,6 +1078,23 @@ export class FaceSyncService {
       createdBy,
       dedupeKey: `face.reader:${clientId}:${readerId}:${force ? 'force' : 'incremental'}`,
       payload: { force },
+    });
+    return this.queue.toDto(job);
+  }
+
+  async enqueueMinorRestrictionCleanup(
+    clientId: string,
+    readerId: string,
+    createdBy?: string,
+  ) {
+    const job = await this.queue.enqueue({
+      kind: 'face.reader',
+      clientId,
+      targetId: readerId,
+      force: false,
+      createdBy,
+      dedupeKey: `face.reader:${clientId}:${readerId}:incremental`,
+      payload: { force: false },
     });
     return this.queue.toDto(job);
   }

@@ -24,6 +24,7 @@ export type ReaderListRow = {
   username: string | null;
   hasCredentials: boolean;
   isActive: boolean;
+  restrictMinors: boolean;
   lastSeenAt: Date | null;
   createdAt: Date;
 };
@@ -59,6 +60,7 @@ export async function listReaders(
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
+      restrictMinors: facialReaders.restrictMinors,
       lastSeenAt: facialReaders.lastSeenAt,
       createdAt: facialReaders.createdAt,
     })
@@ -101,6 +103,7 @@ export async function getReaderById(
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
+      restrictMinors: facialReaders.restrictMinors,
       lastSeenAt: facialReaders.lastSeenAt,
       createdAt: facialReaders.createdAt,
     })
@@ -142,6 +145,7 @@ export async function getReaderWithCredentialsById(
       passwordEncrypted: facialReaders.passwordEncrypted,
       brand: facialReaders.brand,
       isActive: facialReaders.isActive,
+      restrictMinors: facialReaders.restrictMinors,
     })
     .from(facialReaders)
     .innerJoin(clients, eq(facialReaders.clientId, clients.id))
@@ -168,6 +172,7 @@ export type ReaderCreateInput = {
   username?: string | null;
   passwordEncrypted?: string | null;
   isActive?: boolean;
+  restrictMinors?: boolean;
 };
 
 export async function createReader(db: AppDb, input: ReaderCreateInput) {
@@ -196,6 +201,7 @@ export async function createReader(db: AppDb, input: ReaderCreateInput) {
       username: input.username?.trim() || null,
       passwordEncrypted: input.passwordEncrypted ?? null,
       isActive: input.isActive ?? true,
+      restrictMinors: input.restrictMinors ?? false,
     })
     .returning();
 
@@ -216,6 +222,7 @@ export type ReaderUpdateInput = Partial<{
   username: string | null;
   passwordEncrypted: string | null;
   isActive: boolean;
+  restrictMinors: boolean;
 }>;
 
 export async function updateReader(
@@ -280,6 +287,9 @@ export async function updateReader(
     setPayload.passwordEncrypted = input.passwordEncrypted;
   }
   if (input.isActive !== undefined) setPayload.isActive = input.isActive;
+  if (input.restrictMinors !== undefined) {
+    setPayload.restrictMinors = input.restrictMinors;
+  }
 
   if (Object.keys(setPayload).length === 0) {
     return existing;
@@ -539,6 +549,7 @@ export type ReaderFaceSyncRow = {
   port: number;
   username: string;
   passwordEncrypted: string;
+  restrictMinors: boolean;
 };
 
 export async function listReadersForFaceSyncByClient(
@@ -554,6 +565,7 @@ export async function listReadersForFaceSyncByClient(
       port: facialReaders.port,
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
+      restrictMinors: facialReaders.restrictMinors,
     })
     .from(facialReaders)
     .where(
@@ -572,7 +584,23 @@ export async function listReadersForFaceSyncByClient(
     .map((r) => ({
       ...r,
       brand: r.brand ?? 'intelbras',
+      restrictMinors: Boolean(r.restrictMinors),
     })) as ReaderFaceSyncRow[];
+}
+
+export async function getReaderMinorRestriction(
+  db: AppDb,
+  clientId: string,
+  readerId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ restrictMinors: facialReaders.restrictMinors })
+    .from(facialReaders)
+    .where(
+      and(eq(facialReaders.id, readerId), eq(facialReaders.clientId, clientId)),
+    )
+    .limit(1);
+  return row?.restrictMinors === true;
 }
 
 export type ReaderPushRow = {

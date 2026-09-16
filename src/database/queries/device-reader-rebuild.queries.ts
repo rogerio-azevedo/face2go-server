@@ -17,6 +17,7 @@ export async function listMembersWithFaceByClient(db: AppDb, clientId: string) {
       faceId: clientMembers.faceId,
       photoKey: clientMembers.photoKey,
       blockedAt: clientMembers.blockedAt,
+      birthDate: clientMembers.birthDate,
     })
     .from(clientMembers)
     .where(
@@ -40,6 +41,7 @@ export async function listApprovedRegistrationsWithFaceByClient(
       faceId: registrations.faceId,
       photoKey: registrations.faceImageKey,
       status: registrations.status,
+      birthDate: registrations.birthDate,
     })
     .from(registrations)
     .where(
@@ -63,6 +65,7 @@ export async function listStudentsWithFaceByClient(
       faceId: students.faceId,
       photoKey: students.photoKey,
       blockedAt: students.blockedAt,
+      birthDate: students.birthDate,
     })
     .from(students)
     .where(

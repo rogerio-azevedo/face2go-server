@@ -6,6 +6,8 @@ import {
 
 /** minor 75 = face authentication success (ISAPI AcsEvent / alertStream). */
 export const HIKVISION_MINOR_FACE_AUTH_SUCCESS = 75;
+/** minor 0x71 = MINOR_CERTIFICATE_BLACK_LIST (evento de pessoa na lista de bloqueio). */
+export const HIKVISION_MINOR_BLOCK_LIST = 113;
 
 /** Formato exigido pelo DS-K1T671: `2026-08-11T15:14:15-04:00` (offset local). */
 export function formatHikvisionAcsEventTime(date: Date): string {
@@ -46,6 +48,7 @@ export type HikvisionAccessEvent = {
   minor?: number;
   serialNo?: number;
   currentVerifyMode?: string;
+  userType?: string;
   raw: unknown;
 };
 
@@ -112,6 +115,25 @@ function isFaceVerifyMode(mode: string | undefined): boolean {
   return m === 'face' || m.includes('face');
 }
 
+export function isHikvisionBlockListUserType(
+  userType: string | undefined,
+): boolean {
+  if (!userType) {
+    return false;
+  }
+  const normalized = userType.replace(/[\s_-]/g, '').toLowerCase();
+  return normalized === 'blacklist' || normalized === 'blocklist';
+}
+
+export function isHikvisionBlockListEvent(
+  event: Pick<HikvisionAccessEvent, 'minor' | 'userType'>,
+): boolean {
+  return (
+    event.minor === HIKVISION_MINOR_BLOCK_LIST ||
+    isHikvisionBlockListUserType(event.userType)
+  );
+}
+
 export function normalizeHikvisionAccessEvent(
   payload: unknown,
   options?: { source?: 'alertStream' | 'acsEvent' },
@@ -142,6 +164,9 @@ export function normalizeHikvisionAccessEvent(
   const currentVerifyMode =
     pickEventStr(event, 'currentVerifyMode', 'CurrentVerifyMode') ??
     pickEventStr(root, 'currentVerifyMode', 'CurrentVerifyMode');
+  const userType =
+    pickEventStr(event, 'userType', 'UserType') ??
+    pickEventStr(root, 'userType', 'UserType');
 
   const eventType = String(
     event.eventType ??
@@ -171,7 +196,9 @@ export function normalizeHikvisionAccessEvent(
   if (options?.source === 'acsEvent') {
     if (
       minor !== HIKVISION_MINOR_FACE_AUTH_SUCCESS &&
-      !isFaceVerifyMode(currentVerifyMode)
+      minor !== HIKVISION_MINOR_BLOCK_LIST &&
+      !isFaceVerifyMode(currentVerifyMode) &&
+      !isHikvisionBlockListUserType(userType)
     ) {
       return null;
     }
@@ -209,6 +236,7 @@ export function normalizeHikvisionAccessEvent(
     minor,
     serialNo,
     currentVerifyMode,
+    userType,
     raw: payload,
   };
 }
@@ -337,6 +365,12 @@ export function hikvisionEventToVideoEvent(event: HikvisionAccessEvent): {
   data: Record<string, unknown>;
 } {
   const createTime = resolveHikvisionEventUnixSeconds(event.time);
+  const blocked = isHikvisionBlockListEvent(event);
+  const status = blocked
+    ? event.status != null && event.status !== 1
+      ? event.status
+      : 0
+    : (event.status ?? 1);
 
   return {
     code: 'AccessControl',
@@ -346,12 +380,13 @@ export function hikvisionEventToVideoEvent(event: HikvisionAccessEvent): {
       UserID: event.employeeNoString ?? event.userId,
       CardName: event.name,
       CardNo: event.cardNo,
-      Status: event.status ?? 1,
+      Status: status,
       Similarity: event.similarity ?? 100,
       CreateTime: createTime,
       UTC: createTime,
       Type: event.eventType,
       SnapPath: event.pictureURL,
+      UserType: blocked ? 1 : undefined,
       // serialNo do HIK reinicia no reboot/NTP — não usar como RecNo
       // senão o upsert some com o acesso novo (mesmo rec de um evento antigo).
     },

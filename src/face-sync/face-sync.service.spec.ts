@@ -4,16 +4,34 @@ import { Test } from '@nestjs/testing';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
+import * as personBirthDateQueries from '../database/queries/person-birth-date.queries';
+import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
+import * as readersQueries from '../database/queries/readers.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import type { RegistrationRow } from '../database/queries/registrations.queries';
+import type { ReaderFaceSyncRow } from '../database/queries/readers.queries';
 import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
+import * as hikvision from '../integrations/hikvision';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { AccessTimeZoneService } from './access-time-zone.service';
+import * as faceImageVariants from './face-image-variants';
 import {
   FaceSyncService,
   type FaceSyncProgressEvent,
 } from './face-sync.service';
+import * as cipherMod from '../common/crypto/reader-credentials.cipher';
+
+jest.mock('../integrations/hikvision', () => {
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+  const actual = jest.requireActual('../integrations/hikvision');
+  return {
+    ...actual,
+    hikvisionSyncFace: jest.fn(),
+    hikvisionDeleteUser: jest.fn(),
+  };
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
+});
 
 function clientUser(): JwtPayload {
   return {
@@ -41,7 +59,11 @@ function registration(
 
 describe('FaceSyncService', () => {
   let service: FaceSyncService;
-  let queue: { enqueue: jest.Mock; toDto: jest.Mock; listActiveFace: jest.Mock };
+  let queue: {
+    enqueue: jest.Mock;
+    toDto: jest.Mock;
+    listActiveFace: jest.Mock;
+  };
 
   beforeEach(async () => {
     queue = {
@@ -67,9 +89,18 @@ describe('FaceSyncService', () => {
         FaceSyncService,
         { provide: DatabaseService, useValue: { db: {} } },
         { provide: R2StorageService, useValue: {} },
-        { provide: ConfigService, useValue: { get: jest.fn() } },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn(() => 'aa'.repeat(32)) },
+        },
         { provide: PermissionsService, useValue: {} },
-        { provide: AccessTimeZoneService, useValue: {} },
+        {
+          provide: AccessTimeZoneService,
+          useValue: {
+            loadShiftsByZoneIndex: jest.fn().mockResolvedValue(new Map()),
+            ensureZonesOnSingleReader: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
         { provide: DeviceSyncQueueService, useValue: queue },
       ],
@@ -80,6 +111,8 @@ describe('FaceSyncService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+    jest.mocked(hikvision.hikvisionSyncFace).mockReset();
+    jest.mocked(hikvision.hikvisionDeleteUser).mockReset();
   });
 
   it('emite ok:false quando o cadastro permanece parcial', async () => {
@@ -197,16 +230,28 @@ describe('FaceSyncService', () => {
       .mockResolvedValue(
         registration({
           status: 'approved',
+          faceId: 10,
           deviceSyncStatus: 'synced',
           deviceSyncError: 'Sincronizado parcialmente (1 de 2 leitor(es)).',
         }),
       );
+    jest
+      .spyOn(readersQueries, 'listReadersForFaceSyncByClient')
+      .mockResolvedValue([
+        { id: 'r1' },
+        { id: 'r2' },
+      ] as readersQueries.ReaderFaceSyncRow[]);
+    jest
+      .spyOn(personReaderSyncQueries, 'countSyncedPersonReaderSyncByFaceIds')
+      .mockResolvedValue(new Map([[10, 1]]));
 
     await expect(
       service.getApprovedRegistrationSyncStatus('reg-1', 'client-1'),
     ).resolves.toEqual({
       deviceSyncStatus: 'synced',
       deviceSyncError: 'Sincronizado parcialmente (1 de 2 leitor(es)).',
+      readerSyncSynced: 1,
+      readerSyncTotal: 2,
     });
   });
 
@@ -294,9 +339,14 @@ describe('FaceSyncService', () => {
       .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
       .mockResolvedValue(registration());
 
-    await service.enqueueApprovedRegistrationJob('reg-1', 'client-1', 'user-1', {
-      resetReaderProgress: true,
-    });
+    await service.enqueueApprovedRegistrationJob(
+      'reg-1',
+      'client-1',
+      'user-1',
+      {
+        resetReaderProgress: true,
+      },
+    );
 
     const [arg] = queue.enqueue.mock.calls[0] as [
       {
@@ -307,9 +357,22 @@ describe('FaceSyncService', () => {
     ];
     expect(arg.payload.resetReaderProgress).toBe(true);
     expect(arg.force).toBe(true);
-    expect(arg.dedupeKey).toBe(
-      'face.person:client-1:registration:reg-1:force',
+    expect(arg.dedupeKey).toBe('face.person:client-1:registration:reg-1:force');
+  });
+
+  it('enqueueMinorRestrictionCleanup usa job incremental sem checar fila ativa', async () => {
+    await service.enqueueMinorRestrictionCleanup(
+      'client-1',
+      'reader-1',
+      'user-1',
     );
+    expect(queue.listActiveFace).not.toHaveBeenCalled();
+    const [arg] = queue.enqueue.mock.calls[0] as [
+      { kind: string; dedupeKey: string; force: boolean },
+    ];
+    expect(arg.kind).toBe('face.reader');
+    expect(arg.force).toBe(false);
+    expect(arg.dedupeKey).toBe('face.reader:client-1:reader-1:incremental');
   });
 
   it('getRegistrationSyncAllStatus resume queued e running', async () => {
@@ -322,5 +385,151 @@ describe('FaceSyncService', () => {
     await expect(
       service.getRegistrationSyncAllStatus(clientUser(), 'client-1'),
     ).resolves.toEqual({ queued: 2, running: 1 });
+  });
+
+  it('syncPersonOnReaders não envia menor ao leitor 18+ e remove só nele', async () => {
+    const cervejeira: ReaderFaceSyncRow = {
+      id: 'cervejeira',
+      name: 'Porta Cervejeira',
+      brand: 'hikvision',
+      ip: '10.0.0.1',
+      port: 80,
+      username: 'admin',
+      passwordEncrypted: 'enc',
+      restrictMinors: true,
+    };
+    const entrada: ReaderFaceSyncRow = {
+      ...cervejeira,
+      id: 'entrada',
+      name: 'Porta Entrada',
+      ip: '10.0.0.2',
+      restrictMinors: false,
+    };
+    const saida: ReaderFaceSyncRow = {
+      ...cervejeira,
+      id: 'saida',
+      name: 'Porta Saida',
+      ip: '10.0.0.3',
+      restrictMinors: false,
+    };
+
+    jest
+      .spyOn(readersQueries, 'listReadersForFaceSyncByClient')
+      .mockResolvedValue([cervejeira, entrada, saida]);
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2012-10-10');
+    jest
+      .spyOn(personReaderSyncQueries, 'listPersonReaderSyncByFace')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(personReaderSyncQueries, 'deletePersonReaderSyncByFaceAndReader')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(personReaderSyncQueries, 'upsertPersonReaderSync')
+      .mockResolvedValue(undefined);
+    jest.spyOn(cipherMod, 'createReaderCredentialsCipher').mockReturnValue({
+      encrypt: (value: string) => value,
+      decrypt: () => 'secret',
+    });
+    jest
+      .spyOn(faceImageVariants, 'loadOrCreateReaderFaceVariant')
+      .mockResolvedValue(Buffer.from('jpeg'));
+    const syncFace = jest.mocked(hikvision.hikvisionSyncFace);
+    syncFace.mockResolvedValue(undefined);
+    const deleteUser = jest.mocked(hikvision.hikvisionDeleteUser);
+    deleteUser.mockResolvedValue({ success: true });
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 2,
+      name: 'Marcos Menor',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'c/reg/face.jpg',
+      logContext: 'test',
+    });
+
+    expect(deleteUser).toHaveBeenCalledTimes(1);
+    expect(syncFace).toHaveBeenCalledTimes(2);
+    const deletedIds = deleteUser.mock.calls.map(
+      ([connection]) => connection.baseUrl,
+    );
+    expect(deletedIds).toEqual(['http://10.0.0.1']);
+    const syncedIps = syncFace.mock.calls.map(
+      ([connection]) => connection.baseUrl,
+    );
+    expect(syncedIps.sort()).toEqual(['http://10.0.0.2', 'http://10.0.0.3']);
+    expect(outcome.deviceSyncStatus).toBe('synced');
+    expect(outcome.deviceSyncError).toBeNull();
+  });
+
+  it('quando os leitores abertos falham, o agregado é 2 de 2 sem o 18+', async () => {
+    const cervejeira: ReaderFaceSyncRow = {
+      id: 'cervejeira',
+      name: 'Porta Cervejeira',
+      brand: 'hikvision',
+      ip: '10.0.0.1',
+      port: 80,
+      username: 'admin',
+      passwordEncrypted: 'enc',
+      restrictMinors: true,
+    };
+    const entrada: ReaderFaceSyncRow = {
+      ...cervejeira,
+      id: 'entrada',
+      name: 'Porta Entrada',
+      ip: '10.0.0.2',
+      restrictMinors: false,
+    };
+    const saida: ReaderFaceSyncRow = {
+      ...cervejeira,
+      id: 'saida',
+      name: 'Porta Saida',
+      ip: '10.0.0.3',
+      restrictMinors: false,
+    };
+
+    jest
+      .spyOn(readersQueries, 'listReadersForFaceSyncByClient')
+      .mockResolvedValue([cervejeira, entrada, saida]);
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2012-10-10');
+    jest
+      .spyOn(personReaderSyncQueries, 'listPersonReaderSyncByFace')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(personReaderSyncQueries, 'deletePersonReaderSyncByFaceAndReader')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(personReaderSyncQueries, 'upsertPersonReaderSync')
+      .mockResolvedValue(undefined);
+    jest.spyOn(cipherMod, 'createReaderCredentialsCipher').mockReturnValue({
+      encrypt: (value: string) => value,
+      decrypt: () => 'secret',
+    });
+    jest
+      .spyOn(faceImageVariants, 'loadOrCreateReaderFaceVariant')
+      .mockResolvedValue(Buffer.from('jpeg'));
+    jest
+      .mocked(hikvision.hikvisionSyncFace)
+      .mockRejectedValue(new Error('timeout of 12000ms exceeded'));
+    jest
+      .mocked(hikvision.hikvisionDeleteUser)
+      .mockResolvedValue({ success: true });
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 2,
+      name: 'Marcos Menor',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'c/reg/face.jpg',
+    });
+
+    expect(hikvision.hikvisionSyncFace).toHaveBeenCalledTimes(2);
+    expect(hikvision.hikvisionDeleteUser).toHaveBeenCalledTimes(1);
+    expect(outcome.deviceSyncStatus).toBe('sync_failed');
+    expect(outcome.deviceSyncError).toMatch(/2 de 2/);
+    expect(outcome.deviceSyncError).not.toMatch(/Cervejeira/);
   });
 });

@@ -36,6 +36,7 @@ export const facialReaders = pgTable('facial_readers', {
   passwordEncrypted: text('password_encrypted'),
   token: uuid('device_token').notNull().defaultRandom().unique(),
   isActive: boolean('is_active').default(true).notNull(),
+  restrictMinors: boolean('restrict_minors').default(false).notNull(),
   lastSeenAt: timestamp('last_seen_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

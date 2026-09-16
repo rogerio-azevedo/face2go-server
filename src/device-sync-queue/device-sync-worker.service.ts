@@ -187,6 +187,10 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
     const payload = job.payload as FaceReaderJobPayload;
     const force = job.force || payload.force === true;
     const already = job.processed ?? 0;
+    await this.faceSync.purgeIneligibleFacesFromReader(
+      job.clientId,
+      job.targetId,
+    );
     if (force && already === 0) {
       await personReaderSyncQueries.deletePersonReaderSyncByReader(
         this.database.db,

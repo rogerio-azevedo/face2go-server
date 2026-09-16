@@ -23,7 +23,12 @@ import {
   blockRegistrationSchema,
   updateRegistrationSchema,
 } from '../validation/registrations.schema';
-import { normalizeAdditionalDataForClientType } from './registration-additional-data';
+import { isMinor, toIsoDateString } from '../common/utils/birth-date';
+import {
+  normalizeRegistrationFields,
+  mergeHiddenRegistrationFields,
+} from './registration-additional-data';
+import { resolveRegistrationFieldsConfig } from './registration-fields-config';
 import {
   buildPaginatedResult,
   parseListPaginationParams,
@@ -117,9 +122,15 @@ export class RegistrationsAdminService {
 
   private async mapRow(
     row: registrationsQueries.RegistrationRow,
-    hasFacialReaders: boolean,
+    progress: { total: number; syncedByFace: Map<number, number> },
   ) {
     const faceUrl = await this.optionalFaceUrl(row.faceImageKey);
+    const birthDate = toIsoDateString(row.birthDate);
+    const hasFacialReaders = progress.total > 0;
+    const readerSyncSynced =
+      row.faceId != null
+        ? (progress.syncedByFace.get(row.faceId) ?? 0)
+        : null;
     return {
       id: row.id,
       clientId: row.clientId,
@@ -128,10 +139,15 @@ export class RegistrationsAdminService {
       document: row.document,
       phone: row.phone,
       email: row.email,
+      birthDate,
+      isMinor: birthDate ? isMinor(birthDate) : null,
       additionalData: row.additionalData,
       status: row.status,
       isActive: row.isActive,
       submittedAt: row.submittedAt,
+      truthDeclaredAt: row.truthDeclaredAt
+        ? row.truthDeclaredAt.toISOString()
+        : null,
       approvedAt: row.approvedAt,
       rejectionNotes: row.rejectionNotes,
       blockReason: row.blockReason ?? null,
@@ -147,7 +163,20 @@ export class RegistrationsAdminService {
         : null,
       deviceSyncError: row.deviceSyncError ?? null,
       hasFacialReaders,
+      readerSyncSynced,
+      readerSyncTotal: hasFacialReaders ? progress.total : null,
     };
+  }
+
+  private async mapRowForClient(
+    row: registrationsQueries.RegistrationRow,
+    clientId: string,
+  ) {
+    const progress = await this.faceSync.getReaderSyncCounts(
+      clientId,
+      row.faceId != null ? [row.faceId] : [],
+    );
+    return this.mapRow(row, progress);
   }
 
   async listForCompanyUser(
@@ -177,7 +206,7 @@ export class RegistrationsAdminService {
       limit: pageSize,
     };
 
-    const [rows, total, counts, hasFacialReaders, client] = await Promise.all([
+    const [rows, total, counts, client] = await Promise.all([
       registrationsQueries.listSubmittedRegistrationsForClient(
         this.database.db,
         clientId,
@@ -192,13 +221,14 @@ export class RegistrationsAdminService {
         this.database.db,
         clientId,
       ),
-      this.faceSync.hasActiveFacialReaders(clientId),
       clientsQueries.getClientByIdOnly(this.database.db, clientId),
     ]);
+    const faceIds = [
+      ...new Set(rows.flatMap((r) => (r.faceId == null ? [] : [r.faceId]))),
+    ];
+    const progress = await this.faceSync.getReaderSyncCounts(clientId, faceIds);
 
-    const data = await Promise.all(
-      rows.map((r) => this.mapRow(r, hasFacialReaders)),
-    );
+    const data = await Promise.all(rows.map((r) => this.mapRow(r, progress)));
     return {
       ...buildPaginatedResult(data, total, page, pageSize),
       counts,
@@ -319,9 +349,7 @@ export class RegistrationsAdminService {
       }
     }
 
-    const hasFacialReaders =
-      await this.faceSync.hasActiveFacialReaders(clientId);
-    return await this.mapRow(rowOut, hasFacialReaders);
+    return await this.mapRowForClient(rowOut, clientId);
   }
 
   async rejectForCompanyUser(
@@ -365,9 +393,7 @@ export class RegistrationsAdminService {
         'Cadastro não encontrado ou já foi processado.',
       );
     }
-    const hasFacialReaders =
-      await this.faceSync.hasActiveFacialReaders(clientId);
-    return await this.mapRow(updated, hasFacialReaders);
+    return await this.mapRowForClient(updated, clientId);
   }
 
   async blockForCompanyUser(
@@ -495,9 +521,95 @@ export class RegistrationsAdminService {
       registrationId,
       clientId,
     );
-    const hasFacialReaders =
-      await this.faceSync.hasActiveFacialReaders(clientId);
-    return await this.mapRow(refreshed ?? rowOut, hasFacialReaders);
+    return await this.mapRowForClient(refreshed ?? rowOut, clientId);
+  }
+
+  async unblockForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    registrationId: string,
+  ) {
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.unblockShared(clientId, registrationId, user.sub);
+  }
+
+  async unblockForClientTenant(user: JwtPayload, registrationId: string) {
+    const clientId = this.ensureClientTenant(user);
+    return this.unblockShared(clientId, registrationId, user.sub);
+  }
+
+  private async unblockShared(
+    clientId: string,
+    registrationId: string,
+    decidedByUserId: string,
+  ) {
+    const existing = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!existing || !existing.isActive || !existing.submittedAt) {
+      throw new NotFoundException(
+        'Cadastro não encontrado ou já foi processado.',
+      );
+    }
+    if (existing.status !== 'blocked') {
+      throw new BadRequestException('Cadastro não está bloqueado.');
+    }
+
+    const updated = await registrationsQueries.unblockRegistration(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!updated) {
+      throw new NotFoundException(
+        'Cadastro não encontrado ou já foi processado.',
+      );
+    }
+
+    try {
+      await membersQueries.setMemberBlockByRegistrationId(
+        this.database.db,
+        clientId,
+        registrationId,
+        {
+          blockReason: null,
+          blockedAt: null,
+          blockedByUserId: null,
+        },
+      );
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Falha ao desmarcar membro bloqueado reg=${registrationId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    if (updated.faceImageKey && updated.faceId != null) {
+      try {
+        await this.faceSync.enqueueApprovedRegistrationJob(
+          registrationId,
+          clientId,
+          decidedByUserId,
+          { resetReaderProgress: true, blocked: false },
+        );
+      } catch (err: unknown) {
+        this.logger.warn(
+          `enqueue pós-desbloqueio reg=${registrationId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    const refreshed = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    return await this.mapRowForClient(refreshed ?? updated, clientId);
   }
 
   private ensureCompanyAdmin(user: JwtPayload) {
@@ -568,10 +680,24 @@ export class RegistrationsAdminService {
       throw new NotFoundException('Cliente não encontrado.');
     }
 
-    const additionalData = normalizeAdditionalDataForClientType(
+    const fieldsConfig = resolveRegistrationFieldsConfig(
       client.type,
-      parsed.data.additionalData,
+      client.registrationConfig,
     );
+    const normalized = normalizeRegistrationFields(fieldsConfig, {
+      document: parsed.data.document,
+      phone: parsed.data.phone,
+      email: parsed.data.email,
+      birthDate: parsed.data.birthDate,
+      additionalData: parsed.data.additionalData,
+    });
+    const merged = mergeHiddenRegistrationFields(fieldsConfig, normalized, {
+      document: row.document,
+      phone: row.phone,
+      email: row.email,
+      birthDate: toIsoDateString(row.birthDate),
+      additionalData: row.additionalData,
+    });
 
     const updated = await registrationsQueries.updateRegistrationProfile(
       this.database.db,
@@ -579,10 +705,11 @@ export class RegistrationsAdminService {
       clientId,
       {
         name: parsed.data.name,
-        document: parsed.data.document,
-        phone: parsed.data.phone,
-        email: parsed.data.email,
-        additionalData,
+        document: merged.document,
+        phone: merged.phone,
+        email: merged.email,
+        birthDate: merged.birthDate,
+        additionalData: merged.additionalData,
       },
     );
     if (!updated) {
@@ -599,9 +726,7 @@ export class RegistrationsAdminService {
       );
     }
 
-    const hasFacialReaders =
-      await this.faceSync.hasActiveFacialReaders(clientId);
-    return this.mapRow(updated, hasFacialReaders);
+    return this.mapRowForClient(updated, clientId);
   }
 
   async softDeleteForCompanyUser(
@@ -676,9 +801,7 @@ export class RegistrationsAdminService {
       throw new NotFoundException('Cadastro não encontrado.');
     }
 
-    const hasFacialReaders =
-      await this.faceSync.hasActiveFacialReaders(clientId);
-    return this.mapRow(updated, hasFacialReaders);
+    return this.mapRowForClient(updated, clientId);
   }
 
   async restoreForCompanyUser(
@@ -760,8 +883,6 @@ export class RegistrationsAdminService {
       registrationId,
       clientId,
     );
-    const hasFacialReaders =
-      await this.faceSync.hasActiveFacialReaders(clientId);
-    return this.mapRow(restored ?? updated, hasFacialReaders);
+    return this.mapRowForClient(restored ?? updated, clientId);
   }
 }

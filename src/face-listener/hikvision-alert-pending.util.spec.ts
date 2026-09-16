@@ -96,6 +96,19 @@ describe('isHikvisionAlertFaceAccess', () => {
     expect(isHikvisionAlertFaceAccess(faceEvent({ status: 0 }))).toBe(false);
   });
 
+  it('aceita evento de lista de bloqueio mesmo com status diferente de 1', () => {
+    expect(
+      isHikvisionAlertFaceAccess(
+        faceEvent({
+          status: 0,
+          similarity: 0,
+          minor: 113,
+          userType: 'blackList',
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it('rejeita similaridade zero', () => {
     expect(isHikvisionAlertFaceAccess(faceEvent({ similarity: 0 }))).toBe(
       false,

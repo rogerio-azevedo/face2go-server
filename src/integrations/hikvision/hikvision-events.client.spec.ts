@@ -1,7 +1,9 @@
 import {
+  HIKVISION_MINOR_BLOCK_LIST,
   HIKVISION_MINOR_FACE_AUTH_SUCCESS,
   hikvisionEventToVideoEvent,
   hikvisionProbeAlertStreamSupported,
+  isHikvisionBlockListEvent,
   normalizeHikvisionAccessEvent,
   parseHikvisionAlertStreamPart,
   resolveHikvisionEventUnixSeconds,
@@ -135,6 +137,47 @@ describe('normalizeHikvisionAccessEvent', () => {
     expect(event?.employeeNoString).toBe('10');
   });
 
+  it('aceita acsEvent de lista de bloqueio (minor 113)', () => {
+    const event = normalizeHikvisionAccessEvent(
+      {
+        AccessControllerEvent: {
+          employeeNoString: '1',
+          major: 5,
+          minor: HIKVISION_MINOR_BLOCK_LIST,
+          userType: 'blackList',
+          name: 'ROGERIO',
+        },
+        eventType: 'AccessControllerEvent',
+      },
+      { source: 'acsEvent' },
+    );
+
+    expect(event).not.toBeNull();
+    expect(event?.employeeNoString).toBe('1');
+    expect(event?.minor).toBe(HIKVISION_MINOR_BLOCK_LIST);
+    expect(event?.userType).toBe('blackList');
+    expect(isHikvisionBlockListEvent(event!)).toBe(true);
+  });
+
+  it('aceita acsEvent com userType blackList mesmo sem minor 75', () => {
+    const event = normalizeHikvisionAccessEvent(
+      {
+        AccessControllerEvent: {
+          employeeNoString: '9',
+          major: 5,
+          minor: 76,
+          userType: 'blackList',
+          currentVerifyMode: 'card',
+        },
+        eventType: 'AccessControllerEvent',
+      },
+      { source: 'acsEvent' },
+    );
+
+    expect(event).not.toBeNull();
+    expect(event?.userType).toBe('blackList');
+  });
+
   it('retorna null sem employeeNo', () => {
     const event = normalizeHikvisionAccessEvent({
       AccessControllerEvent: { major: 5, minor: 75 },
@@ -171,9 +214,9 @@ describe('resolveHikvisionEventUnixSeconds', () => {
   const now = Date.parse('2026-09-16T00:40:00Z');
 
   it('usa a hora do evento quando é plausível', () => {
-    expect(
-      resolveHikvisionEventUnixSeconds('2026-09-16T00:39:10Z', now),
-    ).toBe(Math.floor(Date.parse('2026-09-16T00:39:10Z') / 1000));
+    expect(resolveHikvisionEventUnixSeconds('2026-09-16T00:39:10Z', now)).toBe(
+      Math.floor(Date.parse('2026-09-16T00:39:10Z') / 1000),
+    );
   });
 
   it('descarta relógio de fábrica 2015', () => {
@@ -199,5 +242,34 @@ describe('hikvisionEventToVideoEvent', () => {
     expect(video.data.CreateTime).toBe(
       Math.floor(Date.parse('2026-09-16T00:40:00Z') / 1000),
     );
+  });
+
+  it('mapeia lista de bloqueio para Status de negação e UserType=1', () => {
+    const video = hikvisionEventToVideoEvent({
+      eventType: 'AccessControllerEvent',
+      employeeNoString: '1',
+      minor: HIKVISION_MINOR_BLOCK_LIST,
+      userType: 'blackList',
+      time: '2026-09-16T00:40:00Z',
+      similarity: 98,
+      raw: {},
+    });
+
+    expect(video.data.Status).toBe(0);
+    expect(video.data.UserType).toBe(1);
+    expect(video.data.UserID).toBe('1');
+  });
+
+  it('preserva Status de negação já presente no evento de bloqueio', () => {
+    const video = hikvisionEventToVideoEvent({
+      eventType: 'AccessControllerEvent',
+      employeeNoString: '1',
+      userType: 'blackList',
+      status: 2,
+      raw: {},
+    });
+
+    expect(video.data.Status).toBe(2);
+    expect(video.data.UserType).toBe(1);
   });
 });

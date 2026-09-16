@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
+import { hikvisionEnsureBlockListAuth } from './hikvision-acs-cfg.client';
 import { hikvisionIsapiRequest } from './hikvision-isapi-request';
 import { resolveHikvisionDevicePictureUrl } from './hikvision-picture-url.util';
 import {
@@ -34,6 +35,9 @@ import {
 export const HIKVISION_FACE_LIB_TYPE = 'blackFD';
 export const HIKVISION_FACE_FDID = '1';
 export const HIKVISION_MAX_FACE_IMAGE_BYTES = 200 * 1024;
+export const HIKVISION_USER_TYPE_NORMAL = 'normal';
+/** Perfil nativo ISAPI "Pessoa na lista de bloqueio" — face reconhecida, porta não abre. */
+export const HIKVISION_USER_TYPE_BLACK_LIST = 'blackList';
 
 export type HikvisionFaceLibRef = {
   fdid: string;
@@ -47,6 +51,7 @@ export type HikvisionUpsertUserParams = {
   name: string;
   validDateStart?: string;
   validDateEnd?: string;
+  blocked?: boolean;
 };
 
 type AxiosLikeError = {
@@ -72,7 +77,7 @@ export type HikvisionDeviceUsersListResult = {
   records: HikvisionDeviceUser[];
 };
 
-function buildUserInfoBody(
+export function buildUserInfoBody(
   params: HikvisionUpsertUserParams,
 ): Record<string, unknown> {
   const beginTime = params.validDateStart ?? DEFAULT_HIKVISION_VALID_DATE_START;
@@ -82,7 +87,9 @@ function buildUserInfoBody(
     UserInfo: {
       employeeNo: params.employeeNo,
       name: params.name,
-      userType: 'normal',
+      userType: params.blocked
+        ? HIKVISION_USER_TYPE_BLACK_LIST
+        : HIKVISION_USER_TYPE_NORMAL,
       Valid: {
         enable: true,
         beginTime,
@@ -1401,22 +1408,29 @@ export async function hikvisionSyncFace(
     validDateStart?: string;
     validDateEnd?: string;
     alreadyNormalized?: boolean;
+    blocked?: boolean;
   },
 ): Promise<void> {
   const normalizedName =
     normalizeNameForFacialReader(params.personName.trim() || 'USUARIO') ||
     'USUARIO';
   const employeeNo = params.employeeNo;
+  const blocked = params.blocked === true;
 
   try {
-    syncLog('hikvision:upsertUser', { employeeNo });
+    if (blocked) {
+      await hikvisionEnsureBlockListAuth(connection);
+    }
+
+    syncLog('hikvision:upsertUser', { employeeNo, blocked });
     await hikvisionUpsertUser(connection, {
       employeeNo,
       name: normalizedName,
       validDateStart: params.validDateStart,
       validDateEnd: params.validDateEnd,
+      blocked,
     });
-    syncLog('hikvision:upsertUserOk', { employeeNo });
+    syncLog('hikvision:upsertUserOk', { employeeNo, blocked });
 
     syncLog('hikvision:upsertFace', { employeeNo });
     await hikvisionUpsertFace(connection, employeeNo, params.jpegBuffer, {

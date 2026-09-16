@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isValidCnpj } from '../common/utils/document';
+
 const CNPJ_REGEX = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
 
 const optionalTrimmed = z
@@ -18,10 +20,8 @@ export const companySchema = z.object({
     .min(2, 'Nome deve ter pelo menos 2 caracteres')
     .max(255, 'Nome muito longo'),
   cnpj: optionalTrimmed.refine(
-    (val) => val === undefined || CNPJ_REGEX.test(val),
-    {
-      message: 'CNPJ inválido (use XX.XXX.XXX/XXXX-XX)',
-    },
+    (val) => val === undefined || (CNPJ_REGEX.test(val) && isValidCnpj(val)),
+    { message: 'CNPJ inválido.' },
   ),
   phone: optionalTrimmed,
   email: optionalTrimmed.refine(

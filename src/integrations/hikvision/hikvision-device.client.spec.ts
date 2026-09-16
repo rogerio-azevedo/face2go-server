@@ -2,7 +2,10 @@ import {
   assertHikvisionEmployeeNoMatch,
   buildFuzzySearchCaseVariants,
   buildHikvisionFaceMultipartBody,
+  buildUserInfoBody,
   chooseFaceLib,
+  HIKVISION_USER_TYPE_BLACK_LIST,
+  HIKVISION_USER_TYPE_NORMAL,
   hikvisionUserInfoSearchId,
   isHikvisionHttp401,
   parseUserInfoSearchPage,
@@ -175,5 +178,29 @@ describe('parseUserInfoSearchPage', () => {
 
     expect(result.totalCount).toBe(0);
     expect(result.records).toEqual([]);
+  });
+});
+
+describe('buildUserInfoBody', () => {
+  it('usa userType normal por padrão', () => {
+    const body = buildUserInfoBody({
+      employeeNo: '1',
+      name: 'ROGERIO',
+    });
+    const userInfo = body.UserInfo as Record<string, unknown>;
+
+    expect(userInfo.userType).toBe(HIKVISION_USER_TYPE_NORMAL);
+    expect(userInfo.employeeNo).toBe('1');
+  });
+
+  it('usa userType blackList quando blocked=true', () => {
+    const body = buildUserInfoBody({
+      employeeNo: '1',
+      name: 'ROGERIO',
+      blocked: true,
+    });
+    const userInfo = body.UserInfo as Record<string, unknown>;
+
+    expect(userInfo.userType).toBe(HIKVISION_USER_TYPE_BLACK_LIST);
   });
 });

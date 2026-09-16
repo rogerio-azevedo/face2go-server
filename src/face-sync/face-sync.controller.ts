@@ -10,7 +10,12 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -78,7 +83,6 @@ export class CompanyFaceSyncController {
       registrationId,
       clientId,
       user.sub,
-      { resetReaderProgress: true },
     );
   }
 
@@ -177,7 +181,6 @@ export class ClientFaceSyncController {
       registrationId,
       clientId,
       user.sub,
-      { resetReaderProgress: true },
     );
   }
 

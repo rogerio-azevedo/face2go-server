@@ -88,6 +88,23 @@ export class CompanyRegistrationsController {
     );
   }
 
+  @Post(':registrationId/unblock')
+  @ApiOperation({
+    summary:
+      'Desbloquear cadastro: restaura status aprovado e reenvia a face ao leitor com acesso normal',
+  })
+  unblock(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.unblockForCompanyUser(
+      user,
+      clientId,
+      registrationId,
+    );
+  }
+
   @Post(':registrationId/reject')
   @ApiOperation({ summary: 'Rejeitar cadastro' })
   reject(

@@ -1,4 +1,7 @@
-import type { HikvisionAccessEvent } from '../integrations/hikvision';
+import {
+  isHikvisionBlockListEvent,
+  type HikvisionAccessEvent,
+} from '../integrations/hikvision';
 
 export const HIKVISION_ALERT_PENDING_FLUSH_MS = 800;
 
@@ -63,6 +66,9 @@ export function isHikvisionAlertFaceAccess(
 ): boolean {
   if (!event.employeeNoString?.trim()) {
     return false;
+  }
+  if (isHikvisionBlockListEvent(event)) {
+    return true;
   }
   const status = event.status ?? 1;
   if (status !== 1) {

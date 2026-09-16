@@ -1,6 +1,6 @@
-export function normalizeCpf(value: string): string {
-  return value.replace(/\D/g, '');
-}
+import { normalizeCpf } from '../../common/utils/document';
+
+export { normalizeCpf };
 
 export function isEmailIdentifier(identifier: string): boolean {
   return identifier.includes('@');

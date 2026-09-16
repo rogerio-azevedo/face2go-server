@@ -10,6 +10,7 @@ import {
   pgEnum,
   integer,
   index,
+  date,
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth';
@@ -67,6 +68,7 @@ export const registrations = pgTable(
     document: varchar('document', { length: 32 }),
     phone: varchar('phone', { length: 32 }),
     email: varchar('email', { length: 255 }),
+    birthDate: date('birth_date'),
     faceImageKey: text('face_image_key'),
     additionalData: jsonb('additional_data').$type<{
       block?: string;
@@ -86,6 +88,8 @@ export const registrations = pgTable(
       onDelete: 'set null',
     }),
     submittedAt: timestamp('submitted_at'),
+    /** Momento em que a pessoa marcou a declaração de veracidade no formulário público. */
+    truthDeclaredAt: timestamp('truth_declared_at'),
     /** ID numérico no leitor facial (único dentro do mesmo cliente). */
     faceId: integer('face_id'),
     /** Sincronização com leitores; nulo até haver foto e aprovação com sincronização. */

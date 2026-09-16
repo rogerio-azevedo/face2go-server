@@ -128,11 +128,13 @@ export async function insertRegistration(
     registrationLinkId: string;
     clientId: string;
     name: string;
-    document: string;
-    phone: string;
-    email: string;
+    document: string | null;
+    phone: string | null;
+    email: string | null;
+    birthDate: string | null;
     faceImageKey: string;
-    additionalData: Record<string, unknown> | null;
+    additionalData: RegistrationRow['additionalData'];
+    truthDeclaredAt: Date;
   },
 ): Promise<RegistrationRow> {
   const now = new Date();
@@ -146,10 +148,12 @@ export async function insertRegistration(
       document: input.document,
       phone: input.phone,
       email: input.email,
+      birthDate: input.birthDate,
       faceImageKey: input.faceImageKey,
       additionalData: input.additionalData,
       status: 'draft',
       submittedAt: now,
+      truthDeclaredAt: input.truthDeclaredAt,
       updatedAt: now,
     })
     .returning();
@@ -174,11 +178,7 @@ export async function getRegistrationByIdForClient(
   return row;
 }
 
-export type RegistrationStatus =
-  | 'draft'
-  | 'approved'
-  | 'rejected'
-  | 'blocked';
+export type RegistrationStatus = 'draft' | 'approved' | 'rejected' | 'blocked';
 
 export type RegistrationListFilter = RegistrationStatus | 'deleted';
 
@@ -395,6 +395,34 @@ export async function blockRegistration(
   return row;
 }
 
+export async function unblockRegistration(
+  db: AppDb,
+  registrationId: string,
+  clientId: string,
+): Promise<RegistrationRow | undefined> {
+  const now = new Date();
+  const [row] = await db
+    .update(registrations)
+    .set({
+      status: 'approved',
+      blockReason: null,
+      blockedAt: null,
+      blockedByUserId: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(registrations.id, registrationId),
+        eq(registrations.clientId, clientId),
+        eq(registrations.status, 'blocked'),
+        isNotNull(registrations.submittedAt),
+        eq(registrations.isActive, true),
+      ),
+    )
+    .returning();
+  return row;
+}
+
 /** Incrementa e retorna o próximo face_id por cliente (1, 2, …). Atômico no Postgres. */
 export async function bumpClientFaceCounter(
   db: AppDb,
@@ -450,9 +478,10 @@ export async function updateRegistrationProfile(
   clientId: string,
   patch: {
     name: string;
-    document: string;
-    phone: string;
-    email: string;
+    document: string | null;
+    phone: string | null;
+    email: string | null;
+    birthDate: string | null;
     additionalData: RegistrationRow['additionalData'];
   },
 ): Promise<RegistrationRow | undefined> {
@@ -464,6 +493,7 @@ export async function updateRegistrationProfile(
       document: patch.document,
       phone: patch.phone,
       email: patch.email,
+      birthDate: patch.birthDate,
       additionalData: patch.additionalData,
       updatedAt: now,
     })

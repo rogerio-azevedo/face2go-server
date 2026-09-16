@@ -80,6 +80,7 @@ export const readerSchema = z.object({
       message: 'Senha deve ter entre 4 e 256 caracteres',
     }),
   isActive: z.boolean(),
+  restrictMinors: z.boolean(),
 });
 
 export const createReaderSchema = readerSchema.refine(

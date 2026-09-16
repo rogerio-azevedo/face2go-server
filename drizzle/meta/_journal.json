@@ -477,6 +477,34 @@
       "when": 1779360000000,
       "tag": "0067_school_person_block",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1779370000000,
+      "tag": "0068_registrations_birth_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1779380000000,
+      "tag": "0069_clients_registration_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1779390000000,
+      "tag": "0070_facial_readers_restrict_minors",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1779400000000,
+      "tag": "0071_registrations_truth_declared_at",
+      "breakpoints": true
     }
   ]
 }

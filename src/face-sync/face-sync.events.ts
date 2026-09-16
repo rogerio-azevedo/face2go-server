@@ -18,7 +18,7 @@ export type FaceSyncRequestedPayload = {
   validUntil?: Date;
   /** Pula cartão/permissões — só troca a foto no leitor. */
   photoOnly?: boolean;
-  /** Aplica perfil Bloqueados (UserType=1) no leitor Intelbras. */
+  /** Aplica perfil Bloqueados no leitor (Intelbras UserType=1 / Hikvision blackList). */
   blocked?: boolean;
   /** Foto nova: apaga progresso por leitor. Default no enqueue: true. */
   resetReaderProgress?: boolean;

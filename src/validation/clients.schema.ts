@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isValidCnpj } from '../common/utils/document';
+
 const CNPJ_REGEX = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
 
@@ -49,9 +51,10 @@ const baseClientShape = {
       message: 'Selecione um tipo válido.',
     },
   ),
-  cnpj: optionalTrimmed.refine((val) => val == null || CNPJ_REGEX.test(val), {
-    message: 'CNPJ inválido (use XX.XXX.XXX/XXXX-XX)',
-  }),
+  cnpj: optionalTrimmed.refine(
+    (val) => val == null || (CNPJ_REGEX.test(val) && isValidCnpj(val)),
+    { message: 'CNPJ inválido.' },
+  ),
   phone: optionalTrimmed,
   email: optionalTrimmed.refine(
     (val) => val == null || z.email().safeParse(val).success,

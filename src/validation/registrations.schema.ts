@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isValidCpfOrCnpj, onlyDigits } from '../common/utils/document';
+
 export const registrationStatusSchema = z.enum([
   'draft',
   'approved',
@@ -35,12 +37,56 @@ export type ListRegistrationsQuery = z.infer<
   typeof listRegistrationsQuerySchema
 >;
 
+const optionalBirthDate = z
+  .string()
+  .trim()
+  .nullable()
+  .optional()
+  .transform((value) => {
+    if (value == null || value === '') return null;
+    return value;
+  })
+  .refine((value) => value == null || /^\d{4}-\d{2}-\d{2}$/.test(value), {
+    message: 'Data inválida (YYYY-MM-DD).',
+  });
+
+const optionalDocument = z
+  .string()
+  .trim()
+  .max(32)
+  .optional()
+  .transform((value) => {
+    if (value == null || value === '') return '';
+    return onlyDigits(value);
+  })
+  .refine((value) => value === '' || isValidCpfOrCnpj(value), {
+    message: 'CPF ou CNPJ inválido.',
+  });
+
 export const updateRegistrationSchema = z.object({
   name: z.string().trim().min(2).max(255),
-  document: z.string().trim().min(5).max(32),
-  phone: z.string().trim().min(8).max(32),
-  email: z.string().email(),
+  document: optionalDocument,
+  phone: z.string().trim().max(32).optional(),
+  email: z.string().trim().max(255).optional(),
+  birthDate: optionalBirthDate,
   additionalData: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const publicSubmitRegistrationSchema = z.object({
+  registrationId: z.string().uuid(),
+  name: z.string().min(2).max(255),
+  document: optionalDocument,
+  phone: z.string().max(32).optional(),
+  email: z.string().max(255).optional(),
+  birthDate: optionalBirthDate,
+  faceImageKey: z.string().min(1),
+  additionalData: z.record(z.string(), z.unknown()).optional(),
+  truthDeclared: z.boolean().refine((v) => v === true, {
+    message: 'É necessário confirmar a declaração de veracidade.',
+  }),
+});
+
 export type UpdateRegistrationInput = z.infer<typeof updateRegistrationSchema>;
+export type PublicSubmitRegistrationInput = z.infer<
+  typeof publicSubmitRegistrationSchema
+>;

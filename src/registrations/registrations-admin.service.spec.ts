@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
+import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { MembersService } from '../members/members.service';
@@ -36,6 +37,7 @@ describe('RegistrationsAdminService lifecycle', () => {
     removePersonFromReaders: jest.Mock;
     enqueueApprovedRegistrationJob: jest.Mock;
     hasActiveFacialReaders: jest.Mock;
+    getReaderSyncCounts: jest.Mock;
   };
   let members: {
     getByRegistrationId: jest.Mock;
@@ -53,6 +55,10 @@ describe('RegistrationsAdminService lifecycle', () => {
       }),
       enqueueApprovedRegistrationJob: jest.fn().mockResolvedValue({}),
       hasActiveFacialReaders: jest.fn().mockResolvedValue(true),
+      getReaderSyncCounts: jest.fn().mockResolvedValue({
+        total: 3,
+        syncedByFace: new Map(),
+      }),
     };
     members = {
       getByRegistrationId: jest.fn().mockResolvedValue({ id: 'member-1' }),
@@ -174,5 +180,47 @@ describe('RegistrationsAdminService lifecycle', () => {
       { resetReaderProgress: true },
     );
     expect(getReg).toHaveBeenCalled();
+  });
+
+  it('desbloqueia cadastro, limpa o membro e reenvia a face com blocked=false', async () => {
+    jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
+      id: 'client-1',
+      companyId: 'company-1',
+    } as never);
+    const blockedRow = {
+      id: 'reg-1',
+      clientId: 'client-1',
+      status: 'blocked',
+      isActive: true,
+      submittedAt: new Date(),
+      faceId: 1,
+      faceImageKey: 'k',
+      name: 'Rogerio',
+    };
+    const approvedRow = { ...blockedRow, status: 'approved' };
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValueOnce(blockedRow as never)
+      .mockResolvedValueOnce(approvedRow as never);
+    jest
+      .spyOn(registrationsQueries, 'unblockRegistration')
+      .mockResolvedValue(approvedRow as never);
+    const clearMember = jest
+      .spyOn(membersQueries, 'setMemberBlockByRegistrationId')
+      .mockResolvedValue(null);
+
+    await service.unblockForCompanyUser(companyAdmin(), 'client-1', 'reg-1');
+
+    expect(clearMember).toHaveBeenCalledWith({}, 'client-1', 'reg-1', {
+      blockReason: null,
+      blockedAt: null,
+      blockedByUserId: null,
+    });
+    expect(faceSync.enqueueApprovedRegistrationJob).toHaveBeenCalledWith(
+      'reg-1',
+      'client-1',
+      'admin-1',
+      { resetReaderProgress: true, blocked: false },
+    );
   });
 });

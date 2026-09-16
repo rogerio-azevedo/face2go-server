@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +14,7 @@ import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
 import * as readersQueries from '../database/queries/readers.queries';
 import { FaceListenerService } from '../face-listener/face-listener.service';
+import { FaceSyncService } from '../face-sync/face-sync.service';
 import {
   IntelbrasPushProvisionService,
   type IntelbrasPushMode,
@@ -30,12 +32,15 @@ const toggleActiveSchema = z.object({
 
 @Injectable()
 export class ReadersService {
+  private readonly log = new Logger(ReadersService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly permissionsService: PermissionsService,
     private readonly faceListener: FaceListenerService,
     private readonly configService: ConfigService<EnvVars, true>,
     private readonly intelbrasPushProvision: IntelbrasPushProvisionService,
+    private readonly faceSync: FaceSyncService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -132,6 +137,7 @@ export class ReadersService {
       username,
       passwordEncrypted,
       isActive: d.isActive,
+      restrictMinors: d.restrictMinors,
     });
     if (!row) {
       throw new BadRequestException(
@@ -162,6 +168,7 @@ export class ReadersService {
       d.model === undefined &&
       d.location === undefined &&
       d.isActive === undefined &&
+      d.restrictMinors === undefined &&
       d.username === undefined &&
       d.password === undefined &&
       d.direction === undefined
@@ -197,6 +204,9 @@ export class ReadersService {
       ...(d.model !== undefined ? { model: d.model ?? null } : {}),
       ...(d.location !== undefined ? { location: d.location ?? null } : {}),
       ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+      ...(d.restrictMinors !== undefined
+        ? { restrictMinors: d.restrictMinors }
+        : {}),
       ...(d.direction !== undefined ? { direction: d.direction } : {}),
     };
 
@@ -230,6 +240,22 @@ export class ReadersService {
       patch,
     );
     if (!updated) throw new NotFoundException('Leitor não encontrado.');
+
+    if (existing.restrictMinors !== true && d.restrictMinors === true) {
+      try {
+        await this.faceSync.enqueueMinorRestrictionCleanup(
+          existing.clientId,
+          readerId,
+          user.sub,
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.log.warn(
+          `Falha ao enfileirar limpeza de menores no leitor ${readerId}: ${msg}`,
+        );
+      }
+    }
+
     if ('companyId' in updated) {
       return updated;
     }
