@@ -6,6 +6,8 @@ import {
   chooseFaceLib,
   HIKVISION_USER_TYPE_BLACK_LIST,
   HIKVISION_USER_TYPE_NORMAL,
+  hikvisionFdSearchIndicatesFace,
+  hikvisionUserHasRecordedFace,
   hikvisionUserInfoSearchId,
   isHikvisionHttp401,
   parseUserInfoSearchPage,
@@ -125,6 +127,48 @@ describe('hikvisionUserInfoSearchId', () => {
     const list = hikvisionUserInfoSearchId('http://leitor:80', '');
     expect(hikvisionUserInfoSearchId('http://outro:80', '')).not.toBe(list);
     expect(hikvisionUserInfoSearchId('http://leitor:80', 'ANA')).not.toBe(list);
+  });
+});
+
+describe('hikvisionUserHasRecordedFace', () => {
+  const user = {
+    userId: '5',
+    name: 'Sueli',
+    cardNo: null,
+    validFrom: null,
+    validTo: null,
+    hasFace: false,
+  };
+
+  it('recusa user sem face e sem foto na busca', () => {
+    expect(hikvisionUserHasRecordedFace(user, '5', {})).toBe(false);
+    expect(hikvisionUserHasRecordedFace(null, '5')).toBe(false);
+    expect(hikvisionUserHasRecordedFace({ ...user, userId: '9' }, '5')).toBe(
+      false,
+    );
+  });
+
+  it('aceita user com hasFace mesmo sem FDSearch', () => {
+    expect(hikvisionUserHasRecordedFace({ ...user, hasFace: true }, '5')).toBe(
+      true,
+    );
+  });
+
+  it('aceita foto encontrada no FDSearch', () => {
+    expect(
+      hikvisionUserHasRecordedFace(user, '5', {
+        pictureURL: 'http://leitor/face.jpg',
+      }),
+    ).toBe(true);
+  });
+
+  it('aceita FDSearch com matches sem URL (DS-K1T343)', () => {
+    expect(hikvisionFdSearchIndicatesFace({ numOfMatches: 1 })).toBe(true);
+    expect(
+      hikvisionUserHasRecordedFace(user, '5', {
+        MatchList: [{ FPID: '5' }],
+      }),
+    ).toBe(true);
   });
 });
 

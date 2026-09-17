@@ -603,6 +603,23 @@ export async function getReaderMinorRestriction(
   return row?.restrictMinors === true;
 }
 
+export async function hasRestrictMinorsReaderByClient(
+  db: AppDb,
+  clientId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: facialReaders.id })
+    .from(facialReaders)
+    .where(
+      and(
+        eq(facialReaders.clientId, clientId),
+        eq(facialReaders.restrictMinors, true),
+      ),
+    )
+    .limit(1);
+  return row != null;
+}
+
 export type ReaderPushRow = {
   id: string;
   name: string;

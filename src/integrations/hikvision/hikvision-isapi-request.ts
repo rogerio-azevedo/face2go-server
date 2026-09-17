@@ -1,5 +1,6 @@
 import { type AxiosRequestConfig, type AxiosResponse } from 'axios';
 
+import { retryOnUnauthorizedDeviceError } from '../../face-sync/recover-unauthorized-if-exists.util';
 import {
   createHikvisionAxios,
   HikvisionDigestAuth,
@@ -25,6 +26,33 @@ type CachedHikvisionClient = {
 
 const hikvisionClientCache = new Map<string, CachedHikvisionClient>();
 
+function hikvisionClientCacheKey(
+  connection: Pick<
+    HikvisionReaderConnection,
+    'username' | 'password' | 'baseUrl'
+  >,
+  timeoutMs: number,
+): string {
+  return `${connection.baseUrl}\0${connection.username}\0${connection.password}\0${timeoutMs}`;
+}
+
+export function invalidateHikvisionClientCache(
+  connection: Pick<
+    HikvisionReaderConnection,
+    'username' | 'password' | 'baseUrl'
+  >,
+  timeoutMs?: number,
+): void {
+  if (timeoutMs != null) {
+    hikvisionClientCache.delete(hikvisionClientCacheKey(connection, timeoutMs));
+    return;
+  }
+  const prefix = `${connection.baseUrl}\0${connection.username}\0${connection.password}\0`;
+  for (const key of hikvisionClientCache.keys()) {
+    if (key.startsWith(prefix)) hikvisionClientCache.delete(key);
+  }
+}
+
 function hikvisionClient(
   connection: Pick<
     HikvisionReaderConnection,
@@ -32,7 +60,7 @@ function hikvisionClient(
   >,
   timeoutMs: number,
 ): CachedHikvisionClient {
-  const key = `${connection.baseUrl}\0${connection.username}\0${connection.password}\0${timeoutMs}`;
+  const key = hikvisionClientCacheKey(connection, timeoutMs);
   const cached = hikvisionClientCache.get(key);
   if (cached) return cached;
   const axiosInst = createHikvisionAxios(timeoutMs);
@@ -46,18 +74,14 @@ function hikvisionClient(
   return created;
 }
 
-/**
- * Requisição ISAPI Hikvision: Digest (uri com query) e fallback Basic Auth.
- */
-export async function hikvisionIsapiRequest(
+async function hikvisionIsapiRequestOnce(
   connection: Pick<
     HikvisionReaderConnection,
     'username' | 'password' | 'baseUrl'
   >,
   opts: AxiosRequestConfig,
-  forStream = false,
+  timeoutMs: number,
 ): Promise<AxiosResponse> {
-  const timeoutMs = forStream ? 0 : readerHttpTimeoutMs();
   const { digest, axiosInst } = hikvisionClient(connection, timeoutMs);
 
   try {
@@ -79,6 +103,29 @@ export async function hikvisionIsapiRequest(
       throw firstErr;
     }
   }
+}
+
+/**
+ * Requisição ISAPI Hikvision: Digest (uri com query) e fallback Basic Auth.
+ * DS-K1T343 às vezes devolve 401 e na tentativa seguinte autentica.
+ */
+export async function hikvisionIsapiRequest(
+  connection: Pick<
+    HikvisionReaderConnection,
+    'username' | 'password' | 'baseUrl'
+  >,
+  opts: AxiosRequestConfig,
+  forStream = false,
+): Promise<AxiosResponse> {
+  const timeoutMs = forStream ? 0 : readerHttpTimeoutMs();
+  return retryOnUnauthorizedDeviceError(
+    () => hikvisionIsapiRequestOnce(connection, opts, timeoutMs),
+    {
+      retries: 1,
+      delayMs: 400,
+      beforeRetry: () => invalidateHikvisionClientCache(connection, timeoutMs),
+    },
+  );
 }
 
 /** Abre alertStream ISAPI (Digest com query no uri; fallback Basic Auth). */

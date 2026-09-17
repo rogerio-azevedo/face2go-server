@@ -1,6 +1,7 @@
 import {
   collectBlockListAuthFieldNames,
   hikvisionEnsureBlockListAuth,
+  hikvisionSetFaceDuplicateCheck,
   isHikvisionEnabledFlag,
   resetHikvisionAcsCfgCache,
 } from './hikvision-acs-cfg.client';
@@ -141,5 +142,58 @@ describe('hikvisionEnsureBlockListAuth', () => {
         .mocked(hikvisionIsapiRequest)
         .mock.calls.some((call) => call[1]?.method === 'PUT'),
     ).toBe(false);
+  });
+});
+
+describe('hikvisionSetFaceDuplicateCheck', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('não faz PUT quando o valor já está no desejado', async () => {
+    jest.mocked(hikvisionIsapiRequest).mockResolvedValueOnce({
+      status: 200,
+      data: { AcsCfg: { faceDuplicateCheckEnabled: true, other: 1 } },
+    } as never);
+
+    await hikvisionSetFaceDuplicateCheck(connection, true);
+
+    expect(hikvisionIsapiRequest).toHaveBeenCalledTimes(1);
+    expect(jest.mocked(hikvisionIsapiRequest).mock.calls[0]?.[1]).toMatchObject(
+      { method: 'GET' },
+    );
+  });
+
+  it('faz PUT mesclando o AcsCfg completo ao ligar o toggle', async () => {
+    jest
+      .mocked(hikvisionIsapiRequest)
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { AcsCfg: { faceDuplicateCheckEnabled: false, other: 1 } },
+      } as never)
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { statusCode: 1, subStatusCode: 'ok' },
+      } as never);
+
+    await hikvisionSetFaceDuplicateCheck(connection, true);
+
+    expect(hikvisionIsapiRequest).toHaveBeenCalledTimes(2);
+    const putCall = jest.mocked(hikvisionIsapiRequest).mock.calls[1]?.[1];
+    expect(putCall).toMatchObject({ method: 'PUT' });
+    expect(putCall?.data).toEqual({
+      AcsCfg: { faceDuplicateCheckEnabled: true, other: 1 },
+    });
+  });
+
+  it('falha quando o firmware não expõe o campo', async () => {
+    jest.mocked(hikvisionIsapiRequest).mockResolvedValueOnce({
+      status: 200,
+      data: { AcsCfg: { voicePrompt: true } },
+    } as never);
+
+    await expect(
+      hikvisionSetFaceDuplicateCheck(connection, true),
+    ).rejects.toThrow(/faceDuplicateCheckEnabled/);
   });
 });

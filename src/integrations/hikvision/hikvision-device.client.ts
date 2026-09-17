@@ -31,7 +31,11 @@ import {
   truncateForLog,
 } from '../../face-sync/intelbras-sync-debug.util';
 import { normalizeNameForFacialReader } from '../../face-sync/normalize-name-for-reader';
-import { recoverUnauthorizedIfExists } from '../../face-sync/recover-unauthorized-if-exists.util';
+import {
+  recoverUnauthorizedIfExists,
+  retryOnUnauthorizedDeviceError,
+} from '../../face-sync/recover-unauthorized-if-exists.util';
+import { invalidateHikvisionClientCache } from './hikvision-isapi-request';
 
 export const HIKVISION_FACE_LIB_TYPE = 'blackFD';
 export const HIKVISION_FACE_FDID = '1';
@@ -609,7 +613,16 @@ export async function hikvisionUpsertFace(
   }
 
   const verifyLib = await resolveHikvisionFaceLib(connection);
-  await hikvisionVerifyUserHasFace(connection, employeeNo, verifyLib);
+  try {
+    await hikvisionVerifyUserHasFace(connection, employeeNo, verifyLib);
+  } catch (verifyErr) {
+    syncLog('hikvision:verifyFaceAposWrite', {
+      employeeNo,
+      reason:
+        verifyErr instanceof Error ? verifyErr.message : String(verifyErr),
+    });
+    // POST/PUT já foi aceito. DS-K1T343 às vezes 401 no FDSearch ou omite numOfFace.
+  }
 }
 
 async function hikvisionPutFaceSetupOnce(
@@ -936,13 +949,19 @@ function mapHikvisionUserInfo(
   }
 
   const valid = asRecord(item.Valid) ?? asRecord(item.valid);
-  const numOfFace = item.numOfFace ?? item.NumOfFace;
+  const numOfFace =
+    item.numOfFace ?? item.NumOfFace ?? item.faceNum ?? item.FaceNum;
+  const faceUrl = pickStr(item, 'faceURL', 'FaceURL', 'pictureURL', 'PictureURL');
   const hasFace =
     typeof numOfFace === 'number'
       ? numOfFace > 0
       : typeof numOfFace === 'string'
         ? Number(numOfFace) > 0
-        : undefined;
+        : faceUrl
+          ? true
+          : item.hasFace === true
+            ? true
+            : undefined;
 
   return {
     userId,
@@ -1225,6 +1244,51 @@ export function assertHikvisionEmployeeNoMatch(
   return user;
 }
 
+export function hikvisionFdSearchIndicatesFace(payload: unknown): boolean {
+  if (findPictureUrlInPayload(payload)) return true;
+  const root = asRecord(payload);
+  if (!root) return false;
+  const n = root.numOfMatches ?? root.totalMatches ?? root.NumOfMatches;
+  if (typeof n === 'number' && n > 0) return true;
+  if (typeof n === 'string' && Number(n) > 0) return true;
+  const matchList = root.MatchList ?? root.matchList;
+  return Array.isArray(matchList) && matchList.length > 0;
+}
+
+/** User no aparelho só conta como sincronizado se tiver face gravada. */
+export function hikvisionUserHasRecordedFace(
+  user: HikvisionDeviceUser | null,
+  employeeNo: string,
+  fdSearch?: unknown,
+): boolean {
+  if (!user || user.userId !== employeeNo) return false;
+  if (user.hasFace === true) return true;
+  return hikvisionFdSearchIndicatesFace(fdSearch);
+}
+
+export async function hikvisionFaceExistsOnReader(
+  connection: HikvisionReaderConnection,
+  employeeNo: string,
+): Promise<boolean> {
+  try {
+    return await retryOnUnauthorizedDeviceError(
+      async () => {
+        const user = await hikvisionGetUserInfoByEmployeeNo(
+          connection,
+          employeeNo,
+        );
+        if (!user || user.userId !== employeeNo) return false;
+        if (user.hasFace === true) return true;
+        const fdSearch = await hikvisionSearchFace(connection, employeeNo);
+        return hikvisionUserHasRecordedFace(user, employeeNo, fdSearch);
+      },
+      { retries: 1, delayMs: 400 },
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function hikvisionVerifyUserHasFace(
   connection: HikvisionReaderConnection,
   employeeNo: string,
@@ -1237,25 +1301,12 @@ export async function hikvisionVerifyUserHasFace(
   );
 
   const fdSearch = await hikvisionSearchFace(connection, employeeNo, lib);
-  const pictureUrl = findPictureUrlInPayload(fdSearch);
-
-  if (pictureUrl) {
+  if (hikvisionUserHasRecordedFace(user, employeeNo, fdSearch)) {
     syncLog('hikvision:verifyFace', {
       employeeNo,
       userId: user.userId,
       numOfFace: user.hasFace ?? null,
-      fdSearch: 'ok',
-      fdSearchBody: truncateForLog(fdSearch),
-    });
-    return;
-  }
-
-  if (user.hasFace === true) {
-    syncLog('hikvision:verifyFace', {
-      employeeNo,
-      userId: user.userId,
-      numOfFace: true,
-      fdSearch: 'miss',
+      fdSearch: findPictureUrlInPayload(fdSearch) ? 'ok' : 'miss',
       fdSearchBody: truncateForLog(fdSearch),
     });
     return;
@@ -1419,34 +1470,39 @@ export async function hikvisionSyncFace(
   const blocked = params.blocked === true;
 
   try {
-    if (blocked) {
-      await hikvisionEnsureBlockListAuth(connection);
-    }
+    await retryOnUnauthorizedDeviceError(
+      async () => {
+        if (blocked) {
+          await hikvisionEnsureBlockListAuth(connection);
+        }
 
-    syncLog('hikvision:upsertUser', { employeeNo, blocked });
-    await hikvisionUpsertUser(connection, {
-      employeeNo,
-      name: normalizedName,
-      validDateStart: params.validDateStart,
-      validDateEnd: params.validDateEnd,
-      blocked,
-    });
-    syncLog('hikvision:upsertUserOk', { employeeNo, blocked });
+        syncLog('hikvision:upsertUser', { employeeNo, blocked });
+        await hikvisionUpsertUser(connection, {
+          employeeNo,
+          name: normalizedName,
+          validDateStart: params.validDateStart,
+          validDateEnd: params.validDateEnd,
+          blocked,
+        });
+        syncLog('hikvision:upsertUserOk', { employeeNo, blocked });
 
-    syncLog('hikvision:upsertFace', { employeeNo });
-    await hikvisionUpsertFace(connection, employeeNo, params.jpegBuffer, {
-      alreadyNormalized: params.alreadyNormalized,
-    });
-    syncLog('hikvision:verifyFaceOk', { employeeNo });
+        syncLog('hikvision:upsertFace', { employeeNo });
+        await hikvisionUpsertFace(connection, employeeNo, params.jpegBuffer, {
+          alreadyNormalized: params.alreadyNormalized,
+        });
+        syncLog('hikvision:verifyFaceOk', { employeeNo });
+      },
+      {
+        retries: 1,
+        delayMs: 400,
+        beforeRetry: () => invalidateHikvisionClientCache(connection),
+      },
+    );
   } catch (error) {
     syncLogError('hikvision:syncFace', error, { employeeNo });
-    const alreadyThere = await recoverUnauthorizedIfExists(error, async () => {
-      const user = await hikvisionGetUserInfoByEmployeeNo(
-        connection,
-        employeeNo,
-      );
-      return user != null;
-    });
+    const alreadyThere = await recoverUnauthorizedIfExists(error, () =>
+      hikvisionFaceExistsOnReader(connection, employeeNo),
+    );
     if (alreadyThere) {
       syncLog('hikvision:jaNoLeitorAposUnauthorized', { employeeNo });
       return;

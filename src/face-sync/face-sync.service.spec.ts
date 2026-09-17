@@ -532,4 +532,110 @@ describe('FaceSyncService', () => {
     expect(outcome.deviceSyncError).toMatch(/2 de 2/);
     expect(outcome.deviceSyncError).not.toMatch(/Cervejeira/);
   });
+
+  function mercadoReaders(): ReaderFaceSyncRow[] {
+    const cervejeira: ReaderFaceSyncRow = {
+      id: 'cervejeira',
+      name: 'Porta Cervejeira',
+      brand: 'hikvision',
+      ip: '10.0.0.1',
+      port: 80,
+      username: 'admin',
+      passwordEncrypted: 'enc',
+      restrictMinors: true,
+    };
+    return [
+      cervejeira,
+      {
+        ...cervejeira,
+        id: 'entrada',
+        name: 'Porta Entrada',
+        ip: '10.0.0.2',
+        restrictMinors: false,
+      },
+      {
+        ...cervejeira,
+        id: 'saida',
+        name: 'Porta Saida',
+        ip: '10.0.0.3',
+        restrictMinors: false,
+      },
+    ];
+  }
+
+  function mockSyncReaders() {
+    jest
+      .spyOn(readersQueries, 'listReadersForFaceSyncByClient')
+      .mockResolvedValue(mercadoReaders());
+    jest
+      .spyOn(personReaderSyncQueries, 'listPersonReaderSyncByFace')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(personReaderSyncQueries, 'deletePersonReaderSyncByFaceAndReader')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(personReaderSyncQueries, 'upsertPersonReaderSync')
+      .mockResolvedValue(undefined);
+    jest.spyOn(cipherMod, 'createReaderCredentialsCipher').mockReturnValue({
+      encrypt: (value: string) => value,
+      decrypt: () => 'secret',
+    });
+    jest
+      .spyOn(faceImageVariants, 'loadOrCreateReaderFaceVariant')
+      .mockResolvedValue(Buffer.from('jpeg'));
+    jest.mocked(hikvision.hikvisionSyncFace).mockResolvedValue(undefined);
+    jest
+      .mocked(hikvision.hikvisionDeleteUser)
+      .mockResolvedValue({ success: true });
+  }
+
+  it('adulto com data vai aos 3 leitores inclusive o 18+', async () => {
+    mockSyncReaders();
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2000-01-01');
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 5,
+      name: 'Sueli Pereira Rocha',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'c/reg/face.jpg',
+    });
+
+    expect(hikvision.hikvisionDeleteUser).not.toHaveBeenCalled();
+    expect(hikvision.hikvisionSyncFace).toHaveBeenCalledTimes(3);
+    expect(outcome.deviceSyncStatus).toBe('synced');
+    expect(outcome.deviceSyncError).toBeNull();
+  });
+
+  it('adulto sem data marca o 18+ como parcial explícito', async () => {
+    mockSyncReaders();
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue(null);
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 5,
+      name: 'Sueli Pereira Rocha',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'c/reg/face.jpg',
+    });
+
+    expect(hikvision.hikvisionSyncFace).toHaveBeenCalledTimes(2);
+    expect(hikvision.hikvisionDeleteUser).toHaveBeenCalledTimes(1);
+    expect(outcome.deviceSyncStatus).toBe('synced');
+    expect(outcome.deviceSyncError).toMatch(/parcialmente/);
+    expect(outcome.deviceSyncError).toMatch(/Cervejeira/);
+    expect(outcome.deviceSyncError).toMatch(/nascimento/);
+    expect(personReaderSyncQueries.upsertPersonReaderSync).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        readerId: 'cervejeira',
+        status: 'sync_failed',
+        error: 'Porta Cervejeira: sem data de nascimento.',
+      }),
+    );
+  });
 });

@@ -1,4 +1,6 @@
 import {
+  hikvisionFaceErrorMessage,
+  isHikvisionSuccess,
   isHikvisionWipeUnsupported,
   isHikvisionWipeUnsupportedBody,
 } from './hikvision-error.util';
@@ -41,5 +43,58 @@ describe('isHikvisionWipeUnsupported', () => {
         },
       }),
     ).toBe(false);
+  });
+});
+
+describe('hikvisionFaceErrorMessage', () => {
+  it('traduz Unauthorized cru do axios', () => {
+    expect(hikvisionFaceErrorMessage(new Error('Unauthorized'))).toMatch(/401/);
+    expect(
+      hikvisionFaceErrorMessage(
+        new Error('Request failed with status code 401'),
+      ),
+    ).toMatch(/sincronizar de novo/);
+  });
+
+  it('traduz faceDuplicate para foto já cadastrada', () => {
+    expect(
+      hikvisionFaceErrorMessage({
+        response: {
+          data: { statusCode: 6, subStatusCode: 'faceDuplicate' },
+        },
+      }),
+    ).toBe('Foto já cadastrada.');
+  });
+
+  it('traduz alreadyExistThisFace (MinMoe) para foto já cadastrada', () => {
+    expect(
+      hikvisionFaceErrorMessage({
+        response: {
+          data: {
+            statusCode: 4,
+            subStatusCode: 'alreadyExistThisFace',
+            errorMsg: 'saveFacePic',
+          },
+        },
+      }),
+    ).toBe('Foto já cadastrada.');
+  });
+});
+
+describe('isHikvisionSuccess', () => {
+  it('não trata faceDuplicate como sucesso mesmo com statusCode 1', () => {
+    expect(
+      isHikvisionSuccess({
+        statusCode: 1,
+        statusString: 'OK',
+        subStatusCode: 'faceDuplicate',
+      }),
+    ).toBe(false);
+  });
+
+  it('aceita statusCode 1 sem duplicata', () => {
+    expect(
+      isHikvisionSuccess({ statusCode: 1, subStatusCode: 'ok' }),
+    ).toBe(true);
   });
 });

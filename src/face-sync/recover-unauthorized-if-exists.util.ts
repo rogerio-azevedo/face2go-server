@@ -115,3 +115,32 @@ export async function recoverUnauthorizedIfExists(
     return false;
   }
 }
+
+/** DS-K1T343 e afins: 401 intermitente some se tentar de novo. */
+export async function retryOnUnauthorizedDeviceError<T>(
+  fn: () => Promise<T>,
+  options?: {
+    retries?: number;
+    delayMs?: number;
+    beforeRetry?: () => void | Promise<void>;
+  },
+): Promise<T> {
+  const retries = options?.retries ?? 1;
+  const delayMs = options?.delayMs ?? 400;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isUnauthorizedDeviceError(err) || attempt >= retries) {
+        throw err;
+      }
+      await options?.beforeRetry?.();
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}

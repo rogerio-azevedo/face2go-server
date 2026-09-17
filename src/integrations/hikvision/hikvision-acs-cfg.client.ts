@@ -17,6 +17,9 @@ export const HIKVISION_BLOCK_LIST_AUTH_KEYS = [
   'blacklistAuth',
 ] as const;
 
+/** Toggle ISAPI de recusar cadastro de face já existente em outra pessoa. */
+export const HIKVISION_FACE_DUPLICATE_CHECK_KEY = 'faceDuplicateCheckEnabled';
+
 const acsCfgEnabledCache = new Map<string, true>();
 
 function acsCfgUrl(
@@ -201,4 +204,61 @@ export async function hikvisionEnsureBlockListAuth(
       baseUrl: connection.baseUrl,
     });
   }
+}
+
+/**
+ * Liga ou desliga a checagem de face duplicada no AcsCfg.
+ * Preserva os demais campos do GET (PUT exige o objeto completo).
+ */
+export async function hikvisionSetFaceDuplicateCheck(
+  connection: HikvisionReaderConnection,
+  enabled: boolean,
+): Promise<void> {
+  const cfgResponse = await hikvisionIsapiRequest(connection, {
+    method: 'GET',
+    url: acsCfgUrl(connection),
+  });
+  const cfgRoot = asRecord(cfgResponse.data);
+  const acsCfg = unwrapAcsCfg(cfgResponse.data);
+  if (!cfgRoot || !acsCfg) {
+    throw new Error('AcsCfg vazio — não foi possível alterar face duplicada.');
+  }
+
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      acsCfg,
+      HIKVISION_FACE_DUPLICATE_CHECK_KEY,
+    )
+  ) {
+    throw new Error('Firmware sem faceDuplicateCheckEnabled no AcsCfg.');
+  }
+
+  if (isHikvisionEnabledFlag(acsCfg[HIKVISION_FACE_DUPLICATE_CHECK_KEY]) === enabled) {
+    syncLog('hikvision:faceDuplicateCheckAlreadySet', {
+      baseUrl: connection.baseUrl,
+      enabled,
+    });
+    return;
+  }
+
+  const nextCfg = structuredClone(acsCfg);
+  nextCfg[HIKVISION_FACE_DUPLICATE_CHECK_KEY] = enabled;
+  const payload =
+    cfgRoot.AcsCfg || cfgRoot.acsCfg ? { AcsCfg: nextCfg } : nextCfg;
+
+  const putResponse = await hikvisionIsapiRequest(connection, {
+    method: 'PUT',
+    url: acsCfgUrl(connection),
+    headers: { 'Content-Type': 'application/json' },
+    data: payload,
+  });
+
+  if (!isHikvisionSuccess(putResponse.data)) {
+    throw new Error('PUT AcsCfg (face duplicada) não retornou sucesso');
+  }
+
+  syncLog('hikvision:faceDuplicateCheckOk', {
+    baseUrl: connection.baseUrl,
+    enabled,
+  });
 }

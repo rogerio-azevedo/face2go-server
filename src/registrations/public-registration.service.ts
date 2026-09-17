@@ -14,7 +14,7 @@ import { parseUploadedImageFile } from '../storage/uploaded-image.util';
 import { publicSubmitRegistrationSchema } from '../validation/registrations.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { normalizeRegistrationFields } from './registration-additional-data';
-import { resolveRegistrationFieldsConfig } from './registration-fields-config';
+import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
 
 const presignBodySchema = z.object({
   registrationId: z.string().uuid(),
@@ -65,10 +65,14 @@ export class PublicRegistrationService {
       clientName: bundle.client.name,
       clientType: bundle.client.type,
       logoUrl: bundle.client.logoUrl,
-      fields: resolveRegistrationFieldsConfig(
-        bundle.client.type,
-        bundle.client.registrationConfig,
-      ),
+      fields: (
+        await resolveFieldsConsideringRestrictMinors(
+          this.database.db,
+          bundle.client.id,
+          bundle.client.type,
+          bundle.client.registrationConfig,
+        )
+      ).fields,
     };
   }
 
@@ -165,10 +169,14 @@ export class PublicRegistrationService {
     } = parsed.data;
     const truthDeclaredAt = new Date();
 
-    const fieldsConfig = resolveRegistrationFieldsConfig(
-      bundle.client.type,
-      bundle.client.registrationConfig,
-    );
+    const fieldsConfig = (
+      await resolveFieldsConsideringRestrictMinors(
+        this.database.db,
+        bundle.client.id,
+        bundle.client.type,
+        bundle.client.registrationConfig,
+      )
+    ).fields;
     const normalized = normalizeRegistrationFields(fieldsConfig, {
       document,
       phone,

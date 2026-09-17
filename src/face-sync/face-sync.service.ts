@@ -16,6 +16,7 @@ import {
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
+import type { AppDb } from '../database/database.types';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as readersQueries from '../database/queries/readers.queries';
@@ -57,14 +58,40 @@ import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
 import { planPersonReaderSync } from './person-reader-sync.util';
 import { AccessTimeZoneService } from './access-time-zone.service';
 import {
+  formatRestrictedReaderSyncError,
   isPersonAllowedOnReader,
   partitionReadersByMinorRestriction,
+  restrictedReaderSkipReason,
 } from './minor-restriction';
 import {
   readerLabel,
   syncLog,
   syncLogError,
 } from './intelbras-sync-debug.util';
+
+async function persistMissingBirthDateRestrictions(
+  db: AppDb,
+  clientId: string,
+  faceId: number,
+  readers: { id: string; name: string }[],
+): Promise<string[]> {
+  if (readers.length === 0) return [];
+  const failures = readers.map((reader) =>
+    formatRestrictedReaderSyncError(reader.name, 'missing_birth_date'),
+  );
+  await Promise.all(
+    readers.map((reader, index) =>
+      personReaderSyncQueries.upsertPersonReaderSync(db, {
+        clientId,
+        faceId,
+        readerId: reader.id,
+        status: 'sync_failed',
+        error: failures[index] ?? null,
+      }),
+    ),
+  );
+  return failures;
+}
 
 export type FaceSyncProgressEvent =
   | { type: 'start'; total: number }
@@ -312,6 +339,9 @@ export class FaceSyncService {
       );
       const { allowed: readers, restricted } =
         partitionReadersByMinorRestriction(scoped, birthDate);
+      const skipReason = restrictedReaderSkipReason(birthDate);
+      const blockedWithoutBirthDate =
+        skipReason === 'missing_birth_date' ? restricted : [];
 
       if (restricted.length > 0) {
         await this.removePersonFromReaders({
@@ -328,23 +358,37 @@ export class FaceSyncService {
         faceId,
         total: readers.length,
         restricted: restricted.length,
+        skipReason,
         readers: readers.map((r) => readerLabel(r)),
       });
-
-      if (readers.length === 0) {
-        syncLog('syncPersonOnReaders:todosRestritos', {
-          clientId,
-          faceId,
-          birthDate,
-        });
-        return { deviceSyncStatus: 'synced', deviceSyncError: null };
-      }
 
       if (params.resetReaderProgress === true) {
         await personReaderSyncQueries.deletePersonReaderSyncByFace(
           this.database.db,
           clientId,
           faceId,
+        );
+      }
+
+      if (readers.length === 0) {
+        syncLog('syncPersonOnReaders:todosRestritos', {
+          clientId,
+          faceId,
+          birthDate,
+          skipReason,
+        });
+        if (blockedWithoutBirthDate.length === 0) {
+          return { deviceSyncStatus: 'synced', deviceSyncError: null };
+        }
+        const missingDateFailures = await persistMissingBirthDateRestrictions(
+          this.database.db,
+          clientId,
+          faceId,
+          blockedWithoutBirthDate,
+        );
+        return aggregateReaderSyncOutcome(
+          missingDateFailures,
+          blockedWithoutBirthDate.length,
         );
       }
 
@@ -578,7 +622,18 @@ export class FaceSyncService {
         }),
       );
 
-      const outcome = aggregateReaderSyncOutcome(failures, readers.length);
+      const missingDateFailures = await persistMissingBirthDateRestrictions(
+        this.database.db,
+        clientId,
+        faceId,
+        blockedWithoutBirthDate,
+      );
+      failures.push(...missingDateFailures);
+
+      const outcome = aggregateReaderSyncOutcome(
+        failures,
+        readers.length + blockedWithoutBirthDate.length,
+      );
 
       if (outcome.deviceSyncStatus === 'sync_failed') {
         syncLog('syncPersonOnReaders:todosFalharam', {
@@ -592,9 +647,10 @@ export class FaceSyncService {
       syncLog('syncPersonOnReaders:concluido', {
         clientId,
         faceId,
-        synced: readers.length - failures.length,
+        synced:
+          readers.length + blockedWithoutBirthDate.length - failures.length,
         skipped: plan.skipped.length,
-        total: readers.length,
+        total: readers.length + blockedWithoutBirthDate.length,
         partial: failures.length > 0,
       });
 

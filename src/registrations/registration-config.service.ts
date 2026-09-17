@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -10,18 +11,21 @@ import * as clientsQueries from '../database/queries/clients.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import type { UpdateRegistrationFieldsConfigDto } from '../validation/dto/registration-config.dto';
 import {
+  BIRTH_DATE_REQUIRED_WITH_18_PLUS,
   defaultConfigForClientType,
   listedFieldsForClientType,
   overrideFromResolved,
   resolveRegistrationFieldsConfig,
   type ResolvedRegistrationFieldsConfig,
 } from './registration-fields-config';
+import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
 
 export type RegistrationConfigResponse = {
   clientId: string;
   clientType: string;
   fields: ResolvedRegistrationFieldsConfig;
   listedFields: ReturnType<typeof listedFieldsForClientType>;
+  birthDateRequiredByRestrictMinors: boolean;
 };
 
 @Injectable()
@@ -85,17 +89,24 @@ export class RegistrationConfigService {
     return clientId;
   }
 
-  private toResponse(
+  private async toResponse(
     clientId: string,
     clientType: string,
     stored: unknown,
-  ): RegistrationConfigResponse {
-    const fields = resolveRegistrationFieldsConfig(clientType, stored);
+  ): Promise<RegistrationConfigResponse> {
+    const resolved = await resolveFieldsConsideringRestrictMinors(
+      this.database.db,
+      clientId,
+      clientType,
+      stored,
+    );
     return {
       clientId,
       clientType,
-      fields,
+      fields: resolved.fields,
       listedFields: listedFieldsForClientType(clientType),
+      birthDateRequiredByRestrictMinors:
+        resolved.birthDateRequiredByRestrictMinors,
     };
   }
 
@@ -120,11 +131,27 @@ export class RegistrationConfigService {
     stored: unknown,
     patch: UpdateRegistrationFieldsConfigDto,
   ) {
+    const resolved = await resolveFieldsConsideringRestrictMinors(
+      this.database.db,
+      clientId,
+      clientType,
+      stored,
+    );
+    if (
+      resolved.birthDateRequiredByRestrictMinors &&
+      patch.birthDate !== undefined &&
+      patch.birthDate !== 'required'
+    ) {
+      throw new BadRequestException(BIRTH_DATE_REQUIRED_WITH_18_PLUS);
+    }
     const current = resolveRegistrationFieldsConfig(clientType, stored);
     const merged = {
       ...defaultConfigForClientType(clientType),
       ...current,
       ...patch,
+      ...(resolved.birthDateRequiredByRestrictMinors
+        ? { birthDate: 'required' as const }
+        : {}),
     };
     const override = overrideFromResolved(clientType, merged);
     const updated = await clientsQueries.updateClientRegistrationConfig(

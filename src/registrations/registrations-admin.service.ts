@@ -28,7 +28,7 @@ import {
   normalizeRegistrationFields,
   mergeHiddenRegistrationFields,
 } from './registration-additional-data';
-import { resolveRegistrationFieldsConfig } from './registration-fields-config';
+import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
 import {
   buildPaginatedResult,
   parseListPaginationParams,
@@ -680,10 +680,14 @@ export class RegistrationsAdminService {
       throw new NotFoundException('Cliente não encontrado.');
     }
 
-    const fieldsConfig = resolveRegistrationFieldsConfig(
-      client.type,
-      client.registrationConfig,
-    );
+    const fieldsConfig = (
+      await resolveFieldsConsideringRestrictMinors(
+        this.database.db,
+        clientId,
+        client.type,
+        client.registrationConfig,
+      )
+    ).fields;
     const normalized = normalizeRegistrationFields(fieldsConfig, {
       document: parsed.data.document,
       phone: parsed.data.phone,

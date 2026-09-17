@@ -15,6 +15,12 @@ export const FACE_ALREADY_EXISTS_CODES = new Set([
   'deviceUserAlreadyExistFace',
 ]);
 
+/** Mesmo rosto já cadastrado em outra pessoa (AcsCfg.faceDuplicateCheckEnabled). */
+export const FACE_DUPLICATE_CODES = new Set([
+  'faceDuplicate',
+  'alreadyExistThisFace',
+]);
+
 export const FACE_LIB_NOT_FOUND_CODES = new Set([
   'faceLibNotExist',
   'FDLibNotExist',
@@ -116,6 +122,13 @@ export function isHikvisionSuccess(data: unknown): boolean {
     return true;
   }
 
+  if (
+    status.subStatusCode &&
+    FACE_DUPLICATE_CODES.has(status.subStatusCode)
+  ) {
+    return false;
+  }
+
   const codeRaw = status.statusCode;
   if (codeRaw != null && String(codeRaw).trim() !== '') {
     const code = String(codeRaw);
@@ -155,6 +168,12 @@ export function hikvisionFaceErrorMessage(error: unknown): string {
   const status = extractResponseStatus(err.response?.data);
   if (
     status?.subStatusCode &&
+    FACE_DUPLICATE_CODES.has(status.subStatusCode)
+  ) {
+    return 'Foto já cadastrada.';
+  }
+  if (
+    status?.subStatusCode &&
     FACE_MODELING_ERROR_CODES.has(status.subStatusCode)
   ) {
     return (
@@ -175,7 +194,11 @@ export function hikvisionFaceErrorMessage(error: unknown): string {
   if (status?.statusString) {
     return status.statusString;
   }
-  return err.message ?? 'Erro desconhecido ao sincronizar face Hikvision';
+  const raw = err.message ?? '';
+  if (/unauthorized/i.test(raw) || /status code 401/i.test(raw)) {
+    return 'Leitor recusou a autenticação (401). Tente sincronizar de novo.';
+  }
+  return raw || 'Erro desconhecido ao sincronizar face Hikvision';
 }
 
 export function isFaceAlreadyExistsError(error: unknown): boolean {

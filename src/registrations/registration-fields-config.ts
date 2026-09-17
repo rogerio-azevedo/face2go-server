@@ -100,6 +100,19 @@ export function resolveRegistrationFieldsConfig(
   return resolved;
 }
 
+export function applyRestrictMinorsFieldRules(
+  fields: ResolvedRegistrationFieldsConfig,
+  hasRestrictMinorsReader: boolean,
+): ResolvedRegistrationFieldsConfig {
+  if (!hasRestrictMinorsReader || fields.birthDate === 'required') {
+    return fields;
+  }
+  return { ...fields, birthDate: 'required' };
+}
+
+export const BIRTH_DATE_REQUIRED_WITH_18_PLUS =
+  'Data de nascimento é obrigatória enquanto houver leitor 18+.';
+
 export function overrideFromResolved(
   clientType: string,
   resolved: ResolvedRegistrationFieldsConfig,

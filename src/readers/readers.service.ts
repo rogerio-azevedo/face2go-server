@@ -12,7 +12,9 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { createReaderCredentialsCipher } from '../common/crypto/reader-credentials.cipher';
 import type { EnvVars } from '../config/env.validation';
 import { DatabaseService } from '../database/database.service';
+import * as clientsQueries from '../database/queries/clients.queries';
 import * as readersQueries from '../database/queries/readers.queries';
+import { persistBirthDateRequiredForClient } from '../registrations/registration-fields-resolve';
 import { FaceListenerService } from '../face-listener/face-listener.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import {
@@ -42,6 +44,27 @@ export class ReadersService {
     private readonly intelbrasPushProvision: IntelbrasPushProvisionService,
     private readonly faceSync: FaceSyncService,
   ) {}
+
+  private async ensureBirthDateRequired(clientId: string) {
+    const client = await clientsQueries.getClientByIdOnly(
+      this.database.db,
+      clientId,
+    );
+    if (!client) return;
+    try {
+      await persistBirthDateRequiredForClient(
+        this.database.db,
+        client.id,
+        client.type,
+        client.registrationConfig,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.log.warn(
+        `Falha ao exigir data de nascimento no cliente ${clientId}: ${msg}`,
+      );
+    }
+  }
 
   private ensureCompany(user: JwtPayload): string {
     const companyId = user.companyId ?? undefined;
@@ -144,6 +167,9 @@ export class ReadersService {
         'Cliente não encontrado ou sem vínculo com a empresa.',
       );
     }
+    if (d.restrictMinors === true) {
+      await this.ensureBirthDateRequired(d.clientId);
+    }
     return readersQueries.readerRowToPublic(row);
   }
 
@@ -242,6 +268,7 @@ export class ReadersService {
     if (!updated) throw new NotFoundException('Leitor não encontrado.');
 
     if (existing.restrictMinors !== true && d.restrictMinors === true) {
+      await this.ensureBirthDateRequired(existing.clientId);
       try {
         await this.faceSync.enqueueMinorRestrictionCleanup(
           existing.clientId,

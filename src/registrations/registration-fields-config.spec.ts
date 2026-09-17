@@ -1,4 +1,5 @@
 import {
+  applyRestrictMinorsFieldRules,
   defaultConfigForClientType,
   overrideFromResolved,
   resolveRegistrationFieldsConfig,
@@ -31,5 +32,16 @@ describe('registration-fields-config', () => {
     expect(overrideFromResolved('condominium', resolved)).toEqual({
       birthDate: 'required',
     });
+  });
+
+  it('força data de nascimento quando há leitor 18+', () => {
+    const hidden = defaultConfigForClientType('other');
+    expect(hidden.birthDate).toBe('hidden');
+    expect(applyRestrictMinorsFieldRules(hidden, false).birthDate).toBe(
+      'hidden',
+    );
+    expect(applyRestrictMinorsFieldRules(hidden, true).birthDate).toBe(
+      'required',
+    );
   });
 });

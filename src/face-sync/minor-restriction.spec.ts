@@ -1,6 +1,8 @@
 import {
+  formatRestrictedReaderSyncError,
   isPersonAllowedOnReader,
   partitionReadersByMinorRestriction,
+  restrictedReaderSkipReason,
 } from './minor-restriction';
 
 describe('minor-restriction', () => {
@@ -65,5 +67,14 @@ describe('minor-restriction', () => {
     const missing = partitionReadersByMinorRestriction(readers, null);
     expect(missing.allowed.map((r) => r.id)).toEqual(['a']);
     jest.useRealTimers();
+  });
+
+  it('classifica skip sem data vs menor', () => {
+    expect(restrictedReaderSkipReason(null)).toBe('missing_birth_date');
+    expect(restrictedReaderSkipReason('ontem')).toBe('missing_birth_date');
+    expect(restrictedReaderSkipReason('2012-01-01')).toBe('minor');
+    expect(
+      formatRestrictedReaderSyncError('Porta Cervejeira', 'missing_birth_date'),
+    ).toBe('Porta Cervejeira: sem data de nascimento.');
   });
 });
