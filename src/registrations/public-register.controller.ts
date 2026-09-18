@@ -11,6 +11,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../common/decorators/public.decorator';
+import { PublicCheckDocumentDto } from '../validation/dto/registrations.dto';
 import { PublicRegistrationService } from './public-registration.service';
 
 const UPLOAD_PHOTO_LIMIT_BYTES = 10 * 1024 * 1024;
@@ -63,6 +64,18 @@ export class PublicRegisterController {
     @Body() body: unknown,
   ) {
     return this.publicRegistrationService.uploadPhoto(code, file, body);
+  }
+
+  @Public()
+  @Post(':code/check-document')
+  @ApiOperation({
+    summary: 'Verifica se o CPF/CNPJ já está cadastrado neste cliente',
+  })
+  checkDocument(
+    @Param('code') code: string,
+    @Body() dto: PublicCheckDocumentDto,
+  ) {
+    return this.publicRegistrationService.checkDocument(code, dto);
   }
 
   @Public()

@@ -6,6 +6,7 @@ import {
   ilike,
   inArray,
   isNotNull,
+  ne,
   or,
   sql,
   type SQL,
@@ -20,6 +21,7 @@ import {
 } from '../schema';
 
 import { incompleteDeviceSyncSql } from '../../face-sync/aggregate-reader-sync-outcome.util';
+import { normalizedDocumentEquals } from './document-match';
 import { unaccentIlike } from './search-utils';
 
 export type RegistrationLinkRow = typeof registrationLinks.$inferSelect;
@@ -190,21 +192,25 @@ export type RegistrationStatusCounts = Record<
 export type RegistrationListQueryOptions = {
   status?: RegistrationListFilter;
   search?: string;
+  block?: string;
+  unit?: string;
+  room?: string;
   offset?: number;
   limit?: number;
 };
 
+type RegistrationListFilterOptions = Pick<
+  RegistrationListQueryOptions,
+  'status' | 'search' | 'block' | 'unit' | 'room'
+>;
+
 function registrationSearchCondition(search?: string): SQL | undefined {
   const term = search?.trim();
   if (!term) return undefined;
-  const pattern = `%${term}%`;
   const digits = term.replace(/\D/g, '');
   const conds: SQL[] = [
     unaccentIlike(registrations.name, term),
     unaccentIlike(registrations.email, term),
-    sql`coalesce(${registrations.additionalData}->>'block', '') ilike ${pattern}`,
-    sql`coalesce(${registrations.additionalData}->>'unit', '') ilike ${pattern}`,
-    sql`coalesce(${registrations.additionalData}->>'room', '') ilike ${pattern}`,
   ];
   if (digits.length >= 3) {
     conds.push(ilike(registrations.document, `%${digits}%`));
@@ -212,9 +218,24 @@ function registrationSearchCondition(search?: string): SQL | undefined {
   return or(...conds);
 }
 
+function additionalDataFieldEquals(
+  key: 'block' | 'unit' | 'room',
+  value?: string,
+): SQL | undefined {
+  const term = value?.trim();
+  if (!term) return undefined;
+  if (key === 'block') {
+    return sql`coalesce(${registrations.additionalData}->>'block', '') ilike ${term}`;
+  }
+  if (key === 'unit') {
+    return sql`coalesce(${registrations.additionalData}->>'unit', '') ilike ${term}`;
+  }
+  return sql`coalesce(${registrations.additionalData}->>'room', '') ilike ${term}`;
+}
+
 function submittedRegistrationsWhere(
   clientId: string,
-  options: Pick<RegistrationListQueryOptions, 'status' | 'search'> = {},
+  options: RegistrationListFilterOptions = {},
 ) {
   const conds: SQL[] = [
     eq(registrations.clientId, clientId),
@@ -230,13 +251,19 @@ function submittedRegistrationsWhere(
   }
   const searchCond = registrationSearchCondition(options.search);
   if (searchCond) conds.push(searchCond);
+  const blockCond = additionalDataFieldEquals('block', options.block);
+  if (blockCond) conds.push(blockCond);
+  const unitCond = additionalDataFieldEquals('unit', options.unit);
+  if (unitCond) conds.push(unitCond);
+  const roomCond = additionalDataFieldEquals('room', options.room);
+  if (roomCond) conds.push(roomCond);
   return and(...conds);
 }
 
 export async function countSubmittedRegistrationsForClient(
   db: AppDb,
   clientId: string,
-  options: Pick<RegistrationListQueryOptions, 'status' | 'search'> = {},
+  options: RegistrationListFilterOptions = {},
 ): Promise<number> {
   const [row] = await db
     .select({ total: count() })
@@ -614,6 +641,33 @@ export async function listClientIdsWithPendingDeviceSync(
       ),
     );
   return rows.map((r) => r.clientId);
+}
+
+export async function findPendingRegistrationByNormalizedDocument(
+  db: AppDb,
+  clientId: string,
+  document: string,
+  excludeRegistrationId?: string,
+): Promise<RegistrationRow | null> {
+  const digits = document.replace(/\D/g, '');
+  if (!digits) return null;
+
+  const conditions: SQL[] = [
+    eq(registrations.clientId, clientId),
+    eq(registrations.status, 'draft'),
+    isNotNull(registrations.submittedAt),
+    normalizedDocumentEquals(registrations.document, digits),
+  ];
+  if (excludeRegistrationId) {
+    conditions.push(ne(registrations.id, excludeRegistrationId));
+  }
+
+  const [row] = await db
+    .select()
+    .from(registrations)
+    .where(and(...conditions))
+    .limit(1);
+  return row ?? null;
 }
 
 /** Nome do cadastro aprovado associado ao face_id do leitor (por cliente). */

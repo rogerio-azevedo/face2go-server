@@ -1335,6 +1335,350 @@
         ]
       }
     },
+    "/client/client-users/{clientUserId}/profile": {
+      "patch": {
+        "operationId": "ClientInviteLinksController_updateClientUserProfile",
+        "parameters": [
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar nome e e-mail do usuário do cliente",
+        "tags": [
+          "client-invite-links"
+        ]
+      }
+    },
+    "/client/client-users/{clientUserId}/role": {
+      "patch": {
+        "operationId": "ClientInviteLinksController_updateClientUserRole",
+        "parameters": [
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Alterar papel do usuário do cliente",
+        "tags": [
+          "client-invite-links"
+        ]
+      }
+    },
+    "/client/client-users/{clientUserId}/active": {
+      "patch": {
+        "operationId": "ClientInviteLinksController_setClientUserActive",
+        "parameters": [
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserActiveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/desativar usuário do cliente",
+        "tags": [
+          "client-invite-links"
+        ]
+      }
+    },
+    "/client/client-users/{clientUserId}/password": {
+      "patch": {
+        "operationId": "ClientInviteLinksController_setClientUserPassword",
+        "parameters": [
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Definir nova senha do usuário do cliente",
+        "tags": [
+          "client-invite-links"
+        ]
+      }
+    },
+    "/clients/{clientId}/client-users/{clientUserId}/profile": {
+      "patch": {
+        "operationId": "CompanyClientUsersController_updateProfile",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar nome e e-mail do usuário do cliente",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/client-users/{clientUserId}/role": {
+      "patch": {
+        "operationId": "CompanyClientUsersController_updateRole",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserRoleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Alterar papel do usuário do cliente",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/client-users/{clientUserId}/active": {
+      "patch": {
+        "operationId": "CompanyClientUsersController_setActive",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserActiveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar/desativar usuário do cliente",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
+    "/clients/{clientId}/client-users/{clientUserId}/password": {
+      "patch": {
+        "operationId": "CompanyClientUsersController_setPassword",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clientUserId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientUserPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Definir nova senha do usuário do cliente",
+        "tags": [
+          "clients"
+        ]
+      }
+    },
     "/readers/monitor/status": {
       "get": {
         "operationId": "ReadersController_monitorStatus",
@@ -1986,6 +2330,83 @@
         ]
       }
     },
+    "/client/accesses/{id}/photo": {
+      "get": {
+        "operationId": "ClientAccessesController_photo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID do documento (Mongo ObjectId).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obter URL assinada (GET) da foto facial de um acesso da unidade atual",
+        "tags": [
+          "client-accesses"
+        ]
+      }
+    },
+    "/client/accesses": {
+      "get": {
+        "operationId": "ClientAccessesController_list",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar acessos faciais da unidade atual",
+        "tags": [
+          "client-accesses"
+        ]
+      }
+    },
     "/clients/{clientId}/faces/sync-all": {
       "post": {
         "operationId": "CompanyFaceSyncController_enqueueSyncAll",
@@ -2633,6 +3054,83 @@
         ]
       }
     },
+    "/client/lpr-accesses/{id}/photo": {
+      "get": {
+        "operationId": "ClientLprAccessesController_photos",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID do documento (Mongo ObjectId).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Obter URLs assinadas (GET) das fotos ANPR de um acesso da unidade atual",
+        "tags": [
+          "client-lpr-accesses"
+        ]
+      }
+    },
+    "/client/lpr-accesses": {
+      "get": {
+        "operationId": "ClientLprAccessesController_list",
+        "parameters": [
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar acessos LPR ANPR da unidade atual",
+        "tags": [
+          "client-lpr-accesses"
+        ]
+      }
+    },
     "/client/registration-links": {
       "post": {
         "operationId": "ClientRegistrationLinksController_create",
@@ -3070,6 +3568,33 @@
               "maxLength": 200,
               "type": "string"
             }
+          },
+          {
+            "name": "block",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "type": "string"
+            }
+          },
+          {
+            "name": "room",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3082,7 +3607,7 @@
             "bearer": []
           }
         ],
-        "summary": "Listar cadastros enviados do meu cliente paginados (?page, ?pageSize, ?status, ?search)",
+        "summary": "Listar cadastros enviados do meu cliente paginados (?page, ?pageSize, ?status, ?search, ?block, ?unit, ?room)",
         "tags": [
           "client-registrations"
         ]
@@ -3389,6 +3914,33 @@
               "maxLength": 200,
               "type": "string"
             }
+          },
+          {
+            "name": "block",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "type": "string"
+            }
+          },
+          {
+            "name": "unit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "type": "string"
+            }
+          },
+          {
+            "name": "room",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 50,
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3401,7 +3953,7 @@
             "bearer": []
           }
         ],
-        "summary": "Listar cadastros enviados de um cliente paginados (?page, ?pageSize, ?status, ?search)",
+        "summary": "Listar cadastros enviados de um cliente paginados (?page, ?pageSize, ?status, ?search, ?block, ?unit, ?room)",
         "tags": [
           "company-registrations"
         ]
@@ -10574,6 +11126,59 @@
             "maxLength": 255
           }
         }
+      },
+      "PatchClientUserProfileDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          }
+        }
+      },
+      "PatchClientUserRoleDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "client_admin",
+              "client_operator"
+            ]
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "PatchClientUserActiveDto": {
+        "type": "object",
+        "properties": {
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "isActive"
+        ]
+      },
+      "PatchClientUserPasswordDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 6
+          }
+        },
+        "required": [
+          "password"
+        ]
       },
       "BatchDeleteDeviceUsersDto": {
         "type": "object",

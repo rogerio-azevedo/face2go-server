@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 
-import { isValidCpfOrCnpj } from '../common/utils/document';
+import { isValidCpfOrCnpj, onlyDigits } from '../common/utils/document';
 import { parseIsoDateParts } from '../common/utils/birth-date';
 import type { ResolvedRegistrationFieldsConfig } from './registration-fields-config';
 
@@ -103,7 +103,7 @@ export function normalizeRegistrationFields(
   if (room) additional.room = room;
 
   return {
-    document,
+    document: document ? onlyDigits(document) : null,
     phone,
     email: email ? email.toLowerCase() : null,
     birthDate,

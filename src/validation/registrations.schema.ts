@@ -21,6 +21,13 @@ export const blockRegistrationSchema = z.object({
   reason: z.string().trim().min(3).max(2000),
 });
 
+const optionalLocationFilter = z
+  .string()
+  .trim()
+  .max(50)
+  .optional()
+  .transform((value) => (value ? value : undefined));
+
 export const listRegistrationsQuerySchema = z.object({
   status: registrationListFilterSchema.optional(),
   page: z.string().optional(),
@@ -31,6 +38,9 @@ export const listRegistrationsQuerySchema = z.object({
     .max(200)
     .optional()
     .transform((value) => (value ? value : undefined)),
+  block: optionalLocationFilter,
+  unit: optionalLocationFilter,
+  room: optionalLocationFilter,
 });
 
 export type ListRegistrationsQuery = z.infer<
@@ -70,6 +80,18 @@ export const updateRegistrationSchema = z.object({
   email: z.string().trim().max(255).optional(),
   birthDate: optionalBirthDate,
   additionalData: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const publicCheckDocumentSchema = z.object({
+  document: z
+    .string()
+    .trim()
+    .min(1, 'Informe o CPF ou CNPJ.')
+    .max(32)
+    .transform((value) => onlyDigits(value))
+    .refine((value) => isValidCpfOrCnpj(value), {
+      message: 'CPF ou CNPJ inválido.',
+    }),
 });
 
 export const publicSubmitRegistrationSchema = z.object({

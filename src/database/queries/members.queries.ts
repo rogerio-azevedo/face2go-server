@@ -15,6 +15,7 @@ import {
 import type { AppDb } from '../database.types';
 import { clientMembers, clientRoles, clients, shifts, users } from '../schema';
 
+import { normalizedDocumentEquals } from './document-match';
 import { unaccentIlike } from './search-utils';
 
 export type MemberListQueryOptions = {
@@ -758,6 +759,31 @@ export async function linkLegacyMembersByDocument(
         targets.map((row) => row.id),
       ),
     );
+}
+
+export async function findMemberByNormalizedDocument(
+  db: AppDb,
+  clientId: string,
+  document: string,
+  excludeMemberId?: string,
+): Promise<ClientMemberRow | null> {
+  const digits = document.replace(/\D/g, '');
+  if (!digits) return null;
+
+  const conditions: SQL[] = [
+    eq(clientMembers.clientId, clientId),
+    normalizedDocumentEquals(clientMembers.document, digits),
+  ];
+  if (excludeMemberId) {
+    conditions.push(ne(clientMembers.id, excludeMemberId));
+  }
+
+  const [row] = await db
+    .select()
+    .from(clientMembers)
+    .where(and(...conditions))
+    .limit(1);
+  return row ?? null;
 }
 
 /** Remove login de membros em clientes que não são escola (correção de vínculo indevido). */

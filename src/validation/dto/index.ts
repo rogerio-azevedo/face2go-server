@@ -11,6 +11,7 @@ export {
   UpdatePushTokenDto,
   UploadFaceDto,
 } from './common.dto';
+export { ClientAccessesListQueryDto } from './accesses.dto';
 export { CreateCameraDto, PatchCameraDto } from './cameras.dto';
 export { CreateClientDto, PatchClientDto } from './clients.dto';
 export {
@@ -58,7 +59,10 @@ export {
   EnrollmentReportQueryDto,
   EnrollmentSummaryDto,
 } from './reports.dto';
-export { CreateRegistrationLinkDto } from './registrations.dto';
+export {
+  CreateRegistrationLinkDto,
+  PublicCheckDocumentDto,
+} from './registrations.dto';
 export { CreateResponsibleDto, PatchResponsibleDto } from './responsibles.dto';
 export { CreateShiftDto, PatchShiftDto } from './shifts.dto';
 export {

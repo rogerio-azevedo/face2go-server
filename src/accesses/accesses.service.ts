@@ -64,6 +64,10 @@ export type AccessListResponse = {
   total: number;
 };
 
+export type ClientAccessListResponse = AccessListResponse & {
+  timezoneOffsetMinutes: number;
+};
+
 @Injectable()
 export class AccessesService {
   private readonly logger = new Logger(AccessesService.name);
@@ -427,9 +431,33 @@ export class AccessesService {
     return { items, page, pageSize, total };
   }
 
+  async listForClient(
+    companyId: string,
+    clientId: string,
+    options: {
+      startDate?: string;
+      endDate?: string;
+      page?: number;
+    },
+  ): Promise<ClientAccessListResponse> {
+    const row = await this.database.db.query.clients.findFirst({
+      where: and(eq(clients.id, clientId), eq(clients.companyId, companyId)),
+      columns: { timezoneOffsetMinutes: true },
+    });
+    const list = await this.listForCompany(companyId, {
+      ...options,
+      clientId,
+    });
+    return {
+      ...list,
+      timezoneOffsetMinutes: row?.timezoneOffsetMinutes ?? 0,
+    };
+  }
+
   async getPhotoUrl(
     id: string,
     companyId: string,
+    clientId?: string,
   ): Promise<FacialAccessPhotoUrlDto> {
     const trimmed = typeof id === 'string' ? id.trim() : '';
     if (!trimmed || !Types.ObjectId.isValid(trimmed)) {
@@ -440,6 +468,7 @@ export class AccessesService {
       .findOne({
         _id: new Types.ObjectId(trimmed),
         companyId,
+        ...(clientId ? { clientId } : {}),
       })
       .lean()
       .exec();

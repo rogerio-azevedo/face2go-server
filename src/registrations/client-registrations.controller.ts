@@ -31,7 +31,7 @@ export class ClientRegistrationsController {
   @Get()
   @ApiOperation({
     summary:
-      'Listar cadastros enviados do meu cliente paginados (?page, ?pageSize, ?status, ?search)',
+      'Listar cadastros enviados do meu cliente paginados (?page, ?pageSize, ?status, ?search, ?block, ?unit, ?room)',
   })
   list(
     @CurrentUser() user: JwtPayload,

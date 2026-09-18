@@ -42,6 +42,10 @@ export type LprAccessListResponse = {
   total: number;
 };
 
+export type ClientLprAccessListResponse = LprAccessListResponse & {
+  timezoneOffsetMinutes: number;
+};
+
 export type LprAccessPhotoUrlsDto = {
   cutoutUrl: string | null;
   vehicleUrl: string | null;
@@ -502,9 +506,33 @@ export class LprAccessesService {
     return { items, page, pageSize, total };
   }
 
+  async listForClient(
+    companyId: string,
+    clientId: string,
+    options: {
+      startDate?: string;
+      endDate?: string;
+      page?: number;
+    },
+  ): Promise<ClientLprAccessListResponse> {
+    const row = await this.database.db.query.clients.findFirst({
+      where: and(eq(clients.id, clientId), eq(clients.companyId, companyId)),
+      columns: { timezoneOffsetMinutes: true },
+    });
+    const list = await this.listForCompany(companyId, {
+      ...options,
+      clientId,
+    });
+    return {
+      ...list,
+      timezoneOffsetMinutes: row?.timezoneOffsetMinutes ?? 0,
+    };
+  }
+
   async getPhotoUrls(
     id: string,
     companyId: string,
+    clientId?: string,
   ): Promise<LprAccessPhotoUrlsDto> {
     const trimmed = typeof id === 'string' ? id.trim() : '';
     if (!trimmed || !Types.ObjectId.isValid(trimmed)) {
@@ -515,6 +543,7 @@ export class LprAccessesService {
       .findOne({
         _id: new Types.ObjectId(trimmed),
         companyId,
+        ...(clientId ? { clientId } : {}),
       })
       .lean()
       .exec();

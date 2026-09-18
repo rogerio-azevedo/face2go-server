@@ -28,6 +28,7 @@ import {
   normalizeRegistrationFields,
   mergeHiddenRegistrationFields,
 } from './registration-additional-data';
+import { assertDocumentAvailableInClient } from './registration-document-unique';
 import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
 import {
   buildPaginatedResult,
@@ -202,6 +203,9 @@ export class RegistrationsAdminService {
     const listOpts = {
       status: query.status,
       search,
+      block: query.block,
+      unit: query.unit,
+      room: query.room,
       offset,
       limit: pageSize,
     };
@@ -215,7 +219,13 @@ export class RegistrationsAdminService {
       registrationsQueries.countSubmittedRegistrationsForClient(
         this.database.db,
         clientId,
-        { status: query.status, search },
+        {
+          status: query.status,
+          search,
+          block: query.block,
+          unit: query.unit,
+          room: query.room,
+        },
       ),
       registrationsQueries.countSubmittedRegistrationsByStatus(
         this.database.db,
@@ -288,6 +298,20 @@ export class RegistrationsAdminService {
     );
     if (!client) {
       throw new NotFoundException('Cliente não encontrado.');
+    }
+
+    const existing = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (client.type !== 'school' && existing) {
+      await assertDocumentAvailableInClient(
+        this.database.db,
+        clientId,
+        existing.document,
+        { excludeRegistrationId: registrationId, checkPending: false },
+      );
     }
 
     const updated = await registrationsQueries.approveRegistration(
@@ -702,6 +726,20 @@ export class RegistrationsAdminService {
       birthDate: toIsoDateString(row.birthDate),
       additionalData: row.additionalData,
     });
+
+    const linkedMember = await membersQueries.getMemberByRegistrationId(
+      this.database.db,
+      registrationId,
+    );
+    await assertDocumentAvailableInClient(
+      this.database.db,
+      clientId,
+      merged.document,
+      {
+        excludeRegistrationId: registrationId,
+        excludeMemberId: linkedMember?.id,
+      },
+    );
 
     const updated = await registrationsQueries.updateRegistrationProfile(
       this.database.db,

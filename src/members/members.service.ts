@@ -39,6 +39,7 @@ import { zodFirstMessage } from '../validation/zod-utils';
 import * as usersQueries from '../database/queries/users.queries';
 import { normalizeCpf } from '../auth/utils/auth-identifiers';
 import { toIsoDateString } from '../common/utils/birth-date';
+import { assertDocumentAvailableInClient } from '../registrations/registration-document-unique';
 
 function mapMemberRow(
   row: membersQueries.MemberWithRoleRow,
@@ -368,6 +369,12 @@ export class MembersService {
       }
     }
 
+    await assertDocumentAvailableInClient(
+      this.database.db,
+      clientId,
+      d.document,
+    );
+
     const resolved = await this.personLookup.resolvePerson({
       cpf: d.document ?? undefined,
       email: d.email,
@@ -516,6 +523,15 @@ export class MembersService {
       throw new NotFoundException('Membro não encontrado.');
     }
 
+    if (d.document !== undefined && d.document) {
+      await assertDocumentAvailableInClient(
+        this.database.db,
+        clientId,
+        d.document,
+        { excludeMemberId: memberId },
+      );
+    }
+
     if (d.roleId !== undefined) {
       const role = await membersQueries.getClientRoleById(
         this.database.db,
@@ -605,7 +621,9 @@ export class MembersService {
       ...(d.name !== undefined ? { name: d.name } : {}),
       ...(d.email !== undefined ? { email: d.email } : {}),
       ...(d.phone !== undefined ? { phone: d.phone } : {}),
-      ...(d.document !== undefined ? { document: d.document } : {}),
+      ...(d.document !== undefined
+        ? { document: d.document ? normalizeCpf(d.document) : d.document }
+        : {}),
       ...(d.birthDate !== undefined ? { birthDate: d.birthDate } : {}),
       ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
       ...(d.canEnrollStudentFace !== undefined
@@ -1007,6 +1025,13 @@ export class MembersService {
     if (existingByReg) {
       return existingByReg;
     }
+
+    await assertDocumentAvailableInClient(
+      this.database.db,
+      registration.clientId,
+      registration.document,
+      { excludeRegistrationId: registration.id, checkPending: false },
+    );
 
     await membersQueries.seedDefaultRolesForClient(
       this.database.db,

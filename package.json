@@ -31,6 +31,7 @@
     "db:split-merged-responsibles": "tsx src/scripts/split-merged-responsible-accounts.ts",
     "db:fix-aliased-faces": "tsx src/scripts/fix-aliased-face-photo-keys.ts",
     "db:seed-person-reader-sync": "tsx src/scripts/seed-person-reader-sync-from-partial.ts",
+    "db:report-duplicate-documents": "tsx src/scripts/report-duplicate-documents.ts",
     "openapi:generate": "nest build && tsx scripts/generate-openapi.ts",
     "openapi:export": "curl -sf ${OPENAPI_URL:-http://localhost:6200/api/docs-json} -o openapi.json"
   },

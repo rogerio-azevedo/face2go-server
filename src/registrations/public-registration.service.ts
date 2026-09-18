@@ -11,9 +11,13 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { parseUploadedImageFile } from '../storage/uploaded-image.util';
-import { publicSubmitRegistrationSchema } from '../validation/registrations.schema';
+import {
+  publicCheckDocumentSchema,
+  publicSubmitRegistrationSchema,
+} from '../validation/registrations.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { normalizeRegistrationFields } from './registration-additional-data';
+import { assertDocumentAvailableInClient } from './registration-document-unique';
 import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
 
 const presignBodySchema = z.object({
@@ -142,6 +146,30 @@ export class PublicRegistrationService {
     return { faceImageKey: key };
   }
 
+  async checkDocument(code: string, body: unknown) {
+    const parsed = publicCheckDocumentSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+
+    const bundle =
+      await registrationsQueries.getActiveRegistrationLinkWithClient(
+        this.database.db,
+        code,
+      );
+    if (!bundle || !isLinkBundleUsable(bundle)) {
+      throw new NotFoundException('Link inválido, expirado ou desativado.');
+    }
+
+    await assertDocumentAvailableInClient(
+      this.database.db,
+      bundle.client.id,
+      parsed.data.document,
+    );
+
+    return { available: true as const };
+  }
+
   async submit(code: string, body: unknown) {
     const parsed = submitBodySchema.safeParse(body);
     if (!parsed.success) {
@@ -184,6 +212,12 @@ export class PublicRegistrationService {
       birthDate,
       additionalData,
     });
+
+    await assertDocumentAvailableInClient(
+      this.database.db,
+      bundle.client.id,
+      normalized.document,
+    );
 
     const re = new RegExp(
       `^${escapeRegex(bundle.client.companyId)}/${escapeRegex(bundle.client.id)}/${escapeRegex(registrationId)}/face\\.(jpg|png|webp)$`,

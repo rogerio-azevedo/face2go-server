@@ -6,6 +6,7 @@ import { StorageModule } from '../storage/storage.module';
 import { FacialAccess, FacialAccessSchema } from './access.schema';
 import { AccessesController } from './accesses.controller';
 import { AccessesService } from './accesses.service';
+import { ClientAccessesController } from './client-accesses.controller';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { AccessesService } from './accesses.service';
     DatabaseModule,
     StorageModule,
   ],
-  controllers: [AccessesController],
+  controllers: [AccessesController, ClientAccessesController],
   providers: [AccessesService],
   exports: [AccessesService],
 })
