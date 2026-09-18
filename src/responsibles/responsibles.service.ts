@@ -16,7 +16,11 @@ import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as vehicleQueries from '../database/queries/vehicles.queries';
 import { DatabaseService } from '../database/database.service';
-import { users } from '../database/schema';
+import { users, responsibles } from '../database/schema';
+import {
+  isPhotoKeyAliasedTo,
+  parseBondPhotoKey,
+} from '../people/face-photo-key';
 import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
@@ -503,7 +507,88 @@ export class ResponsiblesService {
         `saiu de user ${existing.userId} para ${newUserId}`,
     );
 
+    await this.clearAliasedFacesAfterLoginSplit(
+      {
+        id: existing.id,
+        clientId,
+        photoKey: existing.photoKey,
+        faceId: existing.faceId,
+      },
+      existing.userId,
+    );
+
     return { ...existing, userId: newUserId };
+  }
+
+  private async clearAliasedFacesAfterLoginSplit(
+    row: {
+      id: string;
+      clientId: string;
+      photoKey: string | null;
+      faceId: number | null;
+    },
+    previousUserId: string,
+  ) {
+    if (
+      row.photoKey &&
+      isPhotoKeyAliasedTo(row.photoKey, row.clientId, row.id)
+    ) {
+      await this.clearResponsibleFaceFields(row);
+    }
+
+    const others = await this.database.db
+      .select({
+        id: responsibles.id,
+        clientId: responsibles.clientId,
+        photoKey: responsibles.photoKey,
+        faceId: responsibles.faceId,
+      })
+      .from(responsibles)
+      .where(eq(responsibles.userId, previousUserId));
+
+    for (const other of others) {
+      const parsed = parseBondPhotoKey(other.photoKey);
+      if (parsed?.bondId !== row.id) continue;
+      await this.clearResponsibleFaceFields(other);
+    }
+  }
+
+  private async clearResponsibleFaceFields(row: {
+    id: string;
+    clientId: string;
+    photoKey: string | null;
+    faceId: number | null;
+  }) {
+    this.log.warn(
+      `Face aliasada zerada após split de login: responsável ${row.id} ` +
+        `faceId=${row.faceId ?? '—'}`,
+    );
+    const previousFaceId = row.faceId;
+    await responsiblesQueries.updateResponsibleFace(
+      this.database.db,
+      row.id,
+      row.clientId,
+      {
+        photoKey: null,
+        faceId: null,
+        deviceSyncStatus: null,
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+    );
+    if (previousFaceId == null) return;
+    const remove = await this.personProfile.shouldRemoveFaceFromReader(
+      previousFaceId,
+      row.clientId,
+      { responsibleId: row.id },
+    );
+    if (!remove) return;
+    await this.faceSync.removePersonFromReaders({
+      clientId: row.clientId,
+      faceId: previousFaceId,
+      logContext: `split-shared-login=${row.id}`,
+      requireAll: false,
+    });
   }
 
   async listLinkedStudents(

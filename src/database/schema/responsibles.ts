@@ -66,6 +66,9 @@ export const responsibles = pgTable(
     uniqueIndex('responsibles_user_client_unique')
       .on(t.userId, t.clientId)
       .where(sql`${t.userId} is not null`),
+    uniqueIndex('responsibles_client_face_id_unique')
+      .on(t.clientId, t.faceId)
+      .where(sql`${t.faceId} is not null`),
   ],
 );
 

@@ -519,6 +519,13 @@
       "when": 1779420000000,
       "tag": "0073_responsibles_user_client_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1779430000000,
+      "tag": "0074_responsibles_client_face_id_unique",
+      "breakpoints": true
     }
   ]
 }

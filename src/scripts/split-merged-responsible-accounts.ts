@@ -18,6 +18,7 @@ import {
 } from '../database/postgres-connection';
 import type { AppDb } from '../database/database.types';
 import * as schema from '../database/schema';
+import { parseBondPhotoKey } from '../people/face-photo-key';
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 const apply = process.argv.includes('--apply');
@@ -416,6 +417,22 @@ async function main() {
         );
         if (cleared) facesCleared += 1;
       }
+    }
+
+    const otherDocBondIds = new Set(
+      rows.filter((r) => digits(r.document) !== ownerDoc).map((r) => r.id),
+    );
+    for (const owner of ownerRows) {
+      const parsed = parseBondPhotoKey(owner.photoKey);
+      if (!parsed || !otherDocBondIds.has(parsed.bondId)) continue;
+      const cleared = await clearInheritedFace(
+        db,
+        owner,
+        new Set(owner.photoKey ? [owner.photoKey] : []),
+        new Set(owner.faceId != null ? [owner.faceId] : []),
+        !apply,
+      );
+      if (cleared) facesCleared += 1;
     }
   }
 

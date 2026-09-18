@@ -20,6 +20,7 @@ import {
 } from '../common/pagination';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { PersonProfileService } from '../people/person-profile.service';
+import { canonicalFacePhotoKey } from '../people/face-photo-key';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 
@@ -234,7 +235,10 @@ export class FaceEnrollmentService {
       );
     }
 
-    const photoKey = `responsibles/${clientId}/${responsibleId}/face.jpg`;
+    const photoKey = canonicalFacePhotoKey(clientId, {
+      type: 'responsible',
+      id: responsibleId,
+    });
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
     void storeReaderFaceVariants(this.r2, photoKey, buffer);
 
@@ -936,7 +940,10 @@ export class FaceEnrollmentService {
       );
     }
 
-    const photoKey = `members/${clientId}/${memberId}/face.jpg`;
+    const photoKey = canonicalFacePhotoKey(clientId, {
+      type: 'member',
+      id: memberId,
+    });
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
     void storeReaderFaceVariants(this.r2, photoKey, buffer);
 

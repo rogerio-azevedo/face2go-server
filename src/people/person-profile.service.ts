@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
 import * as membersQueries from '../database/queries/members.queries';
@@ -15,6 +19,7 @@ import { FaceSyncService } from '../face-sync/face-sync.service';
 import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
 import { isPortraitImageUsable } from '../storage/portrait-image.utils';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { canonicalFacePhotoKey, isPhotoKeyAliasedTo } from './face-photo-key';
 
 export type {
   BondExclude,
@@ -77,12 +82,19 @@ export class PersonProfileService {
       return false;
     }
 
-    await this.writeFaceToBond(clientId, target, {
-      ...shared,
-      deviceSyncStatus: 'pending_sync',
-      deviceSyncedAt: null,
-      deviceSyncError: null,
-    });
+    const materialized = await this.materializeFaceForBond(
+      clientId,
+      target,
+      {
+        ...shared,
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: null,
+      },
+      buffer,
+    );
+
+    await this.writeFaceToBond(clientId, target, materialized);
 
     const timeSectionIds =
       target.type === 'responsible'
@@ -97,16 +109,16 @@ export class PersonProfileService {
 
     this.faceSync.enqueuePersonSync({
       clientId,
-      faceId: shared.faceId,
+      faceId: materialized.faceId,
       name: target.name,
       imageBuffer: buffer,
-      photoKey: shared.photoKey,
+      photoKey: materialized.photoKey,
       timeSectionIds,
       logContext,
       persistResult: async (sync) => {
         await this.writeFaceToBond(clientId, target, {
-          faceId: shared.faceId,
-          photoKey: shared.photoKey,
+          faceId: materialized.faceId,
+          photoKey: materialized.photoKey,
           deviceSyncStatus: sync.deviceSyncStatus,
           deviceSyncedAt:
             sync.deviceSyncStatus === 'synced' ? new Date() : null,
@@ -117,8 +129,8 @@ export class PersonProfileService {
           userId,
           clientId,
           {
-            faceId: shared.faceId,
-            photoKey: shared.photoKey,
+            faceId: materialized.faceId,
+            photoKey: materialized.photoKey,
             deviceSyncStatus: sync.deviceSyncStatus,
             deviceSyncedAt:
               sync.deviceSyncStatus === 'synced' ? new Date() : null,
@@ -176,10 +188,7 @@ export class PersonProfileService {
       clientId,
     );
 
-    const photoKey =
-      target.type === 'responsible'
-        ? `responsibles/${clientId}/${target.id}/face.jpg`
-        : `members/${clientId}/${target.id}/face.jpg`;
+    const photoKey = canonicalFacePhotoKey(clientId, target);
 
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
     void storeReaderFaceVariants(this.r2, photoKey, buffer);
@@ -263,15 +272,18 @@ export class PersonProfileService {
 
     await Promise.all([
       ...siblings.responsibleIds.map((id) =>
-        responsiblesQueries.updateResponsibleFace(
-          this.database.db,
-          id,
+        this.writeMaterializedSiblingFace(
           clientId,
+          { type: 'responsible', id, name: '' },
           face,
         ),
       ),
       ...siblings.memberIds.map((id) =>
-        membersQueries.updateMemberFace(this.database.db, id, clientId, face),
+        this.writeMaterializedSiblingFace(
+          clientId,
+          { type: 'member', id, name: '' },
+          face,
+        ),
       ),
     ]);
   }
@@ -292,13 +304,28 @@ export class PersonProfileService {
     });
     if (!shared) return null;
 
+    let materialized: SharedFaceSnapshot;
+    try {
+      materialized = await this.materializeFaceForBond(
+        clientId,
+        target,
+        shared,
+      );
+    } catch (e: unknown) {
+      this.log.warn(
+        `reconcile ${target.type}=${target.id}: falha ao copiar foto (${shared.photoKey}): ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return null;
+    }
+
     const aligned =
-      current.faceId === shared.faceId && current.photoKey === shared.photoKey;
+      current.faceId === materialized.faceId &&
+      current.photoKey === materialized.photoKey;
 
     if (!aligned) {
-      await this.writeFaceToBond(clientId, target, shared);
+      await this.writeFaceToBond(clientId, target, materialized);
     }
-    return shared;
+    return materialized;
   }
 
   /** Resolve faceId compartilhado antes de um novo enrollment (evita segundo UserID no leitor). */
@@ -329,11 +356,55 @@ export class PersonProfileService {
     return others === 0;
   }
 
+  /**
+   * Copia o arquivo para o caminho canônico do vínculo-alvo.
+   * `faceId` permanece o mesmo (mesma pessoa, sem re-sync no leitor).
+   */
+  private async materializeFaceForBond(
+    clientId: string,
+    target: FaceBondRef,
+    face: SharedFaceSnapshot,
+    sourceBuffer?: Buffer,
+  ): Promise<SharedFaceSnapshot> {
+    const photoKey = canonicalFacePhotoKey(clientId, target);
+    if (face.photoKey === photoKey) return face;
+
+    const buffer =
+      sourceBuffer ?? (await this.r2.getObjectBytes(face.photoKey)).buffer;
+    await this.r2.putObject(photoKey, buffer, 'image/jpeg');
+    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+    return { ...face, photoKey };
+  }
+
+  private async writeMaterializedSiblingFace(
+    clientId: string,
+    target: FaceBondRef,
+    face: SharedFaceSnapshot,
+  ): Promise<void> {
+    try {
+      const materialized = await this.materializeFaceForBond(
+        clientId,
+        target,
+        face,
+      );
+      await this.writeFaceToBond(clientId, target, materialized);
+    } catch (e: unknown) {
+      this.log.warn(
+        `propagateFaceToSiblings: falha em ${target.type}=${target.id} (${face.photoKey}): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
   private async writeFaceToBond(
     clientId: string,
     target: FaceBondRef,
     face: SharedFaceSnapshot,
   ): Promise<void> {
+    if (isPhotoKeyAliasedTo(face.photoKey, clientId, target.id)) {
+      throw new InternalServerErrorException(
+        `photo_key aliasado recusado: ${face.photoKey} não pertence a ${target.type}=${target.id}`,
+      );
+    }
     if (target.type === 'responsible') {
       await responsiblesQueries.updateResponsibleFace(
         this.database.db,

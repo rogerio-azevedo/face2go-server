@@ -13,6 +13,10 @@ jest.mock('../storage/portrait-image.utils', () => ({
   isPortraitImageUsable: jest.fn().mockResolvedValue(true),
 }));
 
+jest.mock('../face-sync/face-image-variants', () => ({
+  storeReaderFaceVariants: jest.fn().mockResolvedValue(undefined),
+}));
+
 describe('PersonProfileService.applySharedFaceFromSameClient', () => {
   const userId = 'user-1';
   const clientId = 'client-1';
@@ -25,8 +29,24 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
   };
   const imageBuffer = Buffer.alloc(512, 1);
 
+  type PersistResult = (r: {
+    deviceSyncStatus: 'synced' | 'sync_failed';
+    deviceSyncError: string | null;
+  }) => Promise<void>;
+
+  function persistResultFromMock(enqueue: {
+    mock: { calls: unknown[][] };
+  }): PersistResult {
+    const first = enqueue.mock.calls[0]?.[0] as
+      { persistResult?: PersistResult } | undefined;
+    if (!first?.persistResult) {
+      throw new Error('persistResult ausente no enqueuePersonSync');
+    }
+    return first.persistResult;
+  }
+
   let service: PersonProfileService;
-  let r2: { getObjectBytes: jest.Mock };
+  let r2: { getObjectBytes: jest.Mock; putObject: jest.Mock };
   let faceSync: { enqueuePersonSync: jest.Mock };
   let accessTimeZone: { resolveMemberTimeSections: jest.Mock };
 
@@ -37,6 +57,7 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
       getObjectBytes: jest
         .fn()
         .mockResolvedValue({ buffer: imageBuffer, contentType: 'image/jpeg' }),
+      putObject: jest.fn().mockResolvedValue(undefined),
     };
     faceSync = {
       enqueuePersonSync: jest.fn().mockReturnValue({
@@ -99,8 +120,15 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
       target,
     );
 
+    const canonicalKey = 'members/client-1/member-1/face.jpg';
+
     expect(result).toBe(true);
     expect(r2.getObjectBytes).toHaveBeenCalledWith(sharedFace.photoKey);
+    expect(r2.putObject).toHaveBeenCalledWith(
+      canonicalKey,
+      imageBuffer,
+      'image/jpeg',
+    );
     expect(accessTimeZone.resolveMemberTimeSections).toHaveBeenCalledWith(
       clientId,
       'member-1',
@@ -111,7 +139,7 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
         faceId: sharedFace.faceId,
         name: 'Rogerio',
         imageBuffer,
-        photoKey: sharedFace.photoKey,
+        photoKey: canonicalKey,
         timeSectionIds: [255],
         logContext: 'same-client-member=member-1',
       }),
@@ -125,18 +153,14 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
       clientId,
       expect.objectContaining({
         faceId: sharedFace.faceId,
-        photoKey: sharedFace.photoKey,
+        photoKey: canonicalKey,
         deviceSyncStatus: 'pending_sync',
         deviceSyncError: null,
       }),
     );
 
-    const persist = faceSync.enqueuePersonSync.mock.calls[0][0]
-      .persistResult as (r: {
-      deviceSyncStatus: 'synced' | 'sync_failed';
-      deviceSyncError: string | null;
-    }) => Promise<void>;
-    await persist({ deviceSyncStatus: 'synced', deviceSyncError: null });
+    const persistSynced = persistResultFromMock(faceSync.enqueuePersonSync);
+    await persistSynced({ deviceSyncStatus: 'synced', deviceSyncError: null });
 
     expect(membersQueries.updateMemberFace).toHaveBeenCalledTimes(2);
     expect(membersQueries.updateMemberFace).toHaveBeenNthCalledWith(
@@ -146,7 +170,7 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
       clientId,
       expect.objectContaining({
         faceId: sharedFace.faceId,
-        photoKey: sharedFace.photoKey,
+        photoKey: canonicalKey,
         deviceSyncStatus: 'synced',
         deviceSyncError: null,
       }),
@@ -185,12 +209,8 @@ describe('PersonProfileService.applySharedFaceFromSameClient', () => {
     );
 
     expect(result).toBe(true);
-    const persist = faceSync.enqueuePersonSync.mock.calls[0][0]
-      .persistResult as (r: {
-      deviceSyncStatus: 'synced' | 'sync_failed';
-      deviceSyncError: string | null;
-    }) => Promise<void>;
-    await persist({
+    const persistFailed = persistResultFromMock(faceSync.enqueuePersonSync);
+    await persistFailed({
       deviceSyncStatus: 'sync_failed',
       deviceSyncError: 'Leitor offline',
     });
