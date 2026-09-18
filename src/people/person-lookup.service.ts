@@ -9,6 +9,7 @@ import type {
   PersonLookupContext,
   PersonLookupProfile,
   PersonLookupResult,
+  PersonMatchedBy,
 } from '../validation/people.schema';
 import { personLookupQuerySchema } from '../validation/people.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
@@ -38,6 +39,18 @@ export class PersonLookupService {
     );
 
     if (byEmail && byCpf && byEmail.id !== byCpf.id) {
+      return {
+        matched: true,
+        userId: null,
+        hasLogin: false,
+        profile: null,
+        contexts: [],
+        conflict:
+          'CPF e e-mail pertencem a contas diferentes. Verifique os dados informados.',
+      };
+    }
+
+    if (byEmail && cpf.length === 11 && byEmail.cpf && byEmail.cpf !== cpf) {
       return {
         matched: true,
         userId: null,
@@ -113,6 +126,14 @@ export class PersonLookupService {
       };
     }
 
+    const matchedBy = this.determineMatchedBy({
+      resolvedUserId,
+      byEmail,
+      byCpf,
+      membersByDoc,
+      responsiblesByDoc,
+    });
+
     const contexts = await this.buildContexts(resolvedUserId, {
       membersByDoc,
       membersByEmail,
@@ -132,7 +153,27 @@ export class PersonLookupService {
       hasLogin: resolvedUserId !== null,
       profile,
       contexts,
+      ...(matchedBy ? { matchedBy } : {}),
     };
+  }
+
+  private determineMatchedBy(args: {
+    resolvedUserId: string | null;
+    byEmail: usersQueries.UserRow | null;
+    byCpf: usersQueries.UserRow | null;
+    membersByDoc: membersQueries.MemberProfileContextRow[];
+    responsiblesByDoc: responsiblesQueries.ResponsibleProfileContextRow[];
+  }): PersonMatchedBy | undefined {
+    const { resolvedUserId, byEmail, byCpf, membersByDoc, responsiblesByDoc } =
+      args;
+    if (!resolvedUserId) return undefined;
+    if (byCpf?.id === resolvedUserId) return 'cpf';
+    const boundByDocument = [...membersByDoc, ...responsiblesByDoc].some(
+      (row) => row.userId === resolvedUserId,
+    );
+    if (boundByDocument) return 'document-bond';
+    if (byEmail?.id === resolvedUserId) return 'email';
+    return undefined;
   }
 
   async linkLegacyProfilesByDocument(document: string, userId: string) {

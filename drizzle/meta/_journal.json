@@ -512,6 +512,13 @@
       "when": 1779410000000,
       "tag": "0072_normalize_user_emails",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1779420000000,
+      "tag": "0073_responsibles_user_client_unique",
+      "breakpoints": true
     }
   ]
 }

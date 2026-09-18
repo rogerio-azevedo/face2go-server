@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -34,32 +34,40 @@ export const responsibleRelationshipTypeEnum = pgEnum(
   ],
 );
 
-export const responsibles = pgTable('responsibles', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  clientId: uuid('client_id')
-    .notNull()
-    .references(() => clients.id, { onDelete: 'cascade' }),
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-  name: varchar('name', { length: 255 }).notNull(),
-  phone: varchar('phone', { length: 32 }),
-  document: varchar('document', { length: 32 }),
-  /** Face ID no leitor (mesmo modelo que `students.face_id`), para histórico de acessos do responsável. */
-  faceId: integer('face_id'),
-  photoKey: text('photo_key'),
-  deviceSyncStatus: deviceSyncStatusEnum('device_sync_status'),
-  deviceSyncedAt: timestamp('device_synced_at'),
-  deviceSyncError: text('device_sync_error'),
-  /** Token Expo Push (app do responsável). */
-  pushToken: text('push_token'),
-  isActive: boolean('is_active').default(true).notNull(),
-  blockReason: text('block_reason'),
-  blockedAt: timestamp('blocked_at'),
-  blockedByUserId: text('blocked_by_user_id').references(() => users.id, {
-    onDelete: 'set null',
-  }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const responsibles = pgTable(
+  'responsibles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 255 }).notNull(),
+    phone: varchar('phone', { length: 32 }),
+    document: varchar('document', { length: 32 }),
+    /** Face ID no leitor (mesmo modelo que `students.face_id`), para histórico de acessos do responsável. */
+    faceId: integer('face_id'),
+    photoKey: text('photo_key'),
+    deviceSyncStatus: deviceSyncStatusEnum('device_sync_status'),
+    deviceSyncedAt: timestamp('device_synced_at'),
+    deviceSyncError: text('device_sync_error'),
+    /** Token Expo Push (app do responsável). */
+    pushToken: text('push_token'),
+    isActive: boolean('is_active').default(true).notNull(),
+    blockReason: text('block_reason'),
+    blockedAt: timestamp('blocked_at'),
+    blockedByUserId: text('blocked_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex('responsibles_user_client_unique')
+      .on(t.userId, t.clientId)
+      .where(sql`${t.userId} is not null`),
+  ],
+);
 
 export const responsibleStudents = pgTable(
   'responsible_students',

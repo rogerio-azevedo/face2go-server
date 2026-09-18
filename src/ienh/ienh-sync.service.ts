@@ -259,6 +259,7 @@ export class IenhSyncService {
       accountsCreated: 0,
       accountsRelinkedByCpf: 0,
       accountsSkippedEmailConflict: 0,
+      accountsCreatedWithoutEmail: 0,
       classesCreated: 0,
       classesMerged: 0,
       classLinksCreated: 0,
@@ -949,16 +950,11 @@ export class IenhSyncService {
           email: email ?? undefined,
         });
 
-        if (resolved.conflict) {
-          result.accountsSkippedEmailConflict += 1;
-          this.logger.warn(
-            `IENH sync: conflito CPF/e-mail ao vincular responsável ${responsibleId} ` +
-              `(CPF ${document}, e-mail ${email ?? '—'}): ${resolved.conflict}`,
-          );
-          return;
-        }
+        const matchedByCpf =
+          resolved.matchedBy === 'cpf' ||
+          resolved.matchedBy === 'document-bond';
 
-        if (resolved.userId) {
+        if (resolved.userId && matchedByCpf && !resolved.conflict) {
           await this.linkResponsibleToUser({
             responsibleId,
             clientId,
@@ -970,13 +966,31 @@ export class IenhSyncService {
           return;
         }
 
-        if (!email) return;
+        const emailTaken = email
+          ? await usersQueries.findUserByEmail(this.database.db, email)
+          : null;
+        const emailOwnedBySomeoneElse = Boolean(
+          resolved.conflict || resolved.matchedBy === 'email' || emailTaken,
+        );
+
+        if (!email && !emailOwnedBySomeoneElse) return;
+
+        const accountEmail = emailOwnedBySomeoneElse
+          ? `nologin-${crypto.randomUUID()}@sem-acesso.face2go`
+          : email!;
+
+        if (emailOwnedBySomeoneElse) {
+          this.logger.warn(
+            `IENH sync: e-mail ${email ?? '—'} já pertence a outra pessoa; ` +
+              `criando conta própria sem login para responsável ${responsibleId} (CPF ${document})`,
+          );
+        }
 
         const newUserId = crypto.randomUUID();
         try {
           await this.database.db.insert(users).values({
             id: newUserId,
-            email,
+            email: accountEmail,
             password: DEFAULT_RESPONSIBLE_PASSWORD_HASH,
             name,
             cpf: document,
@@ -992,6 +1006,9 @@ export class IenhSyncService {
             responsibleCache,
           });
           result.accountsCreated += 1;
+          if (emailOwnedBySomeoneElse) {
+            result.accountsCreatedWithoutEmail += 1;
+          }
         } catch (err: unknown) {
           const afterRace = await responsiblesQueries.getResponsibleById(
             this.database.db,
@@ -1000,6 +1017,21 @@ export class IenhSyncService {
           );
           if (afterRace?.userId) {
             setLinkedUserId(afterRace.userId);
+            return;
+          }
+          const byCpf = await usersQueries.findUserByCpf(
+            this.database.db,
+            document,
+          );
+          if (byCpf) {
+            await this.linkResponsibleToUser({
+              responsibleId,
+              clientId,
+              document,
+              userId: byCpf.id,
+              responsibleCacheKey,
+              responsibleCache,
+            });
             return;
           }
           throw err;

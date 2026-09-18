@@ -21,6 +21,8 @@ export interface IenhSyncResult {
   accountsRelinkedByCpf: number;
   /** Contas não vinculadas por conflito CPF/e-mail (pessoas diferentes). */
   accountsSkippedEmailConflict: number;
+  /** Contas criadas com e-mail sentinela porque o e-mail do TOTVS já pertencia a outra pessoa. */
+  accountsCreatedWithoutEmail: number;
   classesCreated: number;
   classesMerged: number;
   classLinksCreated: number;

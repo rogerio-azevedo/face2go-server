@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import * as peopleQueries from '../database/queries/people.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
@@ -80,9 +81,15 @@ export class ResponsiblesService {
       ),
       this.faceSync.hasActiveFacialReaders(clientId),
     ]);
+    const sharedUserIds =
+      await peopleQueries.findUserIdsSharedAcrossDistinctDocuments(
+        this.database.db,
+        rows.map((row) => row.userId).filter((id): id is string => Boolean(id)),
+      );
     const data = await Promise.all(
       rows.map(async (row) => ({
         ...row,
+        loginShared: Boolean(row.userId && sharedUserIds.has(row.userId)),
         photoUrl: await this.optionalPhotoUrl(row.photoKey),
         hasFacialReaders,
       })),
@@ -121,9 +128,20 @@ export class ResponsiblesService {
           row.userId,
         )
       : null;
+    const loginShared = row.userId
+      ? await peopleQueries.userHasBondsWithDifferentDocument(
+          this.database.db,
+          {
+            userId: row.userId,
+            document: row.document,
+            excludeResponsibleId: row.id,
+          },
+        )
+      : false;
     return {
       ...row,
       email,
+      loginShared,
       photoUrl: await this.optionalPhotoUrl(row.photoKey),
     };
   }
@@ -289,6 +307,19 @@ export class ResponsiblesService {
       throw new NotFoundException('Responsável não encontrado.');
     }
 
+    if (d.email !== undefined || d.password !== undefined) {
+      existing = await this.splitSharedLoginIfNeeded(
+        existing,
+        clientId,
+        responsibleId,
+        {
+          email: d.email,
+          password: d.password,
+          name: d.name,
+        },
+      );
+    }
+
     if (d.email !== undefined) {
       if (!existing.userId) {
         if (d.password === undefined) {
@@ -385,6 +416,94 @@ export class ResponsiblesService {
       email,
       photoUrl: await this.optionalPhotoUrl(updated.photoKey),
     };
+  }
+
+  /**
+   * Se este responsável compartilha a conta de login com outra pessoa (CPF
+   * diferente), cria um user próprio antes de mutar e-mail/senha.
+   */
+  private async splitSharedLoginIfNeeded(
+    existing: NonNullable<
+      Awaited<ReturnType<typeof responsiblesQueries.getResponsibleById>>
+    >,
+    clientId: string,
+    responsibleId: string,
+    d: { email?: string; password?: string; name?: string },
+  ) {
+    if (!existing.userId) return existing;
+
+    const shared = await peopleQueries.userHasBondsWithDifferentDocument(
+      this.database.db,
+      {
+        userId: existing.userId,
+        document: existing.document,
+        excludeResponsibleId: existing.id,
+      },
+    );
+    if (!shared) return existing;
+
+    const accountEmail =
+      d.email ?? `nologin-${crypto.randomUUID()}@sem-acesso.face2go`;
+    const emailTaken = await this.database.db.query.users.findFirst({
+      where: eq(users.email, accountEmail),
+    });
+    if (emailTaken) {
+      throw new ConflictException(
+        'E-mail já cadastrado. Informe um e-mail exclusivo para separar a conta deste responsável.',
+      );
+    }
+
+    const [currentUser] = await this.database.db
+      .select({ password: users.password })
+      .from(users)
+      .where(eq(users.id, existing.userId))
+      .limit(1);
+    const hashed = d.password
+      ? await bcrypt.hash(d.password, 10)
+      : (currentUser?.password ?? (await bcrypt.hash(crypto.randomUUID(), 10)));
+    const normalizedCpf = existing.document
+      ? normalizeCpf(existing.document)
+      : null;
+    const newUserId = crypto.randomUUID();
+
+    let cpfToSet = normalizedCpf?.length === 11 ? normalizedCpf : null;
+    if (cpfToSet) {
+      const cpfHolder = await usersQueries.findUserByCpf(
+        this.database.db,
+        cpfToSet,
+      );
+      if (cpfHolder?.id === existing.userId) {
+        await this.database.db
+          .update(users)
+          .set({ cpf: null })
+          .where(eq(users.id, existing.userId));
+      } else if (cpfHolder) {
+        cpfToSet = null;
+      }
+    }
+
+    await this.database.db.insert(users).values({
+      id: newUserId,
+      email: accountEmail,
+      password: hashed,
+      name: d.name ?? existing.name,
+      cpf: cpfToSet,
+      role: 'member',
+      isActive: true,
+    });
+    await responsiblesQueries.linkUserToResponsible(
+      this.database.db,
+      responsibleId,
+      clientId,
+      newUserId,
+    );
+
+    this.log.warn(
+      `Conta compartilhada separada: responsável ${responsibleId} ` +
+        `saiu de user ${existing.userId} para ${newUserId}`,
+    );
+
+    return { ...existing, userId: newUserId };
   }
 
   async listLinkedStudents(

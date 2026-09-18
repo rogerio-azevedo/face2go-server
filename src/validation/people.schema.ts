@@ -36,6 +36,8 @@ export type PersonLookupProfile = {
   phone: string | null;
 };
 
+export type PersonMatchedBy = 'cpf' | 'email' | 'document-bond';
+
 export type PersonLookupResult = {
   matched: boolean;
   userId: string | null;
@@ -43,4 +45,6 @@ export type PersonLookupResult = {
   profile: PersonLookupProfile | null;
   contexts: PersonLookupContext[];
   conflict?: string;
+  /** Como o userId foi resolvido. Ausente quando não há conta de login. */
+  matchedBy?: PersonMatchedBy;
 };

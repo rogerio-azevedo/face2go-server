@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { clientMembers, responsibles } from '../schema';
@@ -350,4 +350,95 @@ export async function findUserIdByVehicleOwner(
     return row?.userId ?? null;
   }
   return null;
+}
+
+function documentDigits(value: string | null | undefined): string {
+  return (value ?? '').replace(/\D/g, '');
+}
+
+/**
+ * userIds cuja conta de login está ligada a mais de um CPF distinto
+ * (responsável e/ou membro). Usado para avisar/separar contas fundidas.
+ */
+export async function findUserIdsSharedAcrossDistinctDocuments(
+  db: AppDb,
+  userIds: string[],
+): Promise<Set<string>> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (unique.length === 0) return new Set();
+
+  const [responsibleRows, memberRows] = await Promise.all([
+    db
+      .select({
+        userId: responsibles.userId,
+        document: responsibles.document,
+      })
+      .from(responsibles)
+      .where(inArray(responsibles.userId, unique)),
+    db
+      .select({
+        userId: clientMembers.userId,
+        document: clientMembers.document,
+      })
+      .from(clientMembers)
+      .where(inArray(clientMembers.userId, unique)),
+  ]);
+
+  const docsByUser = new Map<string, Set<string>>();
+  const add = (userId: string | null, document: string | null) => {
+    if (!userId) return;
+    const digits = documentDigits(document);
+    if (digits.length !== 11) return;
+    const set = docsByUser.get(userId) ?? new Set<string>();
+    set.add(digits);
+    docsByUser.set(userId, set);
+  };
+  for (const row of responsibleRows) add(row.userId, row.document);
+  for (const row of memberRows) add(row.userId, row.document);
+
+  const shared = new Set<string>();
+  for (const [userId, docs] of docsByUser) {
+    if (docs.size > 1) shared.add(userId);
+  }
+  return shared;
+}
+
+/** Há outro vínculo (responsável/membro) neste userId com CPF diferente. */
+export async function userHasBondsWithDifferentDocument(
+  db: AppDb,
+  args: {
+    userId: string;
+    document: string | null;
+    excludeResponsibleId?: string;
+  },
+): Promise<boolean> {
+  const selfDoc = documentDigits(args.document);
+  const [responsibleRows, memberRows] = await Promise.all([
+    db
+      .select({
+        id: responsibles.id,
+        document: responsibles.document,
+      })
+      .from(responsibles)
+      .where(eq(responsibles.userId, args.userId)),
+    db
+      .select({
+        document: clientMembers.document,
+      })
+      .from(clientMembers)
+      .where(eq(clientMembers.userId, args.userId)),
+  ]);
+
+  for (const row of responsibleRows) {
+    if (args.excludeResponsibleId && row.id === args.excludeResponsibleId) {
+      continue;
+    }
+    const digits = documentDigits(row.document);
+    if (digits.length === 11 && digits !== selfDoc) return true;
+  }
+  for (const row of memberRows) {
+    const digits = documentDigits(row.document);
+    if (digits.length === 11 && digits !== selfDoc) return true;
+  }
+  return false;
 }

@@ -111,6 +111,7 @@ describe('PersonLookupService', () => {
     expect(result.matched).toBe(true);
     expect(result.userId).toBe('user-1');
     expect(result.hasLogin).toBe(true);
+    expect(result.matchedBy).toBe('document-bond');
     expect(result.contexts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -134,6 +135,71 @@ describe('PersonLookupService', () => {
 
     expect(result.conflict).toBeDefined();
     expect(result.userId).toBeNull();
+  });
+
+  it('retorna conflito quando o e-mail já tem CPF de outra pessoa', async () => {
+    jest.spyOn(usersQueries, 'findUserByEmailOrCpf').mockResolvedValue({
+      byEmail: {
+        id: 'user-mae',
+        email: 'mae@example.com',
+        name: 'Mae',
+        password: 'hash',
+        cpf: '00122445031',
+        emailVerified: null,
+        image: null,
+        role: 'member',
+        isActive: true,
+      },
+      byCpf: null,
+    });
+
+    const result = await service.resolvePerson({
+      cpf: '81844212068',
+      email: 'mae@example.com',
+    });
+
+    expect(result.conflict).toBeDefined();
+    expect(result.userId).toBeNull();
+  });
+
+  it('marca matchedBy=email quando só o e-mail encontra a conta', async () => {
+    jest.spyOn(usersQueries, 'findUserByEmailOrCpf').mockResolvedValue({
+      byEmail: {
+        id: 'user-email',
+        email: 'pai@example.com',
+        name: 'Pai',
+        password: 'hash',
+        cpf: null,
+        emailVerified: null,
+        image: null,
+        role: 'member',
+        isActive: true,
+      },
+      byCpf: null,
+    });
+    jest
+      .spyOn(membersQueries, 'findMembersByDocumentGlobally')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(responsiblesQueries, 'findResponsiblesByDocumentGlobally')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(membersQueries, 'findMembersByEmailGlobally')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(membersQueries, 'listMemberContextsByUserId')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(responsiblesQueries, 'listResponsibleContextsByUserId')
+      .mockResolvedValue([]);
+
+    const result = await service.resolvePerson({
+      email: 'pai@example.com',
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.userId).toBe('user-email');
+    expect(result.matchedBy).toBe('email');
   });
 
   it('não inclui contextos de condomínio — apenas escolas (queries filtradas)', async () => {
@@ -207,6 +273,7 @@ describe('PersonLookupService', () => {
     });
 
     expect(result.matched).toBe(true);
+    expect(result.matchedBy).toBe('document-bond');
     expect(
       result.contexts.every((ctx) => !ctx.clientName.includes('Condomínio')),
     ).toBe(true);
