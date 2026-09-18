@@ -15,6 +15,7 @@ import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { NestFactory } from '@nestjs/core';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -27,9 +28,15 @@ import {
 import type { AppDb } from '../database/database.types';
 import * as schema from '../database/schema';
 import { DatabaseModule } from '../database/database.module';
-import { FaceSyncModule } from '../face-sync/face-sync.module';
-import { PeopleModule } from '../people/people.module';
+import { DeviceSyncQueueModule } from '../device-sync-queue/device-sync-queue.module';
+import { AccessTimeZoneService } from '../face-sync/access-time-zone.service';
+import { FaceReaderRebuildService } from '../face-sync/face-reader-rebuild.service';
+import { FaceSyncService } from '../face-sync/face-sync.service';
+import { LprPlateSyncModule } from '../lpr-plate-sync/lpr-plate-sync.module';
+import { PermissionsModule } from '../permissions/permissions.module';
+import { PersonLookupService } from '../people/person-lookup.service';
 import { PersonProfileService } from '../people/person-profile.service';
+import { SchoolAccessModule } from '../school-access/school-access.module';
 import { StorageModule } from '../storage/storage.module';
 
 type BondKind = 'responsible' | 'member';
@@ -81,10 +88,20 @@ function reexecFromDistBuild(): void {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    EventEmitterModule.forRoot(),
     DatabaseModule,
     StorageModule,
-    FaceSyncModule,
-    PeopleModule,
+    PermissionsModule,
+    SchoolAccessModule,
+    DeviceSyncQueueModule,
+    LprPlateSyncModule,
+  ],
+  providers: [
+    FaceSyncService,
+    AccessTimeZoneService,
+    FaceReaderRebuildService,
+    PersonLookupService,
+    PersonProfileService,
   ],
 })
 class ReconcileSharedFacesScriptModule {}

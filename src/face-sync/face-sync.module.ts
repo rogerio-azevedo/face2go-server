@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { DeviceSyncQueueModule } from '../device-sync-queue/device-sync-queue.module';
 import { DeviceSyncWorkerService } from '../device-sync-queue/device-sync-worker.service';
+import { LprPlateSyncModule } from '../lpr-plate-sync/lpr-plate-sync.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { SchoolAccessModule } from '../school-access/school-access.module';
 import { StorageModule } from '../storage/storage.module';
@@ -22,6 +23,7 @@ import { FaceSyncListener } from './face-sync.listener';
     StorageModule,
     SchoolAccessModule,
     DeviceSyncQueueModule,
+    LprPlateSyncModule,
   ],
   controllers: [CompanyFaceSyncController, ClientFaceSyncController],
   providers: [
