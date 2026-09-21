@@ -1,4 +1,4 @@
-# Fila de sync de dispositivos (faces + LPR)
+# Fila de sync de dispositivos (faces + LPR).
 
 Documento de referência para `face2go-server` e `meuiot-server`.
 
@@ -20,11 +20,11 @@ No MeuIOT o write de face também é síncrono (`syncFaceToDevice` / `syncBatchF
 
 ## 2. Decisão
 
-| Escolha | Agora | Depois (100+ clientes / várias instâncias) |
-| --- | --- | --- |
-| Fila | Tabela no **mesmo Postgres** | Redis/Bull só se houver disputa entre instâncias ou milhares de jobs/min |
-| Worker | Mesmo repo, teto **2** jobs, **1 write por dispositivo** | Segundo processo `node dist/worker` no Beanstalk |
-| Microsserviço | Não | Só se API e ingestão precisarem escalar separado |
+| Escolha       | Agora                                                    | Depois (100+ clientes / várias instâncias)                               |
+| ------------- | -------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Fila          | Tabela no **mesmo Postgres**                             | Redis/Bull só se houver disputa entre instâncias ou milhares de jobs/min |
+| Worker        | Mesmo repo, teto **2** jobs, **1 write por dispositivo** | Segundo processo `node dist/worker` no Beanstalk                         |
+| Microsserviço | Não                                                      | Só se API e ingestão precisarem escalar separado                         |
 
 Fila numa tabela resolve o que mata a API: HTTP devolve **202 + jobId** e o trabalho acontece com backpressure. `FOR UPDATE SKIP LOCKED` + `dedupe_key` (único enquanto `queued`/`running`) fazem 10 cliques virarem **1 job**.
 
@@ -45,17 +45,17 @@ O que a tabela **não** resolve sozinha: worker no mesmo processo com teto alto 
 
 `device_sync_jobs`:
 
-| Campo | Uso |
-| --- | --- |
-| `kind` | `face.person` \| `face.reader` \| `lpr.vehicle` \| `lpr.camera` |
-| `client_id` | Tenant |
-| `target_id` | Pessoa/veículo ou leitor/câmera |
-| `force` | Incremental (`false`) vs reenviar todos (`true`) |
-| `status` | `queued` \| `running` \| `done` \| `failed` |
-| `dedupe_key` | Único entre jobs ativos |
-| `payload` | JSON (faceId, photoKey, entityKind, readerIds, …) — **sem** buffer de imagem |
-| `processed` / `total` | Progresso para UI |
-| `created_by` | Quem disparou |
+| Campo                 | Uso                                                                          |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `kind`                | `face.person` \| `face.reader` \| `lpr.vehicle` \| `lpr.camera`              |
+| `client_id`           | Tenant                                                                       |
+| `target_id`           | Pessoa/veículo ou leitor/câmera                                              |
+| `force`               | Incremental (`false`) vs reenviar todos (`true`)                             |
+| `status`              | `queued` \| `running` \| `done` \| `failed`                                  |
+| `dedupe_key`          | Único entre jobs ativos                                                      |
+| `payload`             | JSON (faceId, photoKey, entityKind, readerIds, …) — **sem** buffer de imagem |
+| `processed` / `total` | Progresso para UI                                                            |
+| `created_by`          | Quem disparou                                                                |
 
 Claim:
 
