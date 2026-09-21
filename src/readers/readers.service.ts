@@ -102,6 +102,22 @@ export class ReadersService {
     throw new ForbiddenException('Sem permissão.');
   }
 
+  async listOptionsForClientTenant(
+    user: JwtPayload,
+  ): Promise<{ id: string; name: string }[]> {
+    const companyId = user.companyId?.trim();
+    const clientId = user.clientId?.trim();
+    if (!companyId || !clientId) {
+      throw new ForbiddenException('Cliente não associado ao usuário.');
+    }
+    const rows = await readersQueries.listReaders(
+      this.database.db,
+      companyId,
+      clientId,
+    );
+    return rows.map((row) => ({ id: row.id, name: row.name }));
+  }
+
   async getMonitorStatus(user: JwtPayload, filterClientId?: string) {
     const companyId = this.ensureCompany(user);
     if (user.role === 'company_admin') {

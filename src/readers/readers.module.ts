@@ -5,6 +5,7 @@ import { FaceSyncModule } from '../face-sync/face-sync.module';
 import { IntelbrasPushModule } from '../intelbras-push/intelbras-push.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { StorageModule } from '../storage/storage.module';
+import { ClientReadersController } from './client-readers.controller';
 import { ReadersController } from './readers.controller';
 import { ReadersDeviceUsersController } from './readers-device-users.controller';
 import { ReadersDeviceUsersService } from './readers-device-users.service';
@@ -19,7 +20,11 @@ import { ReadersService } from './readers.service';
     FaceSyncModule,
     StorageModule,
   ],
-  controllers: [ReadersController, ReadersDeviceUsersController],
+  controllers: [
+    ReadersController,
+    ClientReadersController,
+    ReadersDeviceUsersController,
+  ],
   providers: [
     ReadersService,
     ReadersDeviceUsersService,

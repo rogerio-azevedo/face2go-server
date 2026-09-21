@@ -52,6 +52,8 @@ export const registrationLinks = pgTable('registration_links', {
   expiresAt: timestamp('expires_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  /** Soft-hide: some da listagem e invalida o URL público. Solicitações permanecem. */
+  deletedAt: timestamp('deleted_at'),
 });
 
 export const registrations = pgTable(

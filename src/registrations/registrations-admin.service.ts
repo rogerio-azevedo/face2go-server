@@ -122,7 +122,9 @@ export class RegistrationsAdminService {
   }
 
   private async mapRow(
-    row: registrationsQueries.RegistrationRow,
+    row: registrationsQueries.RegistrationRow & {
+      registrationLinkCode?: string | null;
+    },
     progress: { total: number; syncedByFace: Map<number, number> },
   ) {
     const faceUrl = await this.optionalFaceUrl(row.faceImageKey);
@@ -136,6 +138,7 @@ export class RegistrationsAdminService {
       id: row.id,
       clientId: row.clientId,
       registrationLinkId: row.registrationLinkId,
+      registrationLinkCode: row.registrationLinkCode ?? null,
       name: row.name,
       document: row.document,
       phone: row.phone,
@@ -177,7 +180,15 @@ export class RegistrationsAdminService {
       clientId,
       row.faceId != null ? [row.faceId] : [],
     );
-    return this.mapRow(row, progress);
+    const link = await registrationsQueries.getRegistrationLinkByIdForClient(
+      this.database.db,
+      row.registrationLinkId,
+      clientId,
+    );
+    return this.mapRow(
+      { ...row, registrationLinkCode: link?.code ?? null },
+      progress,
+    );
   }
 
   async listForCompanyUser(

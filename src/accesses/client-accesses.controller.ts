@@ -1,4 +1,10 @@
-import { Controller, ForbiddenException, Get, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -62,6 +68,10 @@ export class ClientAccessesController {
       startDate: query.startDate,
       endDate: query.endDate,
       page: query.page,
+      name: query.name,
+      block: query.block,
+      unit: query.unit,
+      readerId: query.readerId,
     });
   }
 }

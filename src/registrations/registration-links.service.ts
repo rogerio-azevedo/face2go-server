@@ -198,6 +198,20 @@ export class RegistrationLinksService {
     return this.setActiveShared(clientId, linkId, body);
   }
 
+  async deleteForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    linkId: string,
+  ) {
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.deleteShared(clientId, linkId);
+  }
+
+  async deleteForClientTenant(user: JwtPayload, linkId: string) {
+    const clientId = this.ensureClientTenant(user);
+    return this.deleteShared(clientId, linkId);
+  }
+
   private async createLink(
     clientId: string,
     createdByUserId: string,
@@ -276,5 +290,15 @@ export class RegistrationLinksService {
       createdAt: updated.createdAt,
       registrationUrl: this.frontendCadastroUrl(updated.code),
     };
+  }
+
+  private async deleteShared(clientId: string, linkId: string) {
+    const deleted = await registrationsQueries.softDeleteRegistrationLink(
+      this.database.db,
+      linkId,
+      clientId,
+    );
+    if (!deleted) throw new NotFoundException('Link não encontrado.');
+    return { ok: true as const };
   }
 }

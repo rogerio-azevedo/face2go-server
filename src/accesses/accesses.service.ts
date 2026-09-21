@@ -8,6 +8,8 @@ import { Types } from 'mongoose';
 
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
+import { buildFacialAccessMongoFilter } from './build-facial-access-list-filter';
+import { findAccessPersonIdsByLocation } from './find-access-person-ids-by-location';
 import { resolveAccessPersonByFaceId } from './resolve-access-person';
 import {
   ACCESS_BLOCKED_ATTEMPT,
@@ -66,6 +68,17 @@ export type AccessListResponse = {
 
 export type ClientAccessListResponse = AccessListResponse & {
   timezoneOffsetMinutes: number;
+};
+
+export type AccessListQueryOptions = {
+  clientId?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  name?: string;
+  block?: string;
+  unit?: string;
+  readerId?: string;
 };
 
 @Injectable()
@@ -151,10 +164,7 @@ export class AccessesService {
         : rawSim != null && String(rawSim).trim() !== ''
           ? Number(rawSim)
           : NaN;
-    if (
-      !denied &&
-      (!Number.isFinite(similarityNum) || similarityNum <= 0)
-    ) {
+    if (!denied && (!Number.isFinite(similarityNum) || similarityNum <= 0)) {
       return;
     }
 
@@ -326,57 +336,52 @@ export class AccessesService {
 
   async listForCompany(
     companyId: string,
-    options: {
-      clientId?: string;
-      startDate?: string;
-      endDate?: string;
-      page?: number;
-    },
+    options: AccessListQueryOptions,
   ): Promise<AccessListResponse> {
     const page = Math.max(1, options.page ?? 1);
     const pageSize = AccessesService.DEFAULT_PAGE_SIZE;
 
+    let timezoneOffsetMinutes = 0;
     if (options.clientId) {
       const row = await this.database.db.query.clients.findFirst({
         where: and(
           eq(clients.id, options.clientId),
           eq(clients.companyId, companyId),
         ),
+        columns: { timezoneOffsetMinutes: true },
       });
       if (!row) {
         return { items: [], page, pageSize, total: 0 };
       }
+      timezoneOffsetMinutes = row.timezoneOffsetMinutes ?? 0;
     }
 
-    const filter: Record<string, unknown> = {
-      companyId,
-    };
-    if (options.clientId) {
-      filter.clientId = options.clientId;
-    }
+    const wantsLocation = Boolean(
+      options.block?.trim() || options.unit?.trim(),
+    );
+    const locationIds = wantsLocation
+      ? await findAccessPersonIdsByLocation(this.database.db, {
+          companyId,
+          clientId: options.clientId,
+          block: options.block,
+          unit: options.unit,
+        })
+      : undefined;
 
-    let start: Date | undefined;
-    let end: Date | undefined;
-    if (options.startDate) {
-      start = new Date(options.startDate);
-      if (Number.isNaN(start.getTime())) {
-        start = undefined;
-      }
-    }
-    if (options.endDate) {
-      end = new Date(options.endDate);
-      if (Number.isNaN(end.getTime())) {
-        end = undefined;
-      } else {
-        end.setHours(23, 59, 59, 999);
-      }
-    }
-    if (start && end) {
-      filter.createdAt = { $gte: start, $lte: end };
-    } else if (start) {
-      filter.createdAt = { $gte: start };
-    } else if (end) {
-      filter.createdAt = { $lte: end };
+    const filter = buildFacialAccessMongoFilter(
+      {
+        companyId,
+        clientId: options.clientId,
+        startDate: options.startDate,
+        endDate: options.endDate,
+        name: options.name,
+        readerId: options.readerId,
+        timezoneOffsetMinutes,
+      },
+      locationIds,
+    );
+    if (!filter) {
+      return { items: [], page, pageSize, total: 0 };
     }
 
     const total = await this.accessModel.countDocuments(filter).exec();
@@ -434,11 +439,7 @@ export class AccessesService {
   async listForClient(
     companyId: string,
     clientId: string,
-    options: {
-      startDate?: string;
-      endDate?: string;
-      page?: number;
-    },
+    options: Omit<AccessListQueryOptions, 'clientId'>,
   ): Promise<ClientAccessListResponse> {
     const row = await this.database.db.query.clients.findFirst({
       where: and(eq(clients.id, clientId), eq(clients.companyId, companyId)),

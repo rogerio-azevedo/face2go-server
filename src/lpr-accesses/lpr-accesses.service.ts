@@ -7,6 +7,7 @@ import type { Model } from 'mongoose';
 import { Types } from 'mongoose';
 
 import { DatabaseService } from '../database/database.service';
+import { createdAtRangeFilter } from '../common/parse-access-list-datetime';
 import { clients } from '../database/schema';
 import type { CameraStreamContext } from '../lpr-listener/lpr-listener.types';
 import type { LprStreamReadingPayload } from '../lpr-listener/lpr-stream.parser';
@@ -417,16 +418,19 @@ export class LprAccessesService {
     const page = Math.max(1, options.page ?? 1);
     const pageSize = LprAccessesService.DEFAULT_PAGE_SIZE;
 
+    let timezoneOffsetMinutes = 0;
     if (options.clientId) {
       const row = await this.database.db.query.clients.findFirst({
         where: and(
           eq(clients.id, options.clientId),
           eq(clients.companyId, companyId),
         ),
+        columns: { timezoneOffsetMinutes: true },
       });
       if (!row) {
         return { items: [], page, pageSize, total: 0 };
       }
+      timezoneOffsetMinutes = row.timezoneOffsetMinutes ?? 0;
     }
 
     const filter: Record<string, unknown> = {
@@ -439,28 +443,13 @@ export class LprAccessesService {
       filter.clientId = options.clientId;
     }
 
-    let start: Date | undefined;
-    let end: Date | undefined;
-    if (options.startDate) {
-      start = new Date(options.startDate);
-      if (Number.isNaN(start.getTime())) {
-        start = undefined;
-      }
-    }
-    if (options.endDate) {
-      end = new Date(options.endDate);
-      if (Number.isNaN(end.getTime())) {
-        end = undefined;
-      } else {
-        end.setHours(23, 59, 59, 999);
-      }
-    }
-    if (start && end) {
-      filter.createdAt = { $gte: start, $lte: end };
-    } else if (start) {
-      filter.createdAt = { $gte: start };
-    } else if (end) {
-      filter.createdAt = { $lte: end };
+    const createdAt = createdAtRangeFilter(
+      options.startDate,
+      options.endDate,
+      timezoneOffsetMinutes,
+    );
+    if (createdAt) {
+      filter.createdAt = createdAt;
     }
 
     const total = await this.lprModel.countDocuments(filter).exec();

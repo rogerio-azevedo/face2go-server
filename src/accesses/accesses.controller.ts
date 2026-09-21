@@ -15,6 +15,7 @@ import {
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CompanyAccessesListQueryDto } from '../validation/dto/accesses.dto';
 import {
   AccessesService,
   type FacialAccessPhotoUrlDto,
@@ -48,23 +49,22 @@ export class AccessesController {
   @ApiOperation({ summary: 'Listar acessos faciais (MongoDB), por empresa' })
   list(
     @CurrentUser() user: JwtPayload,
-    @Query('clientId') clientId?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('page') pageStr?: string,
+    @Query() query: CompanyAccessesListQueryDto,
   ) {
     const companyId = user.companyId;
     if (!companyId) {
       throw new ForbiddenException('Empresa não associada ao usuário.');
     }
 
-    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
-
     return this.accessesService.listForCompany(companyId, {
-      clientId: clientId?.trim() || undefined,
-      startDate: startDate?.trim() || undefined,
-      endDate: endDate?.trim() || undefined,
-      page,
+      clientId: query.clientId,
+      startDate: query.startDate,
+      endDate: query.endDate,
+      page: query.page,
+      name: query.name,
+      block: query.block,
+      unit: query.unit,
+      readerId: query.readerId,
     });
   }
 }

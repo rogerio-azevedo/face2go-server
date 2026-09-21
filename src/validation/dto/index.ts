@@ -11,7 +11,10 @@ export {
   UpdatePushTokenDto,
   UploadFaceDto,
 } from './common.dto';
-export { ClientAccessesListQueryDto } from './accesses.dto';
+export {
+  ClientAccessesListQueryDto,
+  CompanyAccessesListQueryDto,
+} from './accesses.dto';
 export { CreateCameraDto, PatchCameraDto } from './cameras.dto';
 export { CreateClientDto, PatchClientDto } from './clients.dto';
 export {

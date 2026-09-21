@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -61,6 +62,23 @@ export class CompanyRegistrationLinksController {
       clientId,
       linkId,
       body,
+    );
+  }
+
+  @Delete(':linkId')
+  @ApiOperation({
+    summary:
+      'Excluir um link de cadastro (some da lista; solicitações permanecem)',
+  })
+  remove(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('linkId', ParseUUIDPipe) linkId: string,
+  ) {
+    return this.registrationLinksService.deleteForCompanyUser(
+      user,
+      clientId,
+      linkId,
     );
   }
 }

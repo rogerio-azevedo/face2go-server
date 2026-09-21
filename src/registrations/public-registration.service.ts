@@ -38,7 +38,13 @@ function escapeRegex(s: string): string {
 function isLinkBundleUsable(
   bundle: registrationsQueries.RegistrationLinkWithClient,
 ): boolean {
-  if (!bundle.link.isActive || !bundle.client.isActive) return false;
+  if (
+    !bundle.link.isActive ||
+    !bundle.client.isActive ||
+    bundle.link.deletedAt
+  ) {
+    return false;
+  }
   const now = new Date();
   if (bundle.link.validFrom && now < bundle.link.validFrom) {
     return false;

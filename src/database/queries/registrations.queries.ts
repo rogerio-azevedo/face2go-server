@@ -6,6 +6,7 @@ import {
   ilike,
   inArray,
   isNotNull,
+  isNull,
   ne,
   or,
   sql,
@@ -26,6 +27,10 @@ import { unaccentIlike } from './search-utils';
 
 export type RegistrationLinkRow = typeof registrationLinks.$inferSelect;
 export type RegistrationRow = typeof registrations.$inferSelect;
+
+export type RegistrationListRow = RegistrationRow & {
+  registrationLinkCode: string | null;
+};
 
 export async function insertRegistrationLink(
   db: AppDb,
@@ -59,7 +64,12 @@ export async function listRegistrationLinksByClient(
   return db
     .select()
     .from(registrationLinks)
-    .where(eq(registrationLinks.clientId, clientId))
+    .where(
+      and(
+        eq(registrationLinks.clientId, clientId),
+        isNull(registrationLinks.deletedAt),
+      ),
+    )
     .orderBy(desc(registrationLinks.createdAt));
 }
 
@@ -95,6 +105,27 @@ export async function setRegistrationLinkActive(
       and(
         eq(registrationLinks.id, linkId),
         eq(registrationLinks.clientId, clientId),
+        isNull(registrationLinks.deletedAt),
+      ),
+    )
+    .returning();
+  return row;
+}
+
+export async function softDeleteRegistrationLink(
+  db: AppDb,
+  linkId: string,
+  clientId: string,
+): Promise<RegistrationLinkRow | undefined> {
+  const now = new Date();
+  const [row] = await db
+    .update(registrationLinks)
+    .set({ deletedAt: now, isActive: false, updatedAt: now })
+    .where(
+      and(
+        eq(registrationLinks.id, linkId),
+        eq(registrationLinks.clientId, clientId),
+        isNull(registrationLinks.deletedAt),
       ),
     )
     .returning();
@@ -319,10 +350,17 @@ export async function listSubmittedRegistrationsForClient(
   db: AppDb,
   clientId: string,
   options: RegistrationListQueryOptions = {},
-): Promise<RegistrationRow[]> {
+): Promise<RegistrationListRow[]> {
   const q = db
-    .select()
+    .select({
+      registration: registrations,
+      registrationLinkCode: registrationLinks.code,
+    })
     .from(registrations)
+    .innerJoin(
+      registrationLinks,
+      eq(registrations.registrationLinkId, registrationLinks.id),
+    )
     .where(submittedRegistrationsWhere(clientId, options))
     .orderBy(desc(registrations.submittedAt));
 
@@ -332,7 +370,11 @@ export async function listSubmittedRegistrationsForClient(
   if (options.offset !== undefined) {
     q.offset(options.offset);
   }
-  return q;
+  const rows = await q;
+  return rows.map((r) => ({
+    ...r.registration,
+    registrationLinkCode: r.registrationLinkCode,
+  }));
 }
 
 export async function approveRegistration(
