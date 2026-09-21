@@ -1,4 +1,4 @@
-# Fila de sync de dispositivos (faces + LPR).
+# Fila de sync de dispositivos (faces + LPR)
 
 Documento de referência para `face2go-server` e `meuiot-server`.
 
