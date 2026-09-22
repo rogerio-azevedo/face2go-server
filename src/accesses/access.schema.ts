@@ -72,6 +72,13 @@ export class FacialAccess {
   /** Id de correlação do evento no leitor (idempotência Start/Pulse). */
   @Prop({ type: String, default: null })
   correlationId!: string | null;
+
+  /** Usuário que acionou abertura remota (ausente em eventos do leitor). */
+  @Prop({ type: String, default: null })
+  triggeredByUserId!: string | null;
+
+  @Prop({ type: String, default: null })
+  triggeredByName!: string | null;
 }
 
 export const FacialAccessSchema = SchemaFactory.createForClass(FacialAccess);

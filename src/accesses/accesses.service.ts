@@ -334,6 +334,48 @@ export class AccessesService {
     }
   }
 
+  async recordRemoteOpen(input: {
+    companyId: string;
+    readerId: string;
+    readerName: string;
+    clientId: string;
+    clientName: string;
+    readerDirection: 'in' | 'out' | null;
+    triggeredByUserId: string;
+    triggeredByName: string;
+    opened: boolean;
+  }): Promise<void> {
+    const now = new Date();
+    const actor = input.triggeredByName.trim() || 'Usuário';
+    try {
+      await this.accessModel.create({
+        companyId: input.companyId,
+        readerId: input.readerId,
+        readerName: input.readerName,
+        clientId: input.clientId,
+        clientName: input.clientName,
+        userId: 0,
+        personName: `${actor} (abertura remota)`,
+        personId: null,
+        personType: null,
+        status: input.opened ? 'granted' : 'denied',
+        eventCode: 'RemoteOpen',
+        eventAction: 'Manual',
+        similarity: null,
+        eventDate: now,
+        snapPath: null,
+        snapR2Key: null,
+        readerDirection: input.readerDirection,
+        triggeredByUserId: input.triggeredByUserId,
+        triggeredByName: actor,
+      });
+    } catch (err: unknown) {
+      this.logger.error(
+        `Falha ao gravar abertura remota: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   async listForCompany(
     companyId: string,
     options: AccessListQueryOptions,

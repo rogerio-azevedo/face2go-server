@@ -144,6 +144,7 @@ export async function getReaderWithCredentialsById(
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
       brand: facialReaders.brand,
+      direction: facialReaders.direction,
       isActive: facialReaders.isActive,
       restrictMinors: facialReaders.restrictMinors,
     })

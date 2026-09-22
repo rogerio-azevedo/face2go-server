@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -13,6 +14,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { ReadersCredentialsService } from './readers-credentials.service';
+import { ReadersRemoteOpenService } from './readers-remote-open.service';
 import { ReadersService } from './readers.service';
 
 @ApiTags('readers')
@@ -20,7 +23,11 @@ import { ReadersService } from './readers.service';
 @Roles('company_admin', 'company_operator')
 @Controller('readers')
 export class ReadersController {
-  constructor(private readonly readersService: ReadersService) {}
+  constructor(
+    private readonly readersService: ReadersService,
+    private readonly remoteOpen: ReadersRemoteOpenService,
+    private readonly credentials: ReadersCredentialsService,
+  ) {}
 
   @Get('monitor/status')
   @ApiOperation({
@@ -89,6 +96,31 @@ export class ReadersController {
     @Query('mode') mode?: string,
   ) {
     return this.readersService.provisionIntelbrasPush(user, readerId, mode);
+  }
+
+  @Post(':readerId/credentials/reveal')
+  @Roles('company_admin')
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({
+    summary: 'Revelar a senha salva do leitor (apenas admin da empresa)',
+  })
+  revealCredentials(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+  ) {
+    return this.credentials.revealPassword(user, readerId);
+  }
+
+  @Post(':readerId/open')
+  @Roles('company_admin')
+  @ApiOperation({
+    summary: 'Acionar abertura remota do leitor',
+  })
+  openDoor(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+  ) {
+    return this.remoteOpen.openForCompany(user, readerId);
   }
 
   @Patch(':readerId/active')

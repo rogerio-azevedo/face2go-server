@@ -22,6 +22,8 @@ export type LoadedDeviceReader = {
   clientId: string;
   clientType: string;
   brand: string;
+  direction: 'in' | 'out' | null;
+  name: string;
   plain: PlainReaderCredential;
 };
 
@@ -91,6 +93,11 @@ export async function loadActiveDeviceReader(
     clientId: reader.clientId,
     clientType: client?.type ?? 'other',
     brand: reader.brand ?? 'intelbras',
+    direction:
+      reader.direction === 'in' || reader.direction === 'out'
+        ? reader.direction
+        : null,
+    name: reader.name,
     plain: toPlainReaderCredential(
       {
         id: reader.id,

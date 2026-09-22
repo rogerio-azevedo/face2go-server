@@ -102,9 +102,15 @@ export class ReadersService {
     throw new ForbiddenException('Sem permissão.');
   }
 
-  async listOptionsForClientTenant(
-    user: JwtPayload,
-  ): Promise<{ id: string; name: string }[]> {
+  async listOptionsForClientTenant(user: JwtPayload): Promise<
+    {
+      id: string;
+      name: string;
+      brand: readersQueries.ReaderBrand;
+      direction: readersQueries.ReaderDirection | null;
+      isActive: boolean;
+    }[]
+  > {
     const companyId = user.companyId?.trim();
     const clientId = user.clientId?.trim();
     if (!companyId || !clientId) {
@@ -115,7 +121,25 @@ export class ReadersService {
       companyId,
       clientId,
     );
-    return rows.map((row) => ({ id: row.id, name: row.name }));
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      brand: row.brand,
+      direction: row.direction,
+      isActive: row.isActive,
+    }));
+  }
+
+  async getMonitorStatusForClientTenant(user: JwtPayload) {
+    if (user.role !== 'client_admin') {
+      throw new ForbiddenException('Sem permissão.');
+    }
+    const companyId = user.companyId?.trim();
+    const clientId = user.clientId?.trim();
+    if (!companyId || !clientId) {
+      throw new ForbiddenException('Cliente não associado ao usuário.');
+    }
+    return this.faceListener.getMonitorReportForCompany(companyId, clientId);
   }
 
   async getMonitorStatus(user: JwtPayload, filterClientId?: string) {

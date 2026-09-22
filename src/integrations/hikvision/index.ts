@@ -1,6 +1,7 @@
 export * from './hikvision-acs-cfg.client';
 export * from './hikvision-connection.types';
 export * from './hikvision-device.client';
+export * from './hikvision-door.client';
 export * from './hikvision-error.util';
 export * from './hikvision-events.client';
 export * from './hikvision-isapi-request';
