@@ -22,6 +22,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import * as readersQueries from '../database/queries/readers.queries';
 import * as personBirthDateQueries from '../database/queries/person-birth-date.queries';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
+import { listPersonsByFaceIds } from '../database/queries/device-user-reconcile.queries';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { imageBufferToReaderBase64Jpeg } from './face-image-for-reader';
@@ -56,6 +57,10 @@ import {
 } from '../integrations/hikvision';
 import { ALWAYS_TIME_ZONE_INDEX } from './intelbras-time-zone.constants';
 import { planPersonReaderSync } from './person-reader-sync.util';
+import {
+  extractCollidingFaceId,
+  withCollidingPerson,
+} from './similar-face-collision.util';
 import { AccessTimeZoneService } from './access-time-zone.service';
 import {
   formatRestrictedReaderSyncError,
@@ -279,6 +284,7 @@ export class FaceSyncService {
     photoOnly?: boolean;
     blocked?: boolean;
     resetReaderProgress?: boolean;
+    allowSimilarFace?: boolean;
     previousDeviceSyncError?: string | null;
     readerIds?: string[];
   }): Promise<{
@@ -289,6 +295,7 @@ export class FaceSyncService {
       params;
     const photoOnly = params.photoOnly === true;
     const blocked = params.blocked === true;
+    const allowSimilarFace = params.allowSimilarFace === true;
     const timeSectionIds =
       params.timeSectionIds && params.timeSectionIds.length > 0
         ? params.timeSectionIds
@@ -507,8 +514,6 @@ export class FaceSyncService {
         photoOnly,
       });
 
-      const failures: string[] = [];
-
       const outcomes = await mapReadersWithSyncGate(
         plan.toSync,
         (r) => r.id,
@@ -546,6 +551,7 @@ export class FaceSyncService {
                   ? dateToHikvisionFormat(params.validUntil)
                   : undefined,
                 blocked,
+                allowSimilarFace,
               });
             } else {
               if (!intelbrasBase64) {
@@ -570,7 +576,7 @@ export class FaceSyncService {
                 timeSectionIds,
                 validDateStart,
                 validDateEnd,
-                { photoOnly, blocked },
+                { photoOnly, blocked, allowSimilarFace },
               );
             }
 
@@ -597,18 +603,39 @@ export class FaceSyncService {
               reader: label,
             });
             this.log.warn(`Sync face ${logPrefix}reader=${r.name}: ${raw}`);
-            return msg;
+            return {
+              message: msg,
+              collidingFaceId: extractCollidingFaceId(e, faceId),
+            };
           }
         },
       );
 
-      for (const msg of outcomes) {
-        if (msg !== null) failures.push(msg);
-      }
+      const collidingIds = [
+        ...new Set(
+          outcomes.flatMap((outcome) =>
+            outcome?.collidingFaceId != null ? [outcome.collidingFaceId] : [],
+          ),
+        ),
+      ];
+      const collidingPeople =
+        collidingIds.length > 0
+          ? await listPersonsByFaceIds(this.database.db, clientId, collidingIds)
+          : new Map<number, { name: string }>();
+      const messages = outcomes.map((outcome) => {
+        if (!outcome) return null;
+        if (outcome.collidingFaceId == null) return outcome.message;
+        return withCollidingPerson(outcome.message, {
+          faceId: outcome.collidingFaceId,
+          name: collidingPeople.get(outcome.collidingFaceId)?.name,
+        });
+      });
+
+      const failures = messages.filter((msg): msg is string => msg !== null);
 
       await Promise.all(
         plan.toSync.map((reader, index) => {
-          const msg = outcomes[index] ?? null;
+          const msg = messages[index] ?? null;
           return personReaderSyncQueries.upsertPersonReaderSync(
             this.database.db,
             {
@@ -974,6 +1001,7 @@ export class FaceSyncService {
       photoOnly: payload.photoOnly,
       blocked: payload.blocked,
       resetReaderProgress: payload.resetReaderProgress ?? true,
+      allowSimilarFace: payload.allowSimilarFace === true,
       previousDeviceSyncError: payload.previousDeviceSyncError,
       logContext: payload.logContext,
       userId: payload.userId,
@@ -984,7 +1012,9 @@ export class FaceSyncService {
         kind: 'face.person',
         clientId: payload.clientId,
         targetId: entityId,
-        dedupeKey: `face.person:${payload.clientId}:${entityKind}:${entityId}`,
+        dedupeKey: payload.allowSimilarFace
+          ? `face.person:${payload.clientId}:${entityKind}:${entityId}:similar`
+          : `face.person:${payload.clientId}:${entityKind}:${entityId}`,
         payload: jobPayload,
         total: 1,
       });
@@ -1006,13 +1036,26 @@ export class FaceSyncService {
     }
   }
 
+  assertCanAllowSimilarFace(user: JwtPayload): void {
+    if (user.role !== 'company_admin' && user.role !== 'client_admin') {
+      throw new ForbiddenException(
+        'Só um administrador pode liberar face parecida.',
+      );
+    }
+  }
+
   async enqueueApprovedRegistrationJob(
     registrationId: string,
     clientId: string,
     createdBy?: string,
-    options?: { resetReaderProgress?: boolean; blocked?: boolean },
+    options?: {
+      resetReaderProgress?: boolean;
+      blocked?: boolean;
+      allowSimilarFace?: boolean;
+    },
   ) {
     const resetReaderProgress = options?.resetReaderProgress === true;
+    const allowSimilarFace = options?.allowSimilarFace === true;
     const row = await registrationsQueries.getRegistrationByIdForClient(
       this.database.db,
       registrationId,
@@ -1041,15 +1084,18 @@ export class FaceSyncService {
       clientId,
       { deviceSyncStatus: 'pending_sync', deviceSyncedAt: null },
     );
+    const dedupeKey = allowSimilarFace
+      ? `face.person:${clientId}:registration:${registrationId}:similar`
+      : resetReaderProgress
+        ? `face.person:${clientId}:registration:${registrationId}:force`
+        : `face.person:${clientId}:registration:${registrationId}`;
     const job = await this.queue.enqueue({
       kind: 'face.person',
       clientId,
       targetId: registrationId,
       createdBy,
       force: resetReaderProgress,
-      dedupeKey: resetReaderProgress
-        ? `face.person:${clientId}:registration:${registrationId}:force`
-        : `face.person:${clientId}:registration:${registrationId}`,
+      dedupeKey,
       total: 1,
       payload: {
         entityKind: 'registration',
@@ -1059,6 +1105,7 @@ export class FaceSyncService {
         logContext: `reg=${registrationId}`,
         previousDeviceSyncError: row.deviceSyncError,
         resetReaderProgress,
+        allowSimilarFace,
         blocked: options?.blocked === true || row.status === 'blocked',
       } satisfies FacePersonJobPayload,
     });

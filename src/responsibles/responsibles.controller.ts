@@ -17,6 +17,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { BlockPersonDto } from '../validation/dto/block-person.dto';
+import { EnqueueDeviceSyncBodyDto } from '../validation/dto/device-sync-jobs.dto';
 import { ResponsiblesService } from './responsibles.service';
 
 @ApiTags('responsibles')
@@ -199,11 +200,13 @@ export class ResponsiblesController {
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('responsibleId', ParseUUIDPipe) responsibleId: string,
+    @Body() body: EnqueueDeviceSyncBodyDto,
   ) {
     return this.responsiblesService.syncFaceByCompany(
       user,
       clientId,
       responsibleId,
+      { allowSimilarFace: body.allowSimilarFace === true },
     );
   }
 

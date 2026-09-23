@@ -437,12 +437,16 @@ export class StudentsService {
     user: JwtPayload,
     clientId: string,
     studentId: string,
+    options?: { allowSimilarFace?: boolean },
   ): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed' | 'pending_sync';
     deviceSyncError: string | null;
     jobId?: string;
   }> {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    if (options?.allowSimilarFace === true) {
+      this.faceSync.assertCanAllowSimilarFace(user);
+    }
     const student = await studentsQueries.getStudentById(
       this.database.db,
       studentId,
@@ -479,6 +483,7 @@ export class StudentsService {
       ),
       logContext: `student-sync=${studentId}`,
       resetReaderProgress: false,
+      allowSimilarFace: options?.allowSimilarFace === true,
       previousDeviceSyncError: student.deviceSyncError,
       blocked: student.blockedAt != null,
       persistResult: async (sync) => {

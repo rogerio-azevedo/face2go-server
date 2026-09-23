@@ -641,12 +641,16 @@ export class MembersService {
     user: JwtPayload,
     clientId: string,
     memberId: string,
+    options?: { allowSimilarFace?: boolean },
   ): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed' | 'pending_sync';
     deviceSyncError: string | null;
     jobId?: string;
   }> {
     await this.assertManageClient(user, clientId);
+    if (options?.allowSimilarFace === true) {
+      this.faceSync.assertCanAllowSimilarFace(user);
+    }
     const row = await membersQueries.getMemberWithFaceStatus(
       this.database.db,
       memberId,
@@ -683,6 +687,7 @@ export class MembersService {
       ),
       logContext: `member-sync=${memberId}`,
       resetReaderProgress: false,
+      allowSimilarFace: options?.allowSimilarFace === true,
       previousDeviceSyncError: row.deviceSyncError,
       blocked: row.blockedAt != null,
       persistResult: async (sync) => {

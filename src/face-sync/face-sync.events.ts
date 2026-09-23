@@ -22,6 +22,8 @@ export type FaceSyncRequestedPayload = {
   blocked?: boolean;
   /** Foto nova: apaga progresso por leitor. Default no enqueue: true. */
   resetReaderProgress?: boolean;
+  /** Admin: envia mesmo com face parecida, religando a trava em seguida. */
+  allowSimilarFace?: boolean;
   /** Erro parcial anterior — seed dos leitores que já deram certo. */
   previousDeviceSyncError?: string | null;
   persistResult: (outcome: FaceSyncOutcome) => Promise<void>;

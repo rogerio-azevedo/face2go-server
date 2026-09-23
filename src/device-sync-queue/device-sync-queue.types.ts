@@ -17,6 +17,8 @@ export type FacePersonJobPayload = {
   photoOnly?: boolean;
   blocked?: boolean;
   resetReaderProgress?: boolean;
+  /** Admin: envia mesmo com face parecida, religando a trava em seguida. */
+  allowSimilarFace?: boolean;
   previousDeviceSyncError?: string | null;
   readerIds?: string[];
   logContext?: string;

@@ -768,12 +768,16 @@ export class ResponsiblesService {
     user: JwtPayload,
     clientId: string,
     responsibleId: string,
+    options?: { allowSimilarFace?: boolean },
   ): Promise<{
     deviceSyncStatus: 'synced' | 'sync_failed' | 'pending_sync';
     deviceSyncError: string | null;
     jobId?: string;
   }> {
     await this.schoolAccess.assertManageSchoolClient(user, clientId);
+    if (options?.allowSimilarFace === true) {
+      this.faceSync.assertCanAllowSimilarFace(user);
+    }
     const row = await responsiblesQueries.getResponsibleWithFaceStatus(
       this.database.db,
       responsibleId,
@@ -819,6 +823,7 @@ export class ResponsiblesService {
       ),
       logContext: `responsible-sync=${responsibleId}`,
       resetReaderProgress: false,
+      allowSimilarFace: options?.allowSimilarFace === true,
       previousDeviceSyncError: row.deviceSyncError,
       blocked: responsible.blockedAt != null,
       persistResult: async (sync) => {

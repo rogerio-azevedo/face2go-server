@@ -206,6 +206,21 @@ export function isFaceAlreadyExistsError(error: unknown): boolean {
   return subStatusCode != null && FACE_ALREADY_EXISTS_CODES.has(subStatusCode);
 }
 
+export function isHikvisionFaceDuplicateError(error: unknown): boolean {
+  let node: unknown = error;
+  for (let i = 0; i < 6 && node; i++) {
+    const subStatusCode = extractSubStatusCode(node);
+    if (subStatusCode != null && FACE_DUPLICATE_CODES.has(subStatusCode)) {
+      return true;
+    }
+    node =
+      node instanceof Error && 'cause' in node
+        ? (node as Error & { cause?: unknown }).cause
+        : undefined;
+  }
+  return false;
+}
+
 export function isFaceModelingError(error: unknown): boolean {
   const subStatusCode = extractSubStatusCode(error);
   return subStatusCode != null && FACE_MODELING_ERROR_CODES.has(subStatusCode);

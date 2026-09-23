@@ -167,6 +167,7 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
       photoOnly: payload.photoOnly,
       blocked: payload.blocked,
       resetReaderProgress: payload.resetReaderProgress,
+      allowSimilarFace: payload.allowSimilarFace,
       previousDeviceSyncError: payload.previousDeviceSyncError,
       readerIds: payload.readerIds,
     });

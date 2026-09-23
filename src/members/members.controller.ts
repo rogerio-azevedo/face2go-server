@@ -15,6 +15,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { BlockPersonDto } from '../validation/dto/block-person.dto';
+import { EnqueueDeviceSyncBodyDto } from '../validation/dto/device-sync-jobs.dto';
 import { MembersService } from './members.service';
 
 @ApiTags('members')
@@ -167,7 +168,10 @@ export class MembersController {
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Body() body: EnqueueDeviceSyncBodyDto,
   ) {
-    return this.membersService.syncFaceByCompany(user, clientId, memberId);
+    return this.membersService.syncFaceByCompany(user, clientId, memberId, {
+      allowSimilarFace: body.allowSimilarFace === true,
+    });
   }
 }

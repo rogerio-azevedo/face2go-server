@@ -81,11 +81,17 @@ export class CompanyFaceSyncController {
     @Body() dto: EnqueueDeviceSyncBodyDto,
   ) {
     await this.faceSync.ensureCompanyCanAccessClientPublic(user, clientId);
+    if (dto.allowSimilarFace) {
+      this.faceSync.assertCanAllowSimilarFace(user);
+    }
     return this.faceSync.enqueueApprovedRegistrationJob(
       registrationId,
       clientId,
       user.sub,
-      { resetReaderProgress: dto.force === true },
+      {
+        resetReaderProgress: dto.force === true,
+        allowSimilarFace: dto.allowSimilarFace === true,
+      },
     );
   }
 
@@ -184,11 +190,17 @@ export class ClientFaceSyncController {
     @Body() dto: EnqueueDeviceSyncBodyDto,
   ) {
     const clientId = this.faceSync.ensureClientTenantPublic(user);
+    if (dto.allowSimilarFace) {
+      this.faceSync.assertCanAllowSimilarFace(user);
+    }
     return this.faceSync.enqueueApprovedRegistrationJob(
       registrationId,
       clientId,
       user.sub,
-      { resetReaderProgress: dto.force === true },
+      {
+        resetReaderProgress: dto.force === true,
+        allowSimilarFace: dto.allowSimilarFace === true,
+      },
     );
   }
 

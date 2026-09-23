@@ -17,6 +17,7 @@ import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { BlockPersonDto } from '../validation/dto/block-person.dto';
+import { EnqueueDeviceSyncBodyDto } from '../validation/dto/device-sync-jobs.dto';
 import { StudentsService } from './students.service';
 
 @ApiTags('students')
@@ -140,8 +141,11 @@ export class StudentsController {
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() body: EnqueueDeviceSyncBodyDto,
   ) {
-    return this.studentsService.syncFaceByCompany(user, clientId, studentId);
+    return this.studentsService.syncFaceByCompany(user, clientId, studentId, {
+      allowSimilarFace: body.allowSimilarFace === true,
+    });
   }
 
   @Get(':studentId')

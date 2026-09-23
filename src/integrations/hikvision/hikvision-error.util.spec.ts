@@ -1,5 +1,6 @@
 import {
   hikvisionFaceErrorMessage,
+  isHikvisionFaceDuplicateError,
   isHikvisionSuccess,
   isHikvisionWipeUnsupported,
   isHikvisionWipeUnsupportedBody,
@@ -54,6 +55,19 @@ describe('hikvisionFaceErrorMessage', () => {
         new Error('Request failed with status code 401'),
       ),
     ).toMatch(/sincronizar de novo/);
+  });
+
+  it('reconhece faceDuplicate mesmo aninhado em cause', () => {
+    const error = new Error('falha');
+    error.cause = {
+      response: { data: { subStatusCode: 'alreadyExistThisFace' } },
+    };
+    expect(isHikvisionFaceDuplicateError(error)).toBe(true);
+    expect(
+      isHikvisionFaceDuplicateError({
+        response: { data: { subStatusCode: 'deviceUserAlreadyExistFace' } },
+      }),
+    ).toBe(false);
   });
 
   it('traduz faceDuplicate para foto já cadastrada', () => {

@@ -15,5 +15,6 @@ export const deviceSyncJobDtoSchema = z.object({
 export const enqueueDeviceSyncBodySchema = z
   .object({
     force: z.boolean().optional().default(false),
+    allowSimilarFace: z.boolean().optional().default(false),
   })
-  .default({ force: false });
+  .default({ force: false, allowSimilarFace: false });

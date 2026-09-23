@@ -27,6 +27,7 @@ import {
 } from './intelbras-error-codes.util';
 import { intelbrasFaceFindIndicatesExists } from './intelbras-face-find.util';
 import { buildEnableRepFaceFiltSetConfigQuery } from './intelbras-rep-face-filt.util';
+import { restoreSimilarFaceLock } from '../similar-face-lock.util';
 
 export type PlainReaderCredential = {
   id: string;
@@ -826,6 +827,8 @@ export type IntelbrasUpsertFaceOptions = {
   photoOnly?: boolean;
   /** Aplica perfil nativo Bloqueados (UserType=1) após cartão + foto. */
   blocked?: boolean;
+  /** Admin: desliga a trava de face parecida só durante este envio. */
+  allowSimilarFace?: boolean;
 };
 
 export async function intelbrasUpsertFaceOnReader(
@@ -1011,6 +1014,11 @@ export async function intelbrasUpsertFaceOnReader(
         faceId,
         action,
       });
+      if (options?.allowSimilarFace !== true) {
+        throw attachReaderSyncStepError(err, 'foto facial');
+      }
+
+      // Um sync por leitor (`withReaderSyncGate`) segura a janela da trava.
       try {
         await setRepFaceFilt(auth, base, label, false);
       } catch (disableErr) {
@@ -1021,6 +1029,7 @@ export async function intelbrasUpsertFaceOnReader(
         throw attachReaderSyncStepError(err, 'foto facial');
       }
 
+      let uploadError: unknown;
       try {
         const retryResp = await postFace();
         syncLog('upsertFace:faceSync:okAposFiltro', {
@@ -1036,16 +1045,32 @@ export async function intelbrasUpsertFaceOnReader(
           faceId,
           action,
         });
-        throw attachReaderSyncStepError(retryErr, 'foto facial');
+        uploadError = retryErr;
       } finally {
         try {
-          await setRepFaceFilt(auth, base, label, true);
+          await restoreSimilarFaceLock(() =>
+            setRepFaceFilt(auth, base, label, true),
+          );
         } catch (restoreErr) {
           syncLogError('upsertFace:repFaceFiltOn', restoreErr, {
             reader: label,
             faceId,
           });
+          const restoreMsg =
+            restoreErr instanceof Error
+              ? restoreErr.message
+              : String(restoreErr);
+          if (uploadError) {
+            throw attachReaderSyncStepError(
+              new Error(`${mapReaderError(uploadError)} ${restoreMsg}`),
+              'foto facial',
+            );
+          }
+          throw new ReaderSyncStepError('foto facial', restoreMsg, restoreErr);
         }
+      }
+      if (uploadError) {
+        throw attachReaderSyncStepError(uploadError, 'foto facial');
       }
     }
 

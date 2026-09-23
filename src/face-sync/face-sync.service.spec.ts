@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { DatabaseService } from '../database/database.service';
+import * as deviceUserReconcileQueries from '../database/queries/device-user-reconcile.queries';
 import * as personBirthDateQueries from '../database/queries/person-birth-date.queries';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
 import * as readersQueries from '../database/queries/readers.queries';
@@ -637,5 +638,136 @@ describe('FaceSyncService', () => {
         error: 'Porta Cervejeira: sem data de nascimento.',
       }),
     );
+  });
+
+  it('nomeia quem colidiu quando o leitor devolve o id', async () => {
+    mockSyncReaders();
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2012-10-10');
+    jest
+      .spyOn(deviceUserReconcileQueries, 'listPersonsByFaceIds')
+      .mockResolvedValue(
+        new Map([
+          [
+            22,
+            {
+              faceId: 22,
+              name: 'Isadora de Castro Souza',
+              personType: 'guest',
+            },
+          ],
+        ]),
+      );
+    jest.mocked(hikvision.hikvisionSyncFace).mockRejectedValue({
+      response: {
+        data: {
+          subStatusCode: 'faceDuplicate',
+          employeeNo: '22',
+        },
+      },
+    });
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 24,
+      name: 'Ana Vitória',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'c/reg/face.jpg',
+    });
+
+    expect(outcome.deviceSyncError).toMatch(/2 de 2/);
+    expect(outcome.deviceSyncError).toMatch(
+      /Foto já cadastrada\. Coincide com Isadora de Castro Souza \(ID leitor 22\)\./,
+    );
+    expect(outcome.deviceSyncError).not.toMatch(/Cervejeira/);
+  });
+
+  it('não inventa nome quando o leitor não devolve o id', async () => {
+    mockSyncReaders();
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2012-10-10');
+    const listPersons = jest.spyOn(
+      deviceUserReconcileQueries,
+      'listPersonsByFaceIds',
+    );
+    jest.mocked(hikvision.hikvisionSyncFace).mockRejectedValue({
+      response: { data: { subStatusCode: 'faceDuplicate' } },
+    });
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 24,
+      name: 'Ana Vitória',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'c/reg/face.jpg',
+    });
+
+    expect(outcome.deviceSyncError).toMatch(/Foto já cadastrada\./);
+    expect(outcome.deviceSyncError).not.toMatch(/Coincide com/);
+    expect(listPersons).not.toHaveBeenCalled();
+  });
+
+  it('repassa allowSimilarFace só quando pedido', async () => {
+    mockSyncReaders();
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2000-01-01');
+
+    await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 5,
+      name: 'Ana',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'c/reg/face.jpg',
+      allowSimilarFace: true,
+    });
+
+    const params = jest.mocked(hikvision.hikvisionSyncFace).mock.calls[0]?.[1];
+    expect(params?.allowSimilarFace).toBe(true);
+  });
+
+  it('enqueueApprovedRegistrationJob allowSimilarFace usa dedupe próprio', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(
+        registration({
+          status: 'approved',
+          faceImageKey: 'photo',
+          faceId: 10,
+        }),
+      );
+    jest
+      .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
+      .mockResolvedValue(registration());
+
+    await service.enqueueApprovedRegistrationJob('reg-1', 'client-1', 'user-1', {
+      allowSimilarFace: true,
+    });
+
+    const [arg] = queue.enqueue.mock.calls[0] as [
+      {
+        dedupeKey: string;
+        payload: { allowSimilarFace?: boolean; resetReaderProgress?: boolean };
+      },
+    ];
+    expect(arg.payload.allowSimilarFace).toBe(true);
+    expect(arg.payload.resetReaderProgress).toBe(false);
+    expect(arg.dedupeKey).toBe(
+      'face.person:client-1:registration:reg-1:similar',
+    );
+  });
+
+  it('recusa liberar face parecida para operador', () => {
+    expect(() =>
+      service.assertCanAllowSimilarFace({
+        ...clientUser(),
+        role: 'client_operator',
+      }),
+    ).toThrow(/administrador/);
+    expect(() =>
+      service.assertCanAllowSimilarFace(clientUser()),
+    ).not.toThrow();
   });
 });

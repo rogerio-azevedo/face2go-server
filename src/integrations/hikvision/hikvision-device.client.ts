@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
 
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
-import { hikvisionEnsureBlockListAuth } from './hikvision-acs-cfg.client';
+import {
+  hikvisionEnsureBlockListAuth,
+  hikvisionSetFaceDuplicateCheck,
+} from './hikvision-acs-cfg.client';
 import { hikvisionIsapiRequest } from './hikvision-isapi-request';
 import { resolveHikvisionDevicePictureUrl } from './hikvision-picture-url.util';
 import {
@@ -15,6 +18,7 @@ import {
   hikvisionFaceErrorMessage,
   isFaceAlreadyExistsError,
   isFaceModelingError,
+  isHikvisionFaceDuplicateError,
   isHikvisionSuccess,
   isHikvisionWipeUnsupported,
   isHikvisionWipeUnsupportedBody,
@@ -36,6 +40,7 @@ import {
   retryOnUnauthorizedDeviceError,
 } from '../../face-sync/recover-unauthorized-if-exists.util';
 import { invalidateHikvisionClientCache } from './hikvision-isapi-request';
+import { restoreSimilarFaceLock } from '../similar-face-lock.util';
 
 export const HIKVISION_FACE_LIB_TYPE = 'blackFD';
 export const HIKVISION_FACE_FDID = '1';
@@ -516,11 +521,47 @@ async function hikvisionPostFaceDataRecord(
   }
 }
 
+/**
+ * Desliga a trava, grava a foto e liga de novo.
+ * O sync de pessoa já serializa um leitor por vez (`withReaderSyncGate`).
+ */
+async function enrollDespiteSimilarFace(
+  connection: HikvisionReaderConnection,
+  write: () => Promise<void>,
+): Promise<void> {
+  syncLog('hikvision:similarFace:off', { baseUrl: connection.baseUrl });
+  await hikvisionSetFaceDuplicateCheck(connection, false);
+  let uploadError: unknown;
+  try {
+    await write();
+  } catch (err) {
+    uploadError = err;
+  } finally {
+    try {
+      await restoreSimilarFaceLock(() =>
+        hikvisionSetFaceDuplicateCheck(connection, true),
+      );
+    } catch (restoreErr) {
+      const restoreMsg =
+        restoreErr instanceof Error ? restoreErr.message : String(restoreErr);
+      if (uploadError) {
+        const wrapped = new Error(
+          `${hikvisionFaceErrorMessage(uploadError)} ${restoreMsg}`,
+        );
+        (wrapped as Error & { cause?: unknown }).cause = uploadError;
+        throw wrapped;
+      }
+      throw restoreErr;
+    }
+  }
+  if (uploadError) throw uploadError;
+}
+
 export async function hikvisionUpsertFace(
   connection: HikvisionReaderConnection,
   employeeNo: string,
   jpegBuffer: Buffer,
-  options?: { alreadyNormalized?: boolean },
+  options?: { alreadyNormalized?: boolean; allowSimilarFace?: boolean },
 ): Promise<void> {
   const inputFormat = detectImageFormat(jpegBuffer);
   syncLog('hikvision:normalizeFaceInput', {
@@ -601,6 +642,22 @@ export async function hikvisionUpsertFace(
           employeeNo,
           normalized,
           faceLib,
+        );
+      } else if (
+        options?.allowSimilarFace === true &&
+        isHikvisionFaceDuplicateError(error)
+      ) {
+        syncLog('hikvision:similarFace:duplicata', {
+          employeeNo,
+          subStatusCode: extractSubStatusCode(error),
+        });
+        await enrollDespiteSimilarFace(connection, () =>
+          hikvisionPostFaceDataRecord(
+            connection,
+            employeeNo,
+            normalized,
+            faceLib,
+          ),
         );
       } else {
         syncLogError('hikvision:upsertFace', error, {
@@ -1461,6 +1518,7 @@ export async function hikvisionSyncFace(
     validDateEnd?: string;
     alreadyNormalized?: boolean;
     blocked?: boolean;
+    allowSimilarFace?: boolean;
   },
 ): Promise<void> {
   const normalizedName =
@@ -1489,6 +1547,7 @@ export async function hikvisionSyncFace(
         syncLog('hikvision:upsertFace', { employeeNo });
         await hikvisionUpsertFace(connection, employeeNo, params.jpegBuffer, {
           alreadyNormalized: params.alreadyNormalized,
+          allowSimilarFace: params.allowSimilarFace,
         });
         syncLog('hikvision:verifyFaceOk', { employeeNo });
       },
