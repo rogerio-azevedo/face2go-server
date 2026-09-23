@@ -7,6 +7,7 @@ import {
   requestWithBasicAuth,
 } from './hikvision-digest-auth';
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
+import { hikvisionGatewayIsapiRequest } from './hikvision-gateway-auth';
 
 function readerHttpTimeoutMs(): number {
   const fromEnv = Number(process.env.FACIAL_READER_HTTP_TIMEOUT_MS);
@@ -110,13 +111,16 @@ async function hikvisionIsapiRequestOnce(
  * DS-K1T343 às vezes devolve 401 e na tentativa seguinte autentica.
  */
 export async function hikvisionIsapiRequest(
-  connection: Pick<
-    HikvisionReaderConnection,
-    'username' | 'password' | 'baseUrl'
-  >,
+  connection: HikvisionReaderConnection,
   opts: AxiosRequestConfig,
   forStream = false,
 ): Promise<AxiosResponse> {
+  if (connection.connectionMode === 'auto_register') {
+    return hikvisionGatewayIsapiRequest(connection, {
+      ...opts,
+      timeout: forStream ? 0 : readerHttpTimeoutMs(),
+    });
+  }
   const timeoutMs = forStream ? 0 : readerHttpTimeoutMs();
   return retryOnUnauthorizedDeviceError(
     () => hikvisionIsapiRequestOnce(connection, opts, timeoutMs),

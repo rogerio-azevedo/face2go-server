@@ -8,6 +8,8 @@ export type ReaderBrand = 'intelbras' | 'hikvision';
 
 export type ReaderDirection = 'in' | 'out';
 
+export type ReaderConnectionMode = 'direct' | 'auto_register';
+
 export type ReaderListRow = {
   id: string;
   clientId: string;
@@ -25,6 +27,8 @@ export type ReaderListRow = {
   hasCredentials: boolean;
   isActive: boolean;
   restrictMinors: boolean;
+  connectionMode: ReaderConnectionMode;
+  autoRegisterDeviceId: string | null;
   lastSeenAt: Date | null;
   createdAt: Date;
 };
@@ -61,6 +65,8 @@ export async function listReaders(
       passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
       restrictMinors: facialReaders.restrictMinors,
+      connectionMode: facialReaders.connectionMode,
+      autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
       lastSeenAt: facialReaders.lastSeenAt,
       createdAt: facialReaders.createdAt,
     })
@@ -104,6 +110,8 @@ export async function getReaderById(
       passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
       restrictMinors: facialReaders.restrictMinors,
+      connectionMode: facialReaders.connectionMode,
+      autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
       lastSeenAt: facialReaders.lastSeenAt,
       createdAt: facialReaders.createdAt,
     })
@@ -147,6 +155,8 @@ export async function getReaderWithCredentialsById(
       direction: facialReaders.direction,
       isActive: facialReaders.isActive,
       restrictMinors: facialReaders.restrictMinors,
+      connectionMode: facialReaders.connectionMode,
+      autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
     })
     .from(facialReaders)
     .innerJoin(clients, eq(facialReaders.clientId, clients.id))
@@ -174,6 +184,8 @@ export type ReaderCreateInput = {
   passwordEncrypted?: string | null;
   isActive?: boolean;
   restrictMinors?: boolean;
+  connectionMode?: ReaderConnectionMode;
+  autoRegisterDeviceId?: string | null;
 };
 
 export async function createReader(db: AppDb, input: ReaderCreateInput) {
@@ -203,6 +215,8 @@ export async function createReader(db: AppDb, input: ReaderCreateInput) {
       passwordEncrypted: input.passwordEncrypted ?? null,
       isActive: input.isActive ?? true,
       restrictMinors: input.restrictMinors ?? false,
+      connectionMode: input.connectionMode ?? 'direct',
+      autoRegisterDeviceId: input.autoRegisterDeviceId?.trim() || null,
     })
     .returning();
 
@@ -224,6 +238,8 @@ export type ReaderUpdateInput = Partial<{
   passwordEncrypted: string | null;
   isActive: boolean;
   restrictMinors: boolean;
+  connectionMode: ReaderConnectionMode;
+  autoRegisterDeviceId: string | null;
 }>;
 
 export async function updateReader(
@@ -291,6 +307,15 @@ export async function updateReader(
   if (input.restrictMinors !== undefined) {
     setPayload.restrictMinors = input.restrictMinors;
   }
+  if (input.connectionMode !== undefined) {
+    setPayload.connectionMode = input.connectionMode;
+  }
+  if (input.autoRegisterDeviceId !== undefined) {
+    setPayload.autoRegisterDeviceId =
+      input.autoRegisterDeviceId === null || input.autoRegisterDeviceId === ''
+        ? null
+        : input.autoRegisterDeviceId.trim();
+  }
 
   if (Object.keys(setPayload).length === 0) {
     return existing;
@@ -355,6 +380,8 @@ export type ReaderEventStreamRow = {
   port: number;
   username: string;
   passwordEncrypted: string;
+  connectionMode: ReaderConnectionMode;
+  autoRegisterDeviceId: string | null;
 };
 
 export async function listReadersForEventStream(
@@ -373,6 +400,8 @@ export async function listReadersForEventStream(
       port: facialReaders.port,
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
+      connectionMode: facialReaders.connectionMode,
+      autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
     })
     .from(facialReaders)
     .innerJoin(clients, eq(facialReaders.clientId, clients.id))
@@ -407,6 +436,8 @@ export async function listReadersForEventStream(
       port: r.port,
       username: r.username as string,
       passwordEncrypted: r.passwordEncrypted as string,
+      connectionMode: r.connectionMode ?? 'direct',
+      autoRegisterDeviceId: r.autoRegisterDeviceId ?? null,
     }));
 }
 
@@ -427,6 +458,8 @@ export async function getReaderForEventStreamById(
       port: facialReaders.port,
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
+      connectionMode: facialReaders.connectionMode,
+      autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
     })
     .from(facialReaders)
     .innerJoin(clients, eq(facialReaders.clientId, clients.id))
@@ -461,6 +494,8 @@ export async function getReaderForEventStreamById(
     port: row.port,
     username: row.username,
     passwordEncrypted: row.passwordEncrypted,
+    connectionMode: row.connectionMode ?? 'direct',
+    autoRegisterDeviceId: row.autoRegisterDeviceId ?? null,
   };
 }
 
@@ -551,6 +586,8 @@ export type ReaderFaceSyncRow = {
   username: string;
   passwordEncrypted: string;
   restrictMinors: boolean;
+  connectionMode?: ReaderConnectionMode;
+  autoRegisterDeviceId?: string | null;
 };
 
 export async function listReadersForFaceSyncByClient(
@@ -567,6 +604,8 @@ export async function listReadersForFaceSyncByClient(
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
       restrictMinors: facialReaders.restrictMinors,
+      connectionMode: facialReaders.connectionMode,
+      autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
     })
     .from(facialReaders)
     .where(
@@ -586,6 +625,8 @@ export async function listReadersForFaceSyncByClient(
       ...r,
       brand: r.brand ?? 'intelbras',
       restrictMinors: Boolean(r.restrictMinors),
+      connectionMode: r.connectionMode ?? 'direct',
+      autoRegisterDeviceId: r.autoRegisterDeviceId ?? null,
     })) as ReaderFaceSyncRow[];
 }
 

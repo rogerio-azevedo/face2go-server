@@ -1,0 +1,14 @@
+[Unit]
+Description=Face2Go ISUP gateway (Hikvision)
+After=network-online.target
+
+[Service]
+EnvironmentFile=/etc/face2go-isup-gateway.env
+WorkingDirectory=/opt/face2go-isup-gateway
+ExecStart=/opt/face2go-isup-gateway/Face2Go.IsupGateway
+Restart=always
+RestartSec=2
+Environment=LD_LIBRARY_PATH=/opt/face2go-isup-gateway:/opt/face2go-isup-gateway/HCAapSDKCom
+
+[Install]
+WantedBy=multi-user.target

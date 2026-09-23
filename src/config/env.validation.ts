@@ -88,6 +88,20 @@ export const envSchema = z.object({
   HERE_API_KEY: z.string().min(1).optional(),
   HERE_DISCOVER_BASE_URL: z.string().url().optional(),
   HERE_GEOCODE_BASE_URL: z.string().url().optional(),
+  /**
+   * Gateway TCP do registro automático Intelbras (IP privado da EC2).
+   * Sem estas vars, leitores `auto_register` falham no comando.
+   */
+  READER_GATEWAY_URL: z.string().url().optional(),
+  READER_GATEWAY_TOKEN: z.string().min(16).optional(),
+  /** `1` aceita o certificado autoassinado do gateway na VPC. */
+  READER_GATEWAY_TLS_INSECURE: z.string().optional(),
+  /**
+   * Gateway ISUP Hikvision (IP privado da mesma EC2, porta 8091).
+   * Sem estas vars, leitor Hikvision `auto_register` falha no comando.
+   */
+  HIK_GATEWAY_URL: z.string().url().optional(),
+  HIK_GATEWAY_TOKEN: z.string().min(16).optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

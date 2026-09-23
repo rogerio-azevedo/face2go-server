@@ -35,6 +35,8 @@ export type PlainReaderCredential = {
   port: number;
   username: string;
   plainPassword: string;
+  connectionMode?: 'direct' | 'auto_register';
+  autoRegisterDeviceId?: string | null;
 };
 
 export function toPlainReaderCredential(
@@ -48,6 +50,8 @@ export function toPlainReaderCredential(
     port: row.port ?? 80,
     username: row.username.trim(),
     plainPassword: decryptedPassword,
+    connectionMode: row.connectionMode ?? 'direct',
+    autoRegisterDeviceId: row.autoRegisterDeviceId ?? null,
   };
 }
 

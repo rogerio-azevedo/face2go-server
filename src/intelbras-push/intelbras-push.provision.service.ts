@@ -323,6 +323,8 @@ export class IntelbrasPushProvisionService {
         username: row.username,
         passwordEncrypted: row.passwordEncrypted,
         restrictMinors: row.restrictMinors === true,
+        connectionMode: row.connectionMode ?? 'direct',
+        autoRegisterDeviceId: row.autoRegisterDeviceId ?? null,
       },
       cipher.decrypt(row.passwordEncrypted),
     );

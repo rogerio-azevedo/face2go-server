@@ -3,11 +3,16 @@ import http from 'node:http';
 import AxiosDigestAuth from '@mhoc/axios-digest-auth';
 import axios from 'axios';
 
+import { createGatewayDigestAuth } from './intelbras-gateway-auth';
+
 type ReaderAuthInput = {
+  id?: string;
   ip: string;
   port: number;
   username: string;
   plainPassword: string;
+  connectionMode?: 'direct' | 'auto_register';
+  autoRegisterDeviceId?: string | null;
 };
 
 export type IntelbrasDigestAuth = {
@@ -35,6 +40,9 @@ function readerAuthKey(reader: ReaderAuthInput): string {
 export function digestAuthForReader(
   reader: ReaderAuthInput,
 ): IntelbrasDigestAuth {
+  if (reader.connectionMode === 'auto_register') {
+    return createGatewayDigestAuth(reader);
+  }
   const key = readerAuthKey(reader);
   const cached = digestCache.get(key);
   if (cached) return cached;

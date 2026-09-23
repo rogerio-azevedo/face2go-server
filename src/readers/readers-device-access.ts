@@ -108,6 +108,8 @@ export async function loadActiveDeviceReader(
         username: reader.username,
         passwordEncrypted: reader.passwordEncrypted,
         restrictMinors: reader.restrictMinors === true,
+        connectionMode: reader.connectionMode ?? 'direct',
+        autoRegisterDeviceId: reader.autoRegisterDeviceId ?? null,
       },
       cipher.decrypt(reader.passwordEncrypted),
     ),

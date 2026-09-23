@@ -1,0 +1,13 @@
+[Unit]
+Description=Face2Go reader gateway (registro automatico Intelbras)
+After=network-online.target
+
+[Service]
+EnvironmentFile=/etc/face2go-reader-gateway.env
+WorkingDirectory=/opt/face2go-reader-gateway
+ExecStart=/usr/bin/env node /opt/face2go-reader-gateway/server.mjs
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

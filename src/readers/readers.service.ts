@@ -201,6 +201,8 @@ export class ReadersService {
       passwordEncrypted,
       isActive: d.isActive,
       restrictMinors: d.restrictMinors,
+      connectionMode: d.connectionMode ?? 'direct',
+      autoRegisterDeviceId: d.autoRegisterDeviceId ?? null,
     });
     if (!row) {
       throw new BadRequestException(
@@ -237,7 +239,9 @@ export class ReadersService {
       d.restrictMinors === undefined &&
       d.username === undefined &&
       d.password === undefined &&
-      d.direction === undefined
+      d.direction === undefined &&
+      d.connectionMode === undefined &&
+      d.autoRegisterDeviceId === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
     }
@@ -274,6 +278,12 @@ export class ReadersService {
         ? { restrictMinors: d.restrictMinors }
         : {}),
       ...(d.direction !== undefined ? { direction: d.direction } : {}),
+      ...(d.connectionMode !== undefined
+        ? { connectionMode: d.connectionMode }
+        : {}),
+      ...(d.autoRegisterDeviceId !== undefined
+        ? { autoRegisterDeviceId: d.autoRegisterDeviceId ?? null }
+        : {}),
     };
 
     if (d.username !== undefined) {

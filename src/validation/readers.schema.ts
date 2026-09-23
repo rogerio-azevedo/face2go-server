@@ -32,6 +32,8 @@ export const READER_BRANDS = ['intelbras', 'hikvision'] as const;
 
 export const READER_DIRECTIONS = ['in', 'out'] as const;
 
+export const READER_CONNECTION_MODES = ['direct', 'auto_register'] as const;
+
 export const readerSchema = z.object({
   clientId: z.string().uuid('Cliente inválido.'),
   brand: z.enum(READER_BRANDS, { message: 'Marca inválida.' }),
@@ -81,17 +83,33 @@ export const readerSchema = z.object({
     }),
   isActive: z.boolean(),
   restrictMinors: z.boolean(),
+  connectionMode: z.enum(READER_CONNECTION_MODES).optional(),
+  autoRegisterDeviceId: optionalTrimmed,
 });
 
-export const createReaderSchema = readerSchema.refine(
-  (d) => !d.password || (!!d.username && d.username.trim().length > 0),
+export const createReaderSchema = readerSchema
+  .refine(
+    (d) => !d.password || (!!d.username && d.username.trim().length > 0),
+    {
+      message: 'Informe o usuário do leitor para salvar a senha.',
+      path: ['username'],
+    },
+  )
+  .refine(
+    (d) => d.connectionMode !== 'auto_register' || !!d.autoRegisterDeviceId,
+    {
+      message: 'Informe o ID de registro automático do leitor.',
+      path: ['autoRegisterDeviceId'],
+    },
+  );
+
+export const updateReaderSchema = readerSchema.partial().refine(
+  (d) => d.connectionMode !== 'auto_register' || !!d.autoRegisterDeviceId,
   {
-    message: 'Informe o usuário do leitor para salvar a senha.',
-    path: ['username'],
+    message: 'Informe o ID de registro automático do leitor.',
+    path: ['autoRegisterDeviceId'],
   },
 );
-
-export const updateReaderSchema = readerSchema.partial();
 
 export const batchDeleteDeviceUsersSchema = z.object({
   userIds: z

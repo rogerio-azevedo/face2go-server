@@ -1,6 +1,8 @@
 # compiled output
 /dist
 /node_modules
+gateway-isup/bin/
+gateway-isup/obj/
 
 /.pnpm-store/
 /build

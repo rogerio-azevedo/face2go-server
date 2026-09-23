@@ -18,6 +18,7 @@ import { DatabaseService } from '../database/database.service';
 import { AccessesService } from '../accesses/accesses.service';
 import type {
   ReaderBrand,
+  ReaderConnectionMode,
   ReaderDirection,
   ReaderEventStreamRow,
 } from '../database/queries/readers.queries';
@@ -100,6 +101,8 @@ type ReaderStreamContext = {
   host: string;
   username: string;
   passwordPlain: string;
+  connectionMode: ReaderConnectionMode;
+  autoRegisterDeviceId: string | null;
 };
 
 function hostFromIpPort(ip: string, port: number): string {
@@ -138,6 +141,8 @@ function toStreamContext(
       host: hostFromIpPort(row.ip, row.port),
       username: row.username.trim(),
       passwordPlain,
+      connectionMode: row.connectionMode ?? 'direct',
+      autoRegisterDeviceId: row.autoRegisterDeviceId ?? null,
     };
   } catch (err) {
     Logger.warn(
@@ -405,6 +410,12 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       });
 
       if (ctx.brand === 'hikvision') {
+        if (ctx.connectionMode === 'auto_register') {
+          this.logger.log(
+            `[FaceListener] Hikvision auto_register "${ctx.name}" — sem alertStream`,
+          );
+          continue;
+        }
         const delayMs = hikvisionConnectIndex * HIKVISION_CONNECT_STAGGER_MS;
         hikvisionConnectIndex += 1;
         if (delayMs > 0) {
@@ -453,6 +464,27 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     for (const ctx of validContexts) {
       const dbHost = ctx.host;
       const existing = this.statuses.get(ctx.id);
+
+      if (
+        ctx.brand === 'hikvision' &&
+        ctx.connectionMode === 'auto_register'
+      ) {
+        this.stopHikvisionOutbound(ctx.id);
+        if (!existing) {
+          this.statuses.set(ctx.id, {
+            readerId: ctx.id,
+            readerName: ctx.name,
+            clientId: ctx.clientId,
+            clientName: ctx.clientName,
+            companyId: ctx.companyId,
+            brand: toBrandSlug(ctx.brand),
+            host: dbHost,
+            connected: false,
+            eventsReceived: 0,
+          });
+        }
+        continue;
+      }
 
       if (ctx.brand !== 'hikvision' && skipIntelbrasPersistentStream()) {
         if (!existing) {
@@ -592,11 +624,36 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       });
     }
     this.clearReconnectTimer(readerId);
+    if (ctx.brand === 'hikvision' && ctx.connectionMode === 'auto_register') {
+      this.stopHikvisionOutbound(readerId);
+      this.logger.log(
+        `[FaceListener] Hikvision auto_register "${ctx.name}" — sem alertStream`,
+      );
+      return;
+    }
     if (ctx.brand !== 'hikvision' && skipIntelbrasPersistentStream()) {
       this.trackIntelbrasPushOnly(ctx);
       return;
     }
     this.subscribe(ctx);
+  }
+
+  private stopHikvisionOutbound(readerId: string): void {
+    if (
+      !this.streamAbortByReader.has(readerId) &&
+      !this.hikvisionPollTimers.has(readerId) &&
+      !this.reconnectTimers.has(readerId)
+    ) {
+      return;
+    }
+    this.logger.log(
+      `[FaceListener] Hikvision auto_register ${readerId} — encerrando alertStream/poll`,
+    );
+    this.clearReconnectTimer(readerId);
+    this.clearHikvisionPollTimer(readerId);
+    this.bumpConnectGeneration(readerId);
+    this.abortStream(readerId);
+    this.hikvisionIntegrationByReader.delete(readerId);
   }
 
   private abortStream(readerId: string): void {
@@ -747,6 +804,12 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
   private subscribe(ctx: ReaderStreamContext): void {
     if (ctx.brand === 'hikvision') {
+      if (ctx.connectionMode === 'auto_register') {
+        this.logger.log(
+          `[FaceListener] Hikvision auto_register "${ctx.name}" — sem alertStream`,
+        );
+        return;
+      }
       void this.subscribeHikvision(ctx);
       return;
     }
@@ -950,6 +1013,8 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       port: Number(ctx.host.split(':')[1] ?? 80),
       username: ctx.username,
       plainPassword: ctx.passwordPlain,
+      connectionMode: ctx.connectionMode,
+      autoRegisterDeviceId: ctx.autoRegisterDeviceId,
     });
 
     const persistedMode = this.hikvisionIntegrationByReader.get(ctx.id);

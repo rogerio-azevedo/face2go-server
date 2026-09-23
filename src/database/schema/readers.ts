@@ -18,6 +18,11 @@ export const readerBrandEnum = pgEnum('reader_brand', [
 
 export const readerDirectionEnum = pgEnum('reader_direction', ['in', 'out']);
 
+export const readerConnectionModeEnum = pgEnum('reader_connection_mode', [
+  'direct',
+  'auto_register',
+]);
+
 export const facialReaders = pgTable('facial_readers', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: uuid('client_id')
@@ -37,6 +42,10 @@ export const facialReaders = pgTable('facial_readers', {
   token: uuid('device_token').notNull().defaultRandom().unique(),
   isActive: boolean('is_active').default(true).notNull(),
   restrictMinors: boolean('restrict_minors').default(false).notNull(),
+  connectionMode: readerConnectionModeEnum('connection_mode')
+    .notNull()
+    .default('direct'),
+  autoRegisterDeviceId: varchar('auto_register_device_id', { length: 64 }),
   lastSeenAt: timestamp('last_seen_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
