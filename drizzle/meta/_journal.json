@@ -547,6 +547,13 @@
       "when": 1779460000000,
       "tag": "0077_registration_links_name",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1779470000000,
+      "tag": "0078_registration_face_retake_links",
+      "breakpoints": true
     }
   ]
 }

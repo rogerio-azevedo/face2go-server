@@ -26,13 +26,17 @@ import {
   UpdateRegistrationDto,
 } from '../validation/dto/registrations.dto';
 import { RegistrationsAdminService } from './registrations-admin.service';
+import { RegistrationFaceRetakeService } from './registration-face-retake.service';
 
 @ApiTags('client-registrations')
 @ApiBearerAuth()
 @Roles('client_admin', 'client_operator')
 @Controller('client/registrations')
 export class ClientRegistrationsController {
-  constructor(private readonly registrationsAdmin: RegistrationsAdminService) {}
+  constructor(
+    private readonly registrationsAdmin: RegistrationsAdminService,
+    private readonly faceRetake: RegistrationFaceRetakeService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -159,5 +163,16 @@ export class ClientRegistrationsController {
     @Param('registrationId', ParseUUIDPipe) registrationId: string,
   ) {
     return this.registrationsAdmin.restoreForClientTenant(user, registrationId);
+  }
+
+  @Post(':registrationId/face-retake-link')
+  @ApiOperation({
+    summary: 'Gerar link de uso único para a pessoa refazer a foto',
+  })
+  createFaceRetakeLink(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.faceRetake.createForClientTenant(user, registrationId);
   }
 }

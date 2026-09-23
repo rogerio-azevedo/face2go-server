@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
+import { RegistrationFaceRetakeRepository } from '../database/repositories/registration-face-retake.repository';
 import { FaceSyncModule } from '../face-sync/face-sync.module';
 import { MembersModule } from '../members/members.module';
 import { PeopleModule } from '../people/people.module';
@@ -13,8 +14,10 @@ import { CompanyRegistrationLinksController } from './company-registration-links
 import { CompanyRegistrationsController } from './company-registrations.controller';
 import { CompanyRegistrationConfigController } from './company-registration-config.controller';
 import { PublicRegisterController } from './public-register.controller';
+import { PublicFaceRetakeController } from './public-face-retake.controller';
 import { PublicRegistrationService } from './public-registration.service';
 import { RegistrationConfigService } from './registration-config.service';
+import { RegistrationFaceRetakeService } from './registration-face-retake.service';
 import { RegistrationLinksService } from './registration-links.service';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
@@ -33,6 +36,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
     ClientRegistrationConfigController,
     CompanyRegistrationConfigController,
     PublicRegisterController,
+    PublicFaceRetakeController,
     ClientRegistrationsController,
     CompanyRegistrationsController,
   ],
@@ -40,6 +44,8 @@ import { RegistrationsAdminService } from './registrations-admin.service';
     RegistrationLinksService,
     RegistrationConfigService,
     PublicRegistrationService,
+    RegistrationFaceRetakeService,
+    RegistrationFaceRetakeRepository,
     RegistrationsAdminService,
   ],
   exports: [

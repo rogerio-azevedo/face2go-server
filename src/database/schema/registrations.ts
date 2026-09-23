@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   pgTable,
   uuid,
@@ -10,6 +10,7 @@ import {
   pgEnum,
   integer,
   index,
+  uniqueIndex,
   date,
 } from 'drizzle-orm/pg-core';
 
@@ -109,6 +110,33 @@ export const registrations = pgTable(
       t.status,
       t.submittedAt,
     ),
+  ],
+);
+
+/** Link de uso único para a pessoa substituir só a foto de um cadastro já enviado. */
+export const registrationFaceRetakeLinks = pgTable(
+  'registration_face_retake_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    registrationId: uuid('registration_id')
+      .notNull()
+      .references(() => registrations.id, { onDelete: 'cascade' }),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    createdByUserId: text('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    code: varchar('code', { length: 50 }).notNull().unique(),
+    expiresAt: timestamp('expires_at').notNull(),
+    usedAt: timestamp('used_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('registration_face_retake_links_reg_idx').on(t.registrationId),
+    uniqueIndex('registration_face_retake_open_uidx')
+      .on(t.registrationId)
+      .where(sql`${t.usedAt} IS NULL`),
   ],
 );
 
