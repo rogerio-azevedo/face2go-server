@@ -36,8 +36,18 @@ describe('isapiPathFromUrl', () => {
 });
 
 describe('hikvisionGatewayDeviceId', () => {
-  it('prefere o ID EHome', () => {
+  it('usa o ID EHome gravado', () => {
     expect(hikvisionGatewayDeviceId(connection)).toBe('catraca-01');
+  });
+
+  it('não cai no UUID com hífen', () => {
+    expect(() =>
+      hikvisionGatewayDeviceId({
+        ...connection,
+        id: '732d7413-1f50-486c-9ca4-888ae4bd44d7',
+        autoRegisterDeviceId: null,
+      }),
+    ).toThrow(/ID EHome/);
   });
 });
 

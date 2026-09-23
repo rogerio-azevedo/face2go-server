@@ -96,7 +96,10 @@ export const createReaderSchema = readerSchema
     },
   )
   .refine(
-    (d) => d.connectionMode !== 'auto_register' || !!d.autoRegisterDeviceId,
+    (d) =>
+      d.connectionMode !== 'auto_register' ||
+      d.brand === 'hikvision' ||
+      !!d.autoRegisterDeviceId,
     {
       message: 'Informe o ID de registro automático do leitor.',
       path: ['autoRegisterDeviceId'],
@@ -104,7 +107,10 @@ export const createReaderSchema = readerSchema
   );
 
 export const updateReaderSchema = readerSchema.partial().refine(
-  (d) => d.connectionMode !== 'auto_register' || !!d.autoRegisterDeviceId,
+  (d) =>
+    d.connectionMode !== 'auto_register' ||
+    d.brand === 'hikvision' ||
+    !!d.autoRegisterDeviceId,
   {
     message: 'Informe o ID de registro automático do leitor.',
     path: ['autoRegisterDeviceId'],

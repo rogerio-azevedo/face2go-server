@@ -17,7 +17,6 @@ export function hikvisionGatewayDeviceId(
 ): string {
   const explicit = connection.autoRegisterDeviceId?.trim();
   if (explicit) return explicit;
-  if (connection.id?.trim()) return connection.id.trim();
   throw new Error('Leitor Hikvision em registro automático sem ID EHome');
 }
 
