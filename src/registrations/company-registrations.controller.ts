@@ -9,13 +9,19 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiProduces,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
   BlockRegistrationDto,
+  ExportRegistrationsQueryDto,
   ListRegistrationsQueryDto,
   UpdateRegistrationDto,
 } from '../validation/dto/registrations.dto';
@@ -39,6 +45,25 @@ export class CompanyRegistrationsController {
     @Query() query: ListRegistrationsQueryDto,
   ) {
     return this.registrationsAdmin.listForCompanyUser(user, clientId, query);
+  }
+
+  @Get('export')
+  @ApiOperation({
+    summary: 'Exportar cadastros enviados de um cliente em Excel',
+  })
+  @ApiProduces(
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  exportXlsx(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Query() query: ExportRegistrationsQueryDto,
+  ) {
+    return this.registrationsAdmin.exportXlsxForCompanyUser(
+      user,
+      clientId,
+      query,
+    );
   }
 
   @Get(':registrationId/face-url')
@@ -122,7 +147,7 @@ export class CompanyRegistrationsController {
   }
 
   @Patch(':registrationId')
-  @ApiOperation({ summary: 'Editar cadastro aprovado' })
+  @ApiOperation({ summary: 'Editar cadastro' })
   update(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,

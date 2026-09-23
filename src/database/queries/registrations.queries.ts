@@ -38,6 +38,7 @@ export async function insertRegistrationLink(
     clientId: string;
     createdByUserId: string;
     code: string;
+    name?: string | null;
     validFrom?: Date | null;
     expiresAt?: Date | null;
   },
@@ -49,6 +50,7 @@ export async function insertRegistrationLink(
       clientId: input.clientId,
       createdByUserId: input.createdByUserId,
       code: input.code,
+      name: input.name ?? null,
       validFrom: input.validFrom ?? null,
       expiresAt: input.expiresAt ?? null,
       updatedAt: now,
@@ -91,16 +93,22 @@ export async function getRegistrationLinkByIdForClient(
   return row;
 }
 
-export async function setRegistrationLinkActive(
+export async function patchRegistrationLink(
   db: AppDb,
   linkId: string,
   clientId: string,
-  isActive: boolean,
+  patch: { isActive?: boolean; name?: string | null },
 ): Promise<RegistrationLinkRow | undefined> {
-  const now = new Date();
+  const set: {
+    updatedAt: Date;
+    isActive?: boolean;
+    name?: string | null;
+  } = { updatedAt: new Date() };
+  if (patch.isActive !== undefined) set.isActive = patch.isActive;
+  if (patch.name !== undefined) set.name = patch.name;
   const [row] = await db
     .update(registrationLinks)
-    .set({ isActive, updatedAt: now })
+    .set(set)
     .where(
       and(
         eq(registrationLinks.id, linkId),
@@ -213,7 +221,7 @@ export async function getRegistrationByIdForClient(
 
 export type RegistrationStatus = 'draft' | 'approved' | 'rejected' | 'blocked';
 
-export type RegistrationListFilter = RegistrationStatus | 'deleted';
+export type RegistrationListFilter = RegistrationStatus | 'deleted' | 'all';
 
 export type RegistrationStatusCounts = Record<
   RegistrationStatus | 'deleted',
@@ -272,12 +280,14 @@ function submittedRegistrationsWhere(
     eq(registrations.clientId, clientId),
     isNotNull(registrations.submittedAt),
   ];
-  if (options.status === 'deleted') {
-    conds.push(eq(registrations.isActive, false));
-  } else {
-    conds.push(eq(registrations.isActive, true));
-    if (options.status) {
-      conds.push(eq(registrations.status, options.status));
+  if (options.status !== 'all') {
+    if (options.status === 'deleted') {
+      conds.push(eq(registrations.isActive, false));
+    } else {
+      conds.push(eq(registrations.isActive, true));
+      if (options.status) {
+        conds.push(eq(registrations.status, options.status));
+      }
     }
   }
   const searchCond = registrationSearchCondition(options.search);

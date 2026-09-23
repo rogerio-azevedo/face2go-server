@@ -45,6 +45,8 @@ export const registrationLinks = pgTable('registration_links', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   code: varchar('code', { length: 50 }).notNull().unique(),
+  /** Rótulo interno (ex.: QR na porta). Não faz parte da URL pública. */
+  name: varchar('name', { length: 80 }),
   isActive: boolean('is_active').default(true).notNull(),
   /** Início da vigência (link temporário). Nulo = permanente ou sem janela inicial. */
   validFrom: timestamp('valid_from'),

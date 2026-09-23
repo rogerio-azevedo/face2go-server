@@ -47,6 +47,27 @@ export type ListRegistrationsQuery = z.infer<
   typeof listRegistrationsQuerySchema
 >;
 
+export const registrationExportStatusSchema = z.enum([
+  'draft',
+  'approved',
+  'rejected',
+  'blocked',
+  'deleted',
+  'all',
+]);
+
+export const exportRegistrationsQuerySchema = z.object({
+  status: registrationExportStatusSchema,
+  search: listRegistrationsQuerySchema.shape.search,
+  block: listRegistrationsQuerySchema.shape.block,
+  unit: listRegistrationsQuerySchema.shape.unit,
+  room: listRegistrationsQuerySchema.shape.room,
+});
+
+export type ExportRegistrationsQuery = z.infer<
+  typeof exportRegistrationsQuerySchema
+>;
+
 const optionalBirthDate = z
   .string()
   .trim()

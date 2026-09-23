@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  StreamableFile,
 } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -18,7 +19,10 @@ import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { zodFirstMessage } from '../validation/zod-utils';
-import type { ListRegistrationsQuery } from '../validation/registrations.schema';
+import type {
+  ExportRegistrationsQuery,
+  ListRegistrationsQuery,
+} from '../validation/registrations.schema';
 import {
   blockRegistrationSchema,
   updateRegistrationSchema,
@@ -34,6 +38,11 @@ import {
   buildPaginatedResult,
   parseListPaginationParams,
 } from '../common/pagination';
+import {
+  buildRegistrationsXlsx,
+  REGISTRATIONS_XLSX_TYPE,
+  registrationsExportFilename,
+} from './registration-export.utils';
 
 const rejectBodySchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
@@ -131,9 +140,7 @@ export class RegistrationsAdminService {
     const birthDate = toIsoDateString(row.birthDate);
     const hasFacialReaders = progress.total > 0;
     const readerSyncSynced =
-      row.faceId != null
-        ? (progress.syncedByFace.get(row.faceId) ?? 0)
-        : null;
+      row.faceId != null ? (progress.syncedByFace.get(row.faceId) ?? 0) : null;
     return {
       id: row.id,
       clientId: row.clientId,
@@ -203,6 +210,45 @@ export class RegistrationsAdminService {
   async listForClientTenant(user: JwtPayload, query: ListRegistrationsQuery) {
     const clientId = this.ensureClientTenant(user);
     return this.listShared(clientId, query);
+  }
+
+  async exportXlsxForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    query: ExportRegistrationsQuery,
+  ) {
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.exportXlsxShared(clientId, query);
+  }
+
+  async exportXlsxForClientTenant(
+    user: JwtPayload,
+    query: ExportRegistrationsQuery,
+  ) {
+    const clientId = this.ensureClientTenant(user);
+    return this.exportXlsxShared(clientId, query);
+  }
+
+  private async exportXlsxShared(
+    clientId: string,
+    query: ExportRegistrationsQuery,
+  ) {
+    const rows = await registrationsQueries.listSubmittedRegistrationsForClient(
+      this.database.db,
+      clientId,
+      {
+        status: query.status,
+        search: query.search,
+        block: query.block,
+        unit: query.unit,
+        room: query.room,
+      },
+    );
+    const xlsx = await buildRegistrationsXlsx(rows, query.status === 'all');
+    return new StreamableFile(xlsx, {
+      type: REGISTRATIONS_XLSX_TYPE,
+      disposition: `attachment; filename="${registrationsExportFilename(query.status)}"`,
+    });
   }
 
   private async listShared(clientId: string, query: ListRegistrationsQuery) {
@@ -701,9 +747,9 @@ export class RegistrationsAdminService {
         'Cadastro excluído. Restaure antes de editar.',
       );
     }
-    if (row.status !== 'approved') {
+    if (row.status !== 'draft' && row.status !== 'approved') {
       throw new BadRequestException(
-        'Só é possível editar cadastros aprovados.',
+        'Só é possível editar cadastros aguardando aprovação ou já aprovados.',
       );
     }
 

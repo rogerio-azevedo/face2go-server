@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import {
   blockRegistrationSchema,
+  exportRegistrationsQuerySchema,
   listRegistrationsQuerySchema,
   publicCheckDocumentSchema,
   updateRegistrationSchema,
@@ -49,6 +50,10 @@ export class CreateRegistrationLinkDto extends createZodDto(
 
 export class ListRegistrationsQueryDto extends createZodDto(
   listRegistrationsQuerySchema,
+) {}
+
+export class ExportRegistrationsQueryDto extends createZodDto(
+  exportRegistrationsQuerySchema,
 ) {}
 
 export class UpdateRegistrationDto extends createZodDto(

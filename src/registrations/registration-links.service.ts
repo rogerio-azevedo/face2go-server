@@ -14,9 +14,20 @@ import { DatabaseService } from '../database/database.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { zodFirstMessage } from '../validation/zod-utils';
 
+const optionalLinkNameSchema = z
+  .string()
+  .trim()
+  .max(80, 'O nome pode ter no máximo 80 caracteres.')
+  .nullish()
+  .transform((value) => {
+    if (value == null || value.length === 0) return null;
+    return value;
+  });
+
 const createLinkSchema = z
   .object({
     kind: z.enum(['permanent', 'temporary']).default('permanent'),
+    name: optionalLinkNameSchema,
     validFrom: z.coerce.date().optional(),
     validUntil: z.coerce.date().optional(),
   })
@@ -53,7 +64,10 @@ type CreateLinkSchedule =
   | { kind: 'permanent' }
   | { kind: 'temporary'; validFrom: Date; validUntil: Date };
 
-function parseCreateLinkBody(body: unknown): CreateLinkSchedule {
+function parseCreateLinkBody(body: unknown): {
+  schedule: CreateLinkSchedule;
+  name: string | null;
+} {
   const raw =
     body === null || body === undefined || typeof body !== 'object'
       ? {}
@@ -67,19 +81,44 @@ function parseCreateLinkBody(body: unknown): CreateLinkSchedule {
     throw new BadRequestException(zodFirstMessage(parsed.error));
   }
   const d = parsed.data;
-  if (d.kind === 'permanent') {
-    return { kind: 'permanent' };
-  }
-  return {
-    kind: 'temporary',
-    validFrom: d.validFrom!,
-    validUntil: d.validUntil!,
-  };
+  const schedule: CreateLinkSchedule =
+    d.kind === 'permanent'
+      ? { kind: 'permanent' }
+      : {
+          kind: 'temporary',
+          validFrom: d.validFrom!,
+          validUntil: d.validUntil!,
+        };
+  return { schedule, name: d.name };
 }
 
-const patchLinkSchema = z.object({
-  isActive: z.boolean(),
-});
+const patchLinkSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    name: z
+      .string()
+      .trim()
+      .max(80, 'O nome pode ter no máximo 80 caracteres.')
+      .nullable()
+      .optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.isActive === undefined && val.name === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Informe o status ou o nome do link.',
+      });
+    }
+  })
+  .transform((val) => ({
+    isActive: val.isActive,
+    name:
+      val.name === undefined
+        ? undefined
+        : val.name === null || val.name.length === 0
+          ? null
+          : val.name,
+  }));
 
 function randomLinkCode(): string {
   return Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -159,8 +198,8 @@ export class RegistrationLinksService {
     body: unknown,
   ) {
     await this.ensureCompanyCanAccessClient(user, clientId);
-    const schedule = parseCreateLinkBody(body);
-    return this.createLink(clientId, user.sub, schedule);
+    const { schedule, name } = parseCreateLinkBody(body);
+    return this.createLink(clientId, user.sub, schedule, name);
   }
 
   async listForCompanyUser(user: JwtPayload, clientId: string) {
@@ -180,8 +219,8 @@ export class RegistrationLinksService {
 
   async createForClientTenant(user: JwtPayload, body: unknown) {
     const clientId = this.ensureClientTenant(user);
-    const schedule = parseCreateLinkBody(body);
-    return this.createLink(clientId, user.sub, schedule);
+    const { schedule, name } = parseCreateLinkBody(body);
+    return this.createLink(clientId, user.sub, schedule, name);
   }
 
   async listForClientTenant(user: JwtPayload) {
@@ -212,10 +251,32 @@ export class RegistrationLinksService {
     return this.deleteShared(clientId, linkId);
   }
 
+  private serializeLink(row: {
+    id: string;
+    code: string;
+    name: string | null;
+    isActive: boolean;
+    validFrom: Date | null;
+    expiresAt: Date | null;
+    createdAt: Date;
+  }) {
+    return {
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      isActive: row.isActive,
+      validFrom: row.validFrom,
+      expiresAt: row.expiresAt,
+      createdAt: row.createdAt,
+      registrationUrl: this.frontendCadastroUrl(row.code),
+    };
+  }
+
   private async createLink(
     clientId: string,
     createdByUserId: string,
     schedule: CreateLinkSchedule,
+    name: string | null,
   ) {
     const validFrom = schedule.kind === 'temporary' ? schedule.validFrom : null;
     const expiresAt =
@@ -228,18 +289,11 @@ export class RegistrationLinksService {
           clientId,
           createdByUserId,
           code,
+          name,
           validFrom,
           expiresAt,
         });
-        return {
-          id: row.id,
-          code: row.code,
-          isActive: row.isActive,
-          validFrom: row.validFrom,
-          expiresAt: row.expiresAt,
-          createdAt: row.createdAt,
-          registrationUrl: this.frontendCadastroUrl(row.code),
-        };
+        return this.serializeLink(row);
       } catch {
         // colisão de code → tentar de novo
       }
@@ -254,15 +308,7 @@ export class RegistrationLinksService {
       this.database.db,
       clientId,
     );
-    return rows.map((r) => ({
-      id: r.id,
-      code: r.code,
-      isActive: r.isActive,
-      validFrom: r.validFrom,
-      expiresAt: r.expiresAt,
-      createdAt: r.createdAt,
-      registrationUrl: this.frontendCadastroUrl(r.code),
-    }));
+    return rows.map((r) => this.serializeLink(r));
   }
 
   private async setActiveShared(
@@ -274,22 +320,14 @@ export class RegistrationLinksService {
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
-    const updated = await registrationsQueries.setRegistrationLinkActive(
+    const updated = await registrationsQueries.patchRegistrationLink(
       this.database.db,
       linkId,
       clientId,
-      parsed.data.isActive,
+      parsed.data,
     );
     if (!updated) throw new NotFoundException('Link não encontrado.');
-    return {
-      id: updated.id,
-      code: updated.code,
-      isActive: updated.isActive,
-      validFrom: updated.validFrom,
-      expiresAt: updated.expiresAt,
-      createdAt: updated.createdAt,
-      registrationUrl: this.frontendCadastroUrl(updated.code),
-    };
+    return this.serializeLink(updated);
   }
 
   private async deleteShared(clientId: string, linkId: string) {
