@@ -87,35 +87,15 @@ export const readerSchema = z.object({
   autoRegisterDeviceId: optionalTrimmed,
 });
 
-export const createReaderSchema = readerSchema
-  .refine(
-    (d) => !d.password || (!!d.username && d.username.trim().length > 0),
-    {
-      message: 'Informe o usuário do leitor para salvar a senha.',
-      path: ['username'],
-    },
-  )
-  .refine(
-    (d) =>
-      d.connectionMode !== 'auto_register' ||
-      d.brand === 'hikvision' ||
-      !!d.autoRegisterDeviceId,
-    {
-      message: 'Informe o ID de registro automático do leitor.',
-      path: ['autoRegisterDeviceId'],
-    },
-  );
-
-export const updateReaderSchema = readerSchema.partial().refine(
-  (d) =>
-    d.connectionMode !== 'auto_register' ||
-    d.brand === 'hikvision' ||
-    !!d.autoRegisterDeviceId,
+export const createReaderSchema = readerSchema.refine(
+  (d) => !d.password || (!!d.username && d.username.trim().length > 0),
   {
-    message: 'Informe o ID de registro automático do leitor.',
-    path: ['autoRegisterDeviceId'],
+    message: 'Informe o usuário do leitor para salvar a senha.',
+    path: ['username'],
   },
 );
+
+export const updateReaderSchema = readerSchema.partial();
 
 export const batchDeleteDeviceUsersSchema = z.object({
   userIds: z

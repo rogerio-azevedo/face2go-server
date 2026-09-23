@@ -26,7 +26,7 @@ describe('cgiPathFromUrl', () => {
 });
 
 describe('gatewayDeviceId', () => {
-  it('prefere o id configurado no leitor', () => {
+  it('usa o ID gravado', () => {
     expect(
       gatewayDeviceId({
         id: 'uuid',
@@ -35,6 +35,17 @@ describe('gatewayDeviceId', () => {
         autoRegisterDeviceId: 'f2g-salao-01',
       }),
     ).toBe('f2g-salao-01');
+  });
+
+  it('não cai no UUID com hífen', () => {
+    expect(() =>
+      gatewayDeviceId({
+        id: '732d7413-1f50-486c-9ca4-888ae4bd44d7',
+        username: 'admin',
+        plainPassword: 'x',
+        autoRegisterDeviceId: null,
+      }),
+    ).toThrow(/ID de dispositivo/);
   });
 });
 

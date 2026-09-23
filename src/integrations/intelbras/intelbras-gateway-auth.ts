@@ -22,7 +22,6 @@ const gatewayHttpAgent = new http.Agent({ keepAlive: true });
 export function gatewayDeviceId(reader: GatewayReaderAuth): string {
   const explicit = reader.autoRegisterDeviceId?.trim();
   if (explicit) return explicit;
-  if (reader.id?.trim()) return reader.id.trim();
   throw new Error('Leitor em registro automático sem ID de dispositivo');
 }
 

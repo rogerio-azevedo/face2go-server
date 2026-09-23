@@ -32,8 +32,8 @@ const toggleActiveSchema = z.object({
   isActive: z.boolean(),
 });
 
-/** Device ID do Hikvision: o UUID do leitor sem hífen. */
-function hikvisionEhomeId(readerId: string): string {
+/** Device ID do registro automático: o UUID do leitor sem hífen. */
+function autoRegisterDeviceIdFromReader(readerId: string): string {
   return readerId.replaceAll('-', '');
 }
 
@@ -215,17 +215,19 @@ export class ReadersService {
       );
     }
     let saved = row;
-    if (row.brand === 'hikvision' && row.connectionMode === 'auto_register') {
-      const withEhome = await readersQueries.updateReader(
+    if (row.connectionMode === 'auto_register') {
+      const withDeviceId = await readersQueries.updateReader(
         this.database.db,
         row.id,
         companyId,
-        { autoRegisterDeviceId: hikvisionEhomeId(row.id) },
+        { autoRegisterDeviceId: autoRegisterDeviceIdFromReader(row.id) },
       );
-      if (!withEhome || !('passwordEncrypted' in withEhome)) {
-        throw new BadRequestException('Não foi possível gravar o ID EHome.');
+      if (!withDeviceId || !('passwordEncrypted' in withDeviceId)) {
+        throw new BadRequestException(
+          'Não foi possível gravar o ID de registro automático.',
+        );
       }
-      saved = withEhome;
+      saved = withDeviceId;
     }
     if (d.restrictMinors === true) {
       await this.ensureBirthDateRequired(d.clientId);
@@ -304,10 +306,9 @@ export class ReadersService {
         : {}),
     };
 
-    const brand = d.brand ?? existing.brand;
     const connectionMode = d.connectionMode ?? existing.connectionMode;
-    if (brand === 'hikvision' && connectionMode === 'auto_register') {
-      patch.autoRegisterDeviceId = hikvisionEhomeId(readerId);
+    if (connectionMode === 'auto_register') {
+      patch.autoRegisterDeviceId = autoRegisterDeviceIdFromReader(readerId);
     }
 
     if (d.username !== undefined) {

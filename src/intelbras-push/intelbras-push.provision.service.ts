@@ -126,7 +126,18 @@ export class IntelbrasPushProvisionService {
     raw: string;
   }> {
     const reader = await this.loadIntelbrasReader(companyId, readerId);
-    const version = await intelbrasGetSoftwareVersion(reader);
+    let version: Awaited<ReturnType<typeof intelbrasGetSoftwareVersion>>;
+    try {
+      version = await intelbrasGetSoftwareVersion(reader);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('READER_GATEWAY_URL')) {
+        throw new BadRequestException(
+          'O leitor foi salvo. A config não foi enviada porque este servidor não está ligado ao gateway Intelbras.',
+        );
+      }
+      throw error;
+    }
     const chosen = mode ?? this.detectMode(version.buildDate);
     const target = resolvePushTarget(readerId, this.publicApiUrl());
 
