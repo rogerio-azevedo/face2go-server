@@ -14,7 +14,10 @@ export class DeviceSyncQueueService {
       this.database.db,
       input.dedupeKey,
     );
-    if (existing) return existing;
+    if (existing?.status === 'queued') {
+      const merged = await this.mergeQueued(existing, input);
+      if (merged) return merged;
+    }
     try {
       return await jobQueries.insertDeviceSyncJob(this.database.db, input);
     } catch {
@@ -22,9 +25,25 @@ export class DeviceSyncQueueService {
         this.database.db,
         input.dedupeKey,
       );
+      if (raced?.status === 'queued') {
+        const merged = await this.mergeQueued(raced, input);
+        if (merged) return merged;
+      }
       if (raced) return raced;
       throw new Error('Não foi possível enfileirar o sync.');
     }
+  }
+
+  /** Último estado vence enquanto o job ainda não começou. */
+  private async mergeQueued(
+    existing: jobQueries.DeviceSyncJobRow,
+    input: jobQueries.EnqueueDeviceSyncJobInput,
+  ) {
+    return jobQueries.updateQueuedJobPayload(this.database.db, existing.id, {
+      payload: input.payload ?? {},
+      force: existing.force || input.force === true,
+      createdBy: input.createdBy ?? existing.createdBy,
+    });
   }
 
   toDto(row: {

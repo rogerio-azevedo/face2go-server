@@ -241,7 +241,7 @@ export class AccessesService {
       personName,
       personId,
       personType,
-      status: (denied ? 'denied' : 'granted') as 'granted' | 'denied',
+      status: denied ? 'denied' : 'granted',
       errorCode: data.ErrorCode ?? null,
       userType: data.UserType ?? null,
       cardType: data.CardType ?? null,

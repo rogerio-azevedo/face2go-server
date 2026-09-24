@@ -8,6 +8,8 @@ import {
   type DeviceSyncJobStatus,
 } from '../schema/device-sync-jobs';
 
+export type { DeviceSyncJobRow };
+
 export type EnqueueDeviceSyncJobInput = {
   kind: DeviceSyncJobKind;
   clientId: string;
@@ -29,7 +31,33 @@ export async function findActiveJobByDedupe(db: AppDb, dedupeKey: string) {
         inArray(deviceSyncJobs.status, ['queued', 'running']),
       ),
     )
+    .orderBy(
+      sql`CASE WHEN ${deviceSyncJobs.status} = 'queued' THEN 0 ELSE 1 END`,
+    )
     .limit(1);
+  return row ?? null;
+}
+
+/** Atualiza o job ainda na fila com o último estado pedido. */
+export async function updateQueuedJobPayload(
+  db: AppDb,
+  id: string,
+  patch: {
+    payload: Record<string, unknown>;
+    force: boolean;
+    createdBy?: string | null;
+  },
+): Promise<DeviceSyncJobRow | null> {
+  const [row] = await db
+    .update(deviceSyncJobs)
+    .set({
+      payload: patch.payload,
+      force: patch.force,
+      ...(patch.createdBy !== undefined ? { createdBy: patch.createdBy } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(deviceSyncJobs.id, id), eq(deviceSyncJobs.status, 'queued')))
+    .returning();
   return row ?? null;
 }
 
@@ -96,11 +124,38 @@ export async function listActiveDeviceSyncJobs(
 
 export async function requeueOrphanRunningJobs(db: AppDb): Promise<number> {
   const result = await db.execute(sql`
-    UPDATE device_sync_jobs
-    SET status = 'queued',
+    WITH ranked AS (
+      SELECT id,
+             row_number() OVER (
+               PARTITION BY dedupe_key
+               ORDER BY started_at DESC NULLS LAST, created_at DESC
+             ) AS rn,
+             EXISTS (
+               SELECT 1 FROM device_sync_jobs q
+               WHERE q.dedupe_key = device_sync_jobs.dedupe_key
+                 AND q.status = 'queued'
+             ) AS has_queued
+      FROM device_sync_jobs
+      WHERE status = 'running'
+    )
+    UPDATE device_sync_jobs AS j
+    SET status = CASE
+          WHEN ranked.has_queued OR ranked.rn > 1 THEN 'failed'
+          ELSE 'queued'
+        END,
+        error = CASE
+          WHEN ranked.has_queued OR ranked.rn > 1
+            THEN 'Substituído por um job mais recente.'
+          ELSE j.error
+        END,
+        finished_at = CASE
+          WHEN ranked.has_queued OR ranked.rn > 1 THEN NOW()
+          ELSE j.finished_at
+        END,
         updated_at = NOW()
-    WHERE status = 'running'
-    RETURNING id
+    FROM ranked
+    WHERE j.id = ranked.id
+    RETURNING j.id
   `);
   const rows =
     (result as unknown as { rows?: Array<{ id: string }> }).rows ?? [];
@@ -116,9 +171,19 @@ export async function claimNextDeviceSyncJob(
         started_at = COALESCE(j.started_at, NOW()),
         updated_at = NOW()
     WHERE j.id = (
-      SELECT id FROM device_sync_jobs
-      WHERE status = 'queued'
-      ORDER BY created_at ASC
+      SELECT q.id FROM device_sync_jobs q
+      WHERE q.status = 'queued'
+        AND NOT EXISTS (
+          SELECT 1 FROM device_sync_jobs r
+          WHERE r.kind = q.kind
+            AND r.target_id = q.target_id
+            AND r.id <> q.id
+            AND (
+              r.status = 'running'
+              OR (r.status = 'queued' AND r.created_at < q.created_at)
+            )
+        )
+      ORDER BY q.created_at ASC
       FOR UPDATE SKIP LOCKED
       LIMIT 1
     )

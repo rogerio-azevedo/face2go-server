@@ -742,9 +742,14 @@ describe('FaceSyncService', () => {
       .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
       .mockResolvedValue(registration());
 
-    await service.enqueueApprovedRegistrationJob('reg-1', 'client-1', 'user-1', {
-      allowSimilarFace: true,
-    });
+    await service.enqueueApprovedRegistrationJob(
+      'reg-1',
+      'client-1',
+      'user-1',
+      {
+        allowSimilarFace: true,
+      },
+    );
 
     const [arg] = queue.enqueue.mock.calls[0] as [
       {
@@ -766,8 +771,6 @@ describe('FaceSyncService', () => {
         role: 'client_operator',
       }),
     ).toThrow(/administrador/);
-    expect(() =>
-      service.assertCanAllowSimilarFace(clientUser()),
-    ).not.toThrow();
+    expect(() => service.assertCanAllowSimilarFace(clientUser())).not.toThrow();
   });
 });

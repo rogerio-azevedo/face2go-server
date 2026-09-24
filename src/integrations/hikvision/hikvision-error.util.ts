@@ -122,10 +122,7 @@ export function isHikvisionSuccess(data: unknown): boolean {
     return true;
   }
 
-  if (
-    status.subStatusCode &&
-    FACE_DUPLICATE_CODES.has(status.subStatusCode)
-  ) {
+  if (status.subStatusCode && FACE_DUPLICATE_CODES.has(status.subStatusCode)) {
     return false;
   }
 
@@ -166,10 +163,7 @@ export function extractSubStatusCode(error: unknown): string | undefined {
 export function hikvisionFaceErrorMessage(error: unknown): string {
   const err = error as AxiosLikeError;
   const status = extractResponseStatus(err.response?.data);
-  if (
-    status?.subStatusCode &&
-    FACE_DUPLICATE_CODES.has(status.subStatusCode)
-  ) {
+  if (status?.subStatusCode && FACE_DUPLICATE_CODES.has(status.subStatusCode)) {
     return 'Foto já cadastrada.';
   }
   if (

@@ -554,6 +554,13 @@
       "when": 1779470000000,
       "tag": "0078_registration_face_retake_links",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1779480000000,
+      "tag": "0079_device_sync_jobs_dedupe_queued",
+      "breakpoints": true
     }
   ]
 }

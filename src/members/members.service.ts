@@ -528,7 +528,10 @@ export class MembersService {
         this.database.db,
         clientId,
         d.document,
-        { excludeMemberId: memberId },
+        {
+          excludeMemberId: memberId,
+          excludeRegistrationId: existing.registrationId ?? undefined,
+        },
       );
     }
 
@@ -1035,7 +1038,7 @@ export class MembersService {
       this.database.db,
       registration.clientId,
       registration.document,
-      { excludeRegistrationId: registration.id, checkPending: false },
+      { excludeRegistrationId: registration.id, checkRegistrations: false },
     );
 
     await membersQueries.seedDefaultRolesForClient(

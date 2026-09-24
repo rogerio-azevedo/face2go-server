@@ -86,10 +86,7 @@ export async function getClientUserRow(
     .select()
     .from(clientUsers)
     .where(
-      and(
-        eq(clientUsers.id, clientUserId),
-        eq(clientUsers.clientId, clientId),
-      ),
+      and(eq(clientUsers.id, clientUserId), eq(clientUsers.clientId, clientId)),
     )
     .limit(1);
   return row ?? null;
@@ -105,10 +102,7 @@ export async function updateClientUserRole(
     .update(clientUsers)
     .set({ role })
     .where(
-      and(
-        eq(clientUsers.id, clientUserId),
-        eq(clientUsers.clientId, clientId),
-      ),
+      and(eq(clientUsers.id, clientUserId), eq(clientUsers.clientId, clientId)),
     )
     .returning();
   return row;
@@ -124,10 +118,7 @@ export async function setClientUserActive(
     .update(clientUsers)
     .set({ isActive })
     .where(
-      and(
-        eq(clientUsers.id, clientUserId),
-        eq(clientUsers.clientId, clientId),
-      ),
+      and(eq(clientUsers.id, clientUserId), eq(clientUsers.clientId, clientId)),
     )
     .returning();
   return row;

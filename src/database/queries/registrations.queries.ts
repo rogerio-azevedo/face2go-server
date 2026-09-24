@@ -695,7 +695,8 @@ export async function listClientIdsWithPendingDeviceSync(
   return rows.map((r) => r.clientId);
 }
 
-export async function findPendingRegistrationByNormalizedDocument(
+/** Cadastro já enviado com o documento, em qualquer status (inclusive excluído). */
+export async function findRegistrationByNormalizedDocument(
   db: AppDb,
   clientId: string,
   document: string,
@@ -706,7 +707,6 @@ export async function findPendingRegistrationByNormalizedDocument(
 
   const conditions: SQL[] = [
     eq(registrations.clientId, clientId),
-    eq(registrations.status, 'draft'),
     isNotNull(registrations.submittedAt),
     normalizedDocumentEquals(registrations.document, digits),
   ];

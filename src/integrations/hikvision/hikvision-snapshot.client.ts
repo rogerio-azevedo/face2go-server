@@ -113,8 +113,7 @@ async function downloadSnapshot(
       error: `HTTP ${status} canal ${channelId} sem JPEG`,
     };
   } catch (err: unknown) {
-    const status = (err as { response?: { status?: number } }).response
-      ?.status;
+    const status = (err as { response?: { status?: number } }).response?.status;
     const message = err instanceof Error ? err.message : String(err);
     return {
       buffer: null,

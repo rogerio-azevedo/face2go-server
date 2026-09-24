@@ -43,6 +43,7 @@ describe('RegistrationsAdminService lifecycle', () => {
     getByRegistrationId: jest.Mock;
     setActiveByRegistrationId: jest.Mock;
     syncProfileFromRegistration: jest.Mock;
+    upsertFromApprovedRegistration: jest.Mock;
   };
   let personProfile: { shouldRemoveFaceFromReader: jest.Mock };
 
@@ -66,6 +67,7 @@ describe('RegistrationsAdminService lifecycle', () => {
         .fn()
         .mockResolvedValue({ id: 'member-1' }),
       syncProfileFromRegistration: jest.fn().mockResolvedValue(null),
+      upsertFromApprovedRegistration: jest.fn().mockResolvedValue(null),
     };
     personProfile = {
       shouldRemoveFaceFromReader: jest.fn().mockResolvedValue(true),
@@ -87,6 +89,9 @@ describe('RegistrationsAdminService lifecycle', () => {
     }).compile();
 
     service = module.get(RegistrationsAdminService);
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationLinkByIdForClient')
+      .mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -208,8 +213,17 @@ describe('RegistrationsAdminService lifecycle', () => {
     const clearMember = jest
       .spyOn(membersQueries, 'setMemberBlockByRegistrationId')
       .mockResolvedValue(null);
+    jest.spyOn(clientsQueries, 'getClientByIdOnly').mockResolvedValue({
+      id: 'client-1',
+      type: 'company',
+    } as never);
 
     await service.unblockForCompanyUser(companyAdmin(), 'client-1', 'reg-1');
+
+    expect(members.upsertFromApprovedRegistration).toHaveBeenCalledWith(
+      approvedRow,
+      'company',
+    );
 
     expect(clearMember).toHaveBeenCalledWith({}, 'client-1', 'reg-1', {
       blockReason: null,

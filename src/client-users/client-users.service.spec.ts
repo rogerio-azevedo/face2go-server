@@ -92,7 +92,9 @@ describe('ClientUsersService', () => {
     jest
       .spyOn(clientUsersQueries, 'getClientUserRow')
       .mockResolvedValue(clientUserRow);
-    jest.spyOn(usersQueries, 'findUserByEmail').mockResolvedValue(null as never);
+    jest
+      .spyOn(usersQueries, 'findUserByEmail')
+      .mockResolvedValue(null as never);
 
     await service.updateProfile(companyAdmin, 'client-1', 'cu-1', {
       email: 'PSuelrocha@Gmail.com',

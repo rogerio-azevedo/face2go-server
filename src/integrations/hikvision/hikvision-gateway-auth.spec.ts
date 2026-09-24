@@ -28,9 +28,7 @@ const connection: HikvisionReaderConnection = {
 describe('isapiPathFromUrl', () => {
   it('descarta o host e preserva a query', () => {
     expect(
-      isapiPathFromUrl(
-        'http://10.0.0.9/ISAPI/System/deviceInfo?format=json',
-      ),
+      isapiPathFromUrl('http://10.0.0.9/ISAPI/System/deviceInfo?format=json'),
     ).toBe('/ISAPI/System/deviceInfo?format=json');
   });
 });

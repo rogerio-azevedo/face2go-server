@@ -19,7 +19,10 @@ describe('PublicRegistrationService', () => {
       providers: [
         PublicRegistrationService,
         { provide: DatabaseService, useValue: { db: {} } },
-        { provide: R2StorageService, useValue: { assertObjectExists: jest.fn() } },
+        {
+          provide: R2StorageService,
+          useValue: { assertObjectExists: jest.fn() },
+        },
       ],
     }).compile();
 

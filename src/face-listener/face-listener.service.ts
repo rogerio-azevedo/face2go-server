@@ -465,10 +465,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       const dbHost = ctx.host;
       const existing = this.statuses.get(ctx.id);
 
-      if (
-        ctx.brand === 'hikvision' &&
-        ctx.connectionMode === 'auto_register'
-      ) {
+      if (ctx.brand === 'hikvision' && ctx.connectionMode === 'auto_register') {
         this.stopHikvisionOutbound(ctx.id);
         if (!existing) {
           this.statuses.set(ctx.id, {

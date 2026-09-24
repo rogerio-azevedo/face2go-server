@@ -223,6 +223,7 @@ export class PublicRegistrationService {
       this.database.db,
       bundle.client.id,
       normalized.document,
+      { excludeRegistrationId: registrationId },
     );
 
     const re = new RegExp(

@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-} from '@nestjs/common';
+import { Body, Controller, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';

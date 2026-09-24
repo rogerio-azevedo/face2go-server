@@ -57,7 +57,7 @@ export const deviceSyncJobs = pgTable(
   (t) => [
     uniqueIndex('device_sync_jobs_dedupe_active')
       .on(t.dedupeKey)
-      .where(sql`${t.status} IN ('queued', 'running')`),
+      .where(sql`${t.status} = 'queued'`),
     index('device_sync_jobs_status_created_idx').on(t.status, t.createdAt),
     index('device_sync_jobs_client_idx').on(t.clientId),
   ],

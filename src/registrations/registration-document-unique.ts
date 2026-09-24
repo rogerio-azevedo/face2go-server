@@ -11,6 +11,9 @@ export const DOCUMENT_ALREADY_MEMBER_MESSAGE =
 export const DOCUMENT_ALREADY_PENDING_MESSAGE =
   'Já existe um cadastro em análise com este CPF/CNPJ.';
 
+export const DOCUMENT_ALREADY_REGISTERED_MESSAGE =
+  'Já existe um cadastro com este CPF/CNPJ neste cliente. Procure a administração.';
+
 export async function assertDocumentAvailableInClient(
   db: AppDb,
   clientId: string,
@@ -18,7 +21,7 @@ export async function assertDocumentAvailableInClient(
   options: {
     excludeMemberId?: string;
     excludeRegistrationId?: string;
-    checkPending?: boolean;
+    checkRegistrations?: boolean;
   } = {},
 ): Promise<void> {
   const digits = document ? onlyDigits(document) : '';
@@ -34,16 +37,20 @@ export async function assertDocumentAvailableInClient(
     throw new ConflictException(DOCUMENT_ALREADY_MEMBER_MESSAGE);
   }
 
-  if (options.checkPending === false) return;
+  if (options.checkRegistrations === false) return;
 
-  const pending =
-    await registrationsQueries.findPendingRegistrationByNormalizedDocument(
+  const existing =
+    await registrationsQueries.findRegistrationByNormalizedDocument(
       db,
       clientId,
       digits,
       options.excludeRegistrationId,
     );
-  if (pending) {
-    throw new ConflictException(DOCUMENT_ALREADY_PENDING_MESSAGE);
-  }
+  if (!existing) return;
+
+  throw new ConflictException(
+    existing.status === 'draft'
+      ? DOCUMENT_ALREADY_PENDING_MESSAGE
+      : DOCUMENT_ALREADY_REGISTERED_MESSAGE,
+  );
 }

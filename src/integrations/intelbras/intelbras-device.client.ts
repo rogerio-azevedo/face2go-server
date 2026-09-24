@@ -540,8 +540,9 @@ export async function intelbrasSetUserTypeOnReader(
     : {
         UserID: faceId,
         UserName:
-          normalizeNameForFacialReader(options?.userName?.trim() || 'USUARIO') ||
-          'USUARIO',
+          normalizeNameForFacialReader(
+            options?.userName?.trim() || 'USUARIO',
+          ) || 'USUARIO',
         UserType: userType,
         ValidFrom: DEFAULT_INTELBRAS_VALID_DATE_START,
         ValidTo: DEFAULT_INTELBRAS_VALID_DATE_END,
@@ -866,6 +867,8 @@ export async function intelbrasUpsertFaceOnReader(
     const auth = digestAuthForReader(reader);
     const base = deviceUrl(reader);
 
+    let existingAccessUser: IntelbrasAccessUser | null = null;
+
     if (!options?.photoOnly) {
       let existingCard: DeviceUser | null = null;
       try {
@@ -873,6 +876,7 @@ export async function intelbrasUpsertFaceOnReader(
           reader,
           faceId,
         );
+        existingAccessUser = accessUser;
         if (accessUser) {
           existingCard = await intelbrasFindCardByUserId(reader, faceId);
         } else {
@@ -1079,6 +1083,13 @@ export async function intelbrasUpsertFaceOnReader(
         reader,
         faceId,
         INTELBRAS_USER_TYPE_BLOCKED,
+        { userName: normalizedName },
+      );
+    } else if (existingAccessUser?.UserType === INTELBRAS_USER_TYPE_BLOCKED) {
+      await intelbrasSetUserTypeOnReader(
+        reader,
+        faceId,
+        INTELBRAS_USER_TYPE_GENERAL,
         { userName: normalizedName },
       );
     }

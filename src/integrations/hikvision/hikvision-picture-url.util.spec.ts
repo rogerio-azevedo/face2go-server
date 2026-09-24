@@ -9,9 +9,7 @@ describe('resolveHikvisionDevicePictureUrl', () => {
         'http://condroyal2026.ddns-inte/LOCALS/pic/enrlFace/0/0000000383.jpg@WEB000000002251',
         baseUrl,
       ),
-    ).toBe(
-      `${baseUrl}/LOCALS/pic/enrlFace/0/0000000383.jpg@WEB000000002251`,
-    );
+    ).toBe(`${baseUrl}/LOCALS/pic/enrlFace/0/0000000383.jpg@WEB000000002251`);
   });
 
   it('troca IP LAN pelo origin cadastrado', () => {

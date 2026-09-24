@@ -59,7 +59,10 @@ function decodeGatewayBody(
   responseType: AxiosRequestConfig['responseType'],
 ): unknown {
   if (responseType === 'arraybuffer') {
-    if (typeof payload.bodyBase64 === 'string' && payload.bodyBase64.length > 0) {
+    if (
+      typeof payload.bodyBase64 === 'string' &&
+      payload.bodyBase64.length > 0
+    ) {
       return Buffer.from(payload.bodyBase64, 'base64');
     }
     if (typeof payload.body === 'string') return Buffer.from(payload.body);

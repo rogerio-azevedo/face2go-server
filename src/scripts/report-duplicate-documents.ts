@@ -153,7 +153,9 @@ async function main() {
       }
     }
 
-    console.log('\nPendentes cujo documento já existe em membro do mesmo cliente:');
+    console.log(
+      '\nPendentes cujo documento já existe em membro do mesmo cliente:',
+    );
     if (pendingVsMember.rows.length === 0) {
       console.log('  (nenhum)');
     } else {

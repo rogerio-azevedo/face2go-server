@@ -80,10 +80,7 @@ export class ClientUsersService {
     }
     if (parsed.data.email !== undefined) {
       const email = normalizeEmail(parsed.data.email);
-      const taken = await usersQueries.findUserByEmail(
-        this.database.db,
-        email,
-      );
+      const taken = await usersQueries.findUserByEmail(this.database.db, email);
       if (taken && taken.id !== row.userId) {
         throw new BadRequestException('Este e-mail já está em uso.');
       }
@@ -126,10 +123,7 @@ export class ClientUsersService {
       );
     }
 
-    if (
-      row.role === 'client_admin' &&
-      parsed.data.role === 'client_operator'
-    ) {
+    if (row.role === 'client_admin' && parsed.data.role === 'client_operator') {
       const others = await clientUsersQueries.countActiveClientAdmins(
         this.database.db,
         clientId,

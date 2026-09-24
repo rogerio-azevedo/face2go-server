@@ -107,8 +107,8 @@ describe('isHikvisionSuccess', () => {
   });
 
   it('aceita statusCode 1 sem duplicata', () => {
-    expect(
-      isHikvisionSuccess({ statusCode: 1, subStatusCode: 'ok' }),
-    ).toBe(true);
+    expect(isHikvisionSuccess({ statusCode: 1, subStatusCode: 'ok' })).toBe(
+      true,
+    );
   });
 });

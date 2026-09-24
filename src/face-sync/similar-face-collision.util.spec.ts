@@ -35,9 +35,12 @@ describe('extractCollidingFaceId', () => {
       }),
     ).toBeNull();
     expect(
-      extractCollidingFaceId({
-        response: { data: { UserID: '24' } },
-      }, 24),
+      extractCollidingFaceId(
+        {
+          response: { data: { UserID: '24' } },
+        },
+        24,
+      ),
     ).toBeNull();
   });
 });

@@ -367,7 +367,7 @@ export class RegistrationsAdminService {
         this.database.db,
         clientId,
         existing.document,
-        { excludeRegistrationId: registrationId, checkPending: false },
+        { excludeRegistrationId: registrationId },
       );
     }
 
@@ -647,6 +647,25 @@ export class RegistrationsAdminService {
       throw new NotFoundException(
         'Cadastro não encontrado ou já foi processado.',
       );
+    }
+
+    const client = await clientsQueries.getClientByIdOnly(
+      this.database.db,
+      clientId,
+    );
+    if (client && client.type !== 'school') {
+      try {
+        await this.membersService.upsertFromApprovedRegistration(
+          updated,
+          client.type,
+        );
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Falha ao criar membro pós-desbloqueio reg=${registrationId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
 
     try {

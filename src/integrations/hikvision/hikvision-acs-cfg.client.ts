@@ -233,7 +233,10 @@ export async function hikvisionSetFaceDuplicateCheck(
     throw new Error('Firmware sem faceDuplicateCheckEnabled no AcsCfg.');
   }
 
-  if (isHikvisionEnabledFlag(acsCfg[HIKVISION_FACE_DUPLICATE_CHECK_KEY]) === enabled) {
+  if (
+    isHikvisionEnabledFlag(acsCfg[HIKVISION_FACE_DUPLICATE_CHECK_KEY]) ===
+    enabled
+  ) {
     syncLog('hikvision:faceDuplicateCheckAlreadySet', {
       baseUrl: connection.baseUrl,
       enabled,

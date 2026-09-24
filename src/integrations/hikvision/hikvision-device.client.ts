@@ -1008,7 +1008,13 @@ function mapHikvisionUserInfo(
   const valid = asRecord(item.Valid) ?? asRecord(item.valid);
   const numOfFace =
     item.numOfFace ?? item.NumOfFace ?? item.faceNum ?? item.FaceNum;
-  const faceUrl = pickStr(item, 'faceURL', 'FaceURL', 'pictureURL', 'PictureURL');
+  const faceUrl = pickStr(
+    item,
+    'faceURL',
+    'FaceURL',
+    'pictureURL',
+    'PictureURL',
+  );
   const hasFace =
     typeof numOfFace === 'number'
       ? numOfFace > 0
