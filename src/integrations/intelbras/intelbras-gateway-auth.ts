@@ -19,6 +19,63 @@ function gatewayHttpsAgent(): https.Agent {
 }
 const gatewayHttpAgent = new http.Agent({ keepAlive: true });
 
+function intelbrasGatewayConfig(): {
+  base: string;
+  token: string;
+  secure: boolean;
+} {
+  const base = process.env.READER_GATEWAY_URL?.replace(/\/$/, '') ?? '';
+  const token = process.env.READER_GATEWAY_TOKEN ?? '';
+  if (!base || !token) {
+    throw new Error(
+      'Leitor em registro automático sem READER_GATEWAY_URL/READER_GATEWAY_TOKEN',
+    );
+  }
+  return { base, token, secure: base.startsWith('https:') };
+}
+
+export type IntelbrasGatewayDevice = {
+  deviceId: string;
+  lastRxAt: string | null;
+};
+
+/** Sessões TCP vivas. Quem não está na lista está offline. */
+export async function listIntelbrasGatewayDevices(): Promise<
+  IntelbrasGatewayDevice[]
+> {
+  const { base, token, secure } = intelbrasGatewayConfig();
+  const response = await axios.get(`${base}/devices`, {
+    timeout: 8_000,
+    headers: { Authorization: `Bearer ${token}` },
+    httpsAgent: secure ? gatewayHttpsAgent() : undefined,
+    httpAgent: secure ? undefined : gatewayHttpAgent,
+    validateStatus: () => true,
+  });
+  if (response.status >= 400) {
+    const data = response.data as { error?: unknown } | undefined;
+    const reason =
+      typeof data?.error === 'string' ? data.error : `HTTP ${response.status}`;
+    throw new Error(`Gateway Intelbras indisponível: ${reason}`);
+  }
+  const payload = response.data as { devices?: unknown } | undefined;
+  if (!payload || !Array.isArray(payload.devices)) {
+    throw new Error('Gateway Intelbras devolveu lista inválida');
+  }
+  const devices: IntelbrasGatewayDevice[] = [];
+  for (const item of payload.devices) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const deviceId =
+      typeof row.deviceId === 'string' ? row.deviceId.trim() : '';
+    if (!deviceId) continue;
+    devices.push({
+      deviceId,
+      lastRxAt: typeof row.lastRxAt === 'string' ? row.lastRxAt : null,
+    });
+  }
+  return devices;
+}
+
 export function gatewayDeviceId(reader: GatewayReaderAuth): string {
   const explicit = reader.autoRegisterDeviceId?.trim();
   if (explicit) return explicit;
@@ -41,18 +98,11 @@ export function createGatewayDigestAuth(
   const deviceId = gatewayDeviceId(reader);
   return {
     async request(opts) {
-      const base = process.env.READER_GATEWAY_URL?.replace(/\/$/, '') ?? '';
-      const token = process.env.READER_GATEWAY_TOKEN ?? '';
-      if (!base || !token) {
-        throw new Error(
-          'Leitor em registro automático sem READER_GATEWAY_URL/READER_GATEWAY_TOKEN',
-        );
-      }
+      const { base, token, secure } = intelbrasGatewayConfig();
       const method = String(opts.method ?? 'GET');
       const path = cgiPathFromUrl(String(opts.url ?? ''));
       const headers = (opts.headers ?? {}) as Record<string, string>;
       const timeout = Math.max(Number(opts.timeout ?? 0) || 0, 30_000);
-      const secure = base.startsWith('https:');
       const response = await axios.post(
         `${base}/devices/${encodeURIComponent(deviceId)}/cgi`,
         {

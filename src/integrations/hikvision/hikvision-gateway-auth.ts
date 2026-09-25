@@ -131,6 +131,48 @@ export async function hikvisionGatewayPublishMedia(
   return data.url;
 }
 
+export type HikvisionGatewayDevice = {
+  ehomeId: string;
+  online: boolean;
+  lastSeenAt: string | null;
+};
+
+/** Sessões ISUP. `online` vem de ENUM_DEV_ON / ENUM_DEV_OFF. */
+export async function listHikvisionGatewayDevices(): Promise<
+  HikvisionGatewayDevice[]
+> {
+  const { base, token, secure } = hikvisionGatewayConfig();
+  const response = await axios.get(`${base}/devices`, {
+    timeout: 8_000,
+    headers: { Authorization: `Bearer ${token}` },
+    httpsAgent: secure ? gatewayHttpsAgent() : undefined,
+    httpAgent: secure ? undefined : gatewayHttpAgent,
+    validateStatus: () => true,
+  });
+  if (response.status >= 400) {
+    const data = response.data as { error?: unknown } | undefined;
+    const reason =
+      typeof data?.error === 'string' ? data.error : `HTTP ${response.status}`;
+    throw new Error(`Gateway Hikvision indisponível: ${reason}`);
+  }
+  if (!Array.isArray(response.data)) {
+    throw new Error('Gateway Hikvision devolveu lista inválida');
+  }
+  const devices: HikvisionGatewayDevice[] = [];
+  for (const item of response.data) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const ehomeId = typeof row.ehomeId === 'string' ? row.ehomeId.trim() : '';
+    if (!ehomeId) continue;
+    devices.push({
+      ehomeId,
+      online: row.online === true,
+      lastSeenAt: typeof row.lastSeenAt === 'string' ? row.lastSeenAt : null,
+    });
+  }
+  return devices;
+}
+
 /** ISAPI pelo processo ISUP. */
 export async function hikvisionGatewayIsapiRequest(
   connection: HikvisionReaderConnection,

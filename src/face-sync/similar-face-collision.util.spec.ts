@@ -43,6 +43,25 @@ describe('extractCollidingFaceId', () => {
       ),
     ).toBeNull();
   });
+
+  it('não inventa colidente no alreadyExistThisFace real (MinMoe)', () => {
+    expect(
+      extractCollidingFaceId(
+        {
+          response: {
+            data: {
+              statusCode: 4,
+              statusString: 'Invalid Operation',
+              subStatusCode: 'alreadyExistThisFace',
+              errorCode: 1073782792,
+              errorMsg: 'saveFacePic',
+            },
+          },
+        },
+        184,
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('withCollidingPerson', () => {

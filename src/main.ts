@@ -35,6 +35,7 @@ async function bootstrap() {
     exclude: [
       { path: '/', method: RequestMethod.GET },
       { path: 'device-events/facial/:readerId', method: RequestMethod.POST },
+      { path: 'device-events/hikvision/:readerId', method: RequestMethod.POST },
       { path: 'notification', method: RequestMethod.POST },
     ],
   });

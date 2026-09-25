@@ -1,3 +1,5 @@
+/// <reference types="jest" />
+
 import type { AxiosRequestConfig } from 'axios';
 
 import type { HikvisionReaderConnection } from './hikvision-connection.types';

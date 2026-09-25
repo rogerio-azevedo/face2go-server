@@ -522,6 +522,8 @@ export type ReaderMonitorListRow = {
   isActive: boolean;
   username: string | null;
   hasCredentials: boolean;
+  connectionMode: ReaderConnectionMode;
+  autoRegisterDeviceId: string | null;
   lastSeenAt: Date | null;
   createdAt: Date;
 };
@@ -548,6 +550,8 @@ export async function listReadersForMonitorReport(
       isActive: facialReaders.isActive,
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
+      connectionMode: facialReaders.connectionMode,
+      autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
       lastSeenAt: facialReaders.lastSeenAt,
       createdAt: facialReaders.createdAt,
     })
@@ -571,6 +575,8 @@ export async function listReadersForMonitorReport(
       r.passwordEncrypted != null &&
       String(r.passwordEncrypted).trim() !== ''
     ),
+    connectionMode: r.connectionMode ?? 'direct',
+    autoRegisterDeviceId: r.autoRegisterDeviceId ?? null,
     lastSeenAt: r.lastSeenAt,
     createdAt: r.createdAt,
   }));

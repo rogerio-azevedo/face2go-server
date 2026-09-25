@@ -28,8 +28,10 @@ import {
   hikvisionCaptureLiveSnapshotWithReason,
   hikvisionEventToVideoEvent,
   hikvisionIsapiRequest,
+  hikvisionConfigureHttpHost,
   hikvisionOpenStreamRequest,
   hikvisionSearchAcsEvents,
+  resolveHikvisionPushTarget,
   isJpegBuffer,
   parseHikvisionAlertStreamPart,
   resolveHikvisionDevicePictureUrl,
@@ -86,6 +88,15 @@ import {
 } from './face-listener-offline-notifier.util';
 import { skipIntelbrasPersistentStream } from '../intelbras-push/intelbras-push.flags';
 import { intelbrasGetSoftwareVersion } from '../intelbras-push/intelbras-push.config.client';
+import { listHikvisionGatewayDevices } from '../integrations/hikvision/hikvision-gateway-auth';
+import { listIntelbrasGatewayDevices } from '../integrations/intelbras/intelbras-gateway-auth';
+import {
+  hikvisionSessionsToPresence,
+  intelbrasSessionsToPresence,
+  resolveAutoRegisterPresence,
+  type AutoRegisterPresence,
+  type GatewayPresenceSnapshot,
+} from './face-listener-gateway-presence.util';
 
 type FacialSnapEvent = NonNullable<ReturnType<typeof snapFlatMapToVideoEvent>>;
 
@@ -161,7 +172,16 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
 
   private reconnectTimers = new Map<string, NodeJS.Timeout>();
   private hikvisionPollTimers = new Map<string, NodeJS.Timeout>();
+  private readonly hikvisionHttpHostOk = new Set<string>();
+  private readonly hikvisionHttpHostBusy = new Set<string>();
   private refreshIntervalId: ReturnType<typeof setInterval> | null = null;
+  private gatewayPresenceIntervalId: ReturnType<typeof setInterval> | null =
+    null;
+  private gatewaySnapshotCache: {
+    at: number;
+    hikvision?: GatewayPresenceSnapshot;
+    intelbras?: GatewayPresenceSnapshot;
+  } | null = null;
 
   private streamAbortByReader = new Map<string, AbortController>();
   private connectGeneration = new Map<string, number>();
@@ -184,6 +204,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   private readonly offlineNotifyDebounceMs: number;
 
   private static readonly REFRESH_INTERVAL_MS = 60_000;
+  private static readonly GATEWAY_SNAPSHOT_TTL_MS = 8_000;
   private static readonly LAST_SEEN_DEBOUNCE_MS = 30_000;
   private static readonly HIKVISION_POLL_INTERVAL_MS = 3_000;
   private static readonly HIKVISION_EVENT_DEDUP_MS = 5 * 60_000;
@@ -227,12 +248,28 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         ),
       );
     }, FaceListenerService.REFRESH_INTERVAL_MS);
+    this.gatewayPresenceIntervalId = setInterval(() => {
+      void this.syncAutoRegisterPresence().catch((e) =>
+        this.logger.warn(
+          `[FaceListener] Presença sem NAT falhou: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
+    }, this.offlineNotifyDebounceMs);
+    void this.syncAutoRegisterPresence().catch((e) =>
+      this.logger.warn(
+        `[FaceListener] Presença sem NAT falhou: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   }
 
   onModuleDestroy(): void {
     if (this.refreshIntervalId) {
       clearInterval(this.refreshIntervalId);
       this.refreshIntervalId = null;
+    }
+    if (this.gatewayPresenceIntervalId) {
+      clearInterval(this.gatewayPresenceIntervalId);
+      this.gatewayPresenceIntervalId = null;
     }
     for (const timer of this.reconnectTimers.values()) {
       clearTimeout(timer);
@@ -285,6 +322,22 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       companyId,
       filterClientId,
     );
+    const snapshots = await this.loadGatewaySnapshots({
+      hikvision: fromDb.some(
+        (d) =>
+          d.connectionMode === 'auto_register' &&
+          d.brand === 'hikvision' &&
+          d.isActive &&
+          d.hasCredentials,
+      ),
+      intelbras: fromDb.some(
+        (d) =>
+          d.connectionMode === 'auto_register' &&
+          d.brand === 'intelbras' &&
+          d.isActive &&
+          d.hasCredentials,
+      ),
+    });
 
     const devices: ReaderMonitorDeviceRow[] = fromDb.map((d) => {
       const host = hostFromIpPort(d.ip, d.port);
@@ -321,6 +374,40 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
               : !d.hasCredentials
                 ? 'Credenciais do leitor não configuradas'
                 : null,
+        };
+      }
+
+      if (d.connectionMode === 'auto_register') {
+        const existingStatus = this.statuses.get(d.id);
+        const presence = resolveAutoRegisterPresence({
+          brand: d.brand,
+          autoRegisterDeviceId: d.autoRegisterDeviceId,
+          previousConnected: existingStatus?.connected ?? false,
+          hikvision: snapshots.hikvision,
+          intelbras: snapshots.intelbras,
+        });
+        this.rememberAutoRegisterStatus(
+          {
+            id: d.id,
+            name: d.name,
+            clientId: d.clientId,
+            clientName: d.clientName,
+            companyId,
+            brand: d.brand,
+            host,
+          },
+          presence,
+          existingStatus,
+        );
+        const status = this.statuses.get(d.id);
+        return {
+          ...base,
+          connected: presence.connected,
+          eventsReceived: status?.eventsReceived ?? 0,
+          lastEventAt: status?.lastEventAt ?? null,
+          connectedSince: status?.connectedSince ?? null,
+          lastConnectionError: presence.lastConnectionError,
+          lastSeenAt: presence.lastSeenAt ?? d.lastSeenAt,
         };
       }
 
@@ -363,6 +450,150 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         disconnected: devices.length - connected,
       },
     };
+  }
+
+  private async syncAutoRegisterPresence(): Promise<void> {
+    const rows = await readersQueries.listReadersForEventStream(
+      this.database.db,
+    );
+    const auto = rows.filter((row) => row.connectionMode === 'auto_register');
+    if (auto.length === 0) return;
+
+    const snapshots = await this.loadGatewaySnapshots({
+      hikvision: auto.some((row) => row.brand === 'hikvision'),
+      intelbras: auto.some((row) => row.brand === 'intelbras'),
+    });
+
+    for (const row of auto) {
+      const existing = this.statuses.get(row.id);
+      const presence = resolveAutoRegisterPresence({
+        brand: row.brand,
+        autoRegisterDeviceId: row.autoRegisterDeviceId,
+        previousConnected: existing?.connected ?? false,
+        hikvision: snapshots.hikvision,
+        intelbras: snapshots.intelbras,
+      });
+      this.rememberAutoRegisterStatus(
+        {
+          id: row.id,
+          name: row.name,
+          clientId: row.clientId,
+          clientName: row.clientName,
+          companyId: row.companyId,
+          brand: row.brand,
+          host: hostFromIpPort(row.ip, row.port),
+        },
+        presence,
+        existing,
+      );
+    }
+  }
+
+  private rememberAutoRegisterStatus(
+    reader: {
+      id: string;
+      name: string;
+      clientId: string;
+      clientName: string;
+      companyId: string;
+      brand: ReaderBrand;
+      host: string;
+    },
+    presence: AutoRegisterPresence,
+    existing: ReaderListenerStatus | undefined,
+  ): void {
+    const connectedSince = presence.connected
+      ? (existing?.connectedSince ?? new Date())
+      : existing?.connectedSince;
+    const lastConnectionError = presence.lastConnectionError ?? undefined;
+
+    if (!existing) {
+      this.statuses.set(reader.id, {
+        readerId: reader.id,
+        readerName: reader.name,
+        clientId: reader.clientId,
+        clientName: reader.clientName,
+        companyId: reader.companyId,
+        brand: toBrandSlug(reader.brand),
+        host: reader.host,
+        connected: presence.connected,
+        eventsReceived: 0,
+        connectedSince,
+        lastConnectionError,
+      });
+      return;
+    }
+
+    this.updateStatus(reader.id, {
+      readerName: reader.name,
+      clientName: reader.clientName,
+      host: reader.host,
+      connected: presence.connected,
+      connectedSince,
+      lastConnectionError,
+    });
+  }
+
+  private async loadGatewaySnapshots(need: {
+    hikvision: boolean;
+    intelbras: boolean;
+  }): Promise<{
+    hikvision: GatewayPresenceSnapshot;
+    intelbras: GatewayPresenceSnapshot;
+  }> {
+    const empty: GatewayPresenceSnapshot = { ok: true, devices: [] };
+    const [hikvision, intelbras] = await Promise.all([
+      need.hikvision ? this.loadOneGatewaySnapshot('hikvision') : empty,
+      need.intelbras ? this.loadOneGatewaySnapshot('intelbras') : empty,
+    ]);
+    return { hikvision, intelbras };
+  }
+
+  private async loadOneGatewaySnapshot(
+    kind: 'hikvision' | 'intelbras',
+  ): Promise<GatewayPresenceSnapshot> {
+    const now = Date.now();
+    const cached = this.gatewaySnapshotCache;
+    if (
+      cached &&
+      now - cached.at < FaceListenerService.GATEWAY_SNAPSHOT_TTL_MS &&
+      cached[kind]
+    ) {
+      return cached[kind];
+    }
+
+    let snapshot: GatewayPresenceSnapshot;
+    try {
+      snapshot =
+        kind === 'hikvision'
+          ? {
+              ok: true,
+              devices: hikvisionSessionsToPresence(
+                await listHikvisionGatewayDevices(),
+              ),
+            }
+          : {
+              ok: true,
+              devices: intelbrasSessionsToPresence(
+                await listIntelbrasGatewayDevices(),
+              ),
+            };
+    } catch (err) {
+      snapshot = {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      this.logger.warn(
+        `[FaceListener] Gateway ${kind} indisponível: ${snapshot.error}`,
+      );
+    }
+
+    const fresh =
+      cached && now - cached.at < FaceListenerService.GATEWAY_SNAPSHOT_TTL_MS
+        ? cached
+        : { at: now };
+    this.gatewaySnapshotCache = { ...fresh, at: fresh.at, [kind]: snapshot };
+    return snapshot;
   }
 
   private async connectAllStreamReaders(): Promise<void> {
@@ -412,8 +643,9 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       if (ctx.brand === 'hikvision') {
         if (ctx.connectionMode === 'auto_register') {
           this.logger.log(
-            `[FaceListener] Hikvision auto_register "${ctx.name}" — sem alertStream`,
+            `[FaceListener] Hikvision auto_register "${ctx.name}" — HTTP host`,
           );
+          this.configureHikvisionHttpHost(ctx);
           continue;
         }
         const delayMs = hikvisionConnectIndex * HIKVISION_CONNECT_STAGGER_MS;
@@ -466,7 +698,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       const existing = this.statuses.get(ctx.id);
 
       if (ctx.brand === 'hikvision' && ctx.connectionMode === 'auto_register') {
-        this.stopHikvisionOutbound(ctx.id);
         if (!existing) {
           this.statuses.set(ctx.id, {
             readerId: ctx.id,
@@ -479,7 +710,14 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
             connected: false,
             eventsReceived: 0,
           });
+        } else {
+          this.updateStatus(ctx.id, {
+            readerName: ctx.name,
+            host: dbHost,
+            clientName: ctx.clientName,
+          });
         }
+        this.configureHikvisionHttpHost(ctx);
         continue;
       }
 
@@ -622,10 +860,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
     }
     this.clearReconnectTimer(readerId);
     if (ctx.brand === 'hikvision' && ctx.connectionMode === 'auto_register') {
-      this.stopHikvisionOutbound(readerId);
-      this.logger.log(
-        `[FaceListener] Hikvision auto_register "${ctx.name}" — sem alertStream`,
-      );
+      this.configureHikvisionHttpHost(ctx);
       return;
     }
     if (ctx.brand !== 'hikvision' && skipIntelbrasPersistentStream()) {
@@ -633,24 +868,6 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     this.subscribe(ctx);
-  }
-
-  private stopHikvisionOutbound(readerId: string): void {
-    if (
-      !this.streamAbortByReader.has(readerId) &&
-      !this.hikvisionPollTimers.has(readerId) &&
-      !this.reconnectTimers.has(readerId)
-    ) {
-      return;
-    }
-    this.logger.log(
-      `[FaceListener] Hikvision auto_register ${readerId} — encerrando alertStream/poll`,
-    );
-    this.clearReconnectTimer(readerId);
-    this.clearHikvisionPollTimer(readerId);
-    this.bumpConnectGeneration(readerId);
-    this.abortStream(readerId);
-    this.hikvisionIntegrationByReader.delete(readerId);
   }
 
   private abortStream(readerId: string): void {
@@ -802,9 +1019,7 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   private subscribe(ctx: ReaderStreamContext): void {
     if (ctx.brand === 'hikvision') {
       if (ctx.connectionMode === 'auto_register') {
-        this.logger.log(
-          `[FaceListener] Hikvision auto_register "${ctx.name}" — sem alertStream`,
-        );
+        this.configureHikvisionHttpHost(ctx);
         return;
       }
       void this.subscribeHikvision(ctx);
@@ -995,6 +1210,50 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
         this.tryFlushSnapPending(ctx.id, ctx);
       }
     }
+  }
+
+  private configureHikvisionHttpHost(ctx: ReaderStreamContext): void {
+    if (
+      this.hikvisionHttpHostOk.has(ctx.id) ||
+      this.hikvisionHttpHostBusy.has(ctx.id)
+    ) {
+      return;
+    }
+    let target: ReturnType<typeof resolveHikvisionPushTarget>;
+    try {
+      target = resolveHikvisionPushTarget(ctx.id);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `[FaceListener] HTTP host Hikvision "${ctx.name}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+    this.hikvisionHttpHostBusy.add(ctx.id);
+    const connection = toHikvisionConnection({
+      id: ctx.id,
+      name: ctx.name,
+      ip: ctx.host.split(':')[0] ?? ctx.host,
+      port: Number(ctx.host.split(':')[1] ?? 80),
+      username: ctx.username,
+      plainPassword: ctx.passwordPlain,
+      connectionMode: ctx.connectionMode,
+      autoRegisterDeviceId: ctx.autoRegisterDeviceId,
+    });
+    void hikvisionConfigureHttpHost(connection, target)
+      .then(() => {
+        this.hikvisionHttpHostOk.add(ctx.id);
+        this.logger.log(
+          `[FaceListener] HTTP host Hikvision "${ctx.name}" → ${target.hostName}:${target.port}${target.path}`,
+        );
+      })
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `[FaceListener] HTTP host Hikvision "${ctx.name}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      })
+      .finally(() => {
+        this.hikvisionHttpHostBusy.delete(ctx.id);
+      });
   }
 
   private subscribeHikvision(ctx: ReaderStreamContext): void {
