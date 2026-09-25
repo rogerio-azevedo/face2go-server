@@ -84,13 +84,14 @@ function decodeGatewayBody(
 }
 
 /**
- * ISAPI pelo processo ISUP. Sem HIK_GATEWAY_URL/HIK_GATEWAY_TOKEN o comando
- * falha: o IP do leitor atrás de CGNAT não é alcançável.
+ * Sem HIK_GATEWAY_URL/HIK_GATEWAY_TOKEN o comando falha: o IP do leitor atrás
+ * de CGNAT não é alcançável.
  */
-export async function hikvisionGatewayIsapiRequest(
-  connection: HikvisionReaderConnection,
-  opts: AxiosRequestConfig,
-): Promise<AxiosResponse> {
+function hikvisionGatewayConfig(): {
+  base: string;
+  token: string;
+  secure: boolean;
+} {
   const base = process.env.HIK_GATEWAY_URL?.replace(/\/$/, '') ?? '';
   const token = process.env.HIK_GATEWAY_TOKEN ?? '';
   if (!base || !token) {
@@ -98,11 +99,48 @@ export async function hikvisionGatewayIsapiRequest(
       'Leitor Hikvision em registro automático sem HIK_GATEWAY_URL/HIK_GATEWAY_TOKEN',
     );
   }
+  return { base, token, secure: base.startsWith('https:') };
+}
+
+/**
+ * Publica o JPEG no gateway e devolve a URL curta (HTTP, expira em ~120 s)
+ * que o leitor baixa como `faceURL`.
+ */
+export async function hikvisionGatewayPublishMedia(
+  jpeg: Buffer,
+): Promise<string> {
+  const { base, token, secure } = hikvisionGatewayConfig();
+  const response = await axios.post(
+    `${base}/media`,
+    { bodyBase64: jpeg.toString('base64') },
+    {
+      timeout: 15_000,
+      headers: { Authorization: `Bearer ${token}` },
+      httpsAgent: secure ? gatewayHttpsAgent() : undefined,
+      httpAgent: secure ? undefined : gatewayHttpAgent,
+      validateStatus: () => true,
+      maxBodyLength: Infinity,
+    },
+  );
+  const data = response.data as { url?: unknown; error?: unknown } | undefined;
+  if (response.status >= 400 || typeof data?.url !== 'string') {
+    const reason =
+      typeof data?.error === 'string' ? data.error : `HTTP ${response.status}`;
+    throw new Error(`Gateway Hikvision recusou a foto: ${reason}`);
+  }
+  return data.url;
+}
+
+/** ISAPI pelo processo ISUP. */
+export async function hikvisionGatewayIsapiRequest(
+  connection: HikvisionReaderConnection,
+  opts: AxiosRequestConfig,
+): Promise<AxiosResponse> {
+  const { base, token, secure } = hikvisionGatewayConfig();
   const deviceId = hikvisionGatewayDeviceId(connection);
   const method = String(opts.method ?? 'GET');
   const path = isapiPathFromUrl(String(opts.url ?? ''));
   const timeout = Math.max(Number(opts.timeout ?? 0) || 0, 30_000);
-  const secure = base.startsWith('https:');
   const response = await axios.post(
     `${base}/devices/${encodeURIComponent(deviceId)}/isapi`,
     {

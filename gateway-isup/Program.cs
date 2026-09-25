@@ -12,6 +12,8 @@ var isupKey = Environment.GetEnvironmentVariable("ISUP_KEY") ?? "";
 var publicHost = Environment.GetEnvironmentVariable("ISUP_PUBLIC_HOST") ?? "184.194.233.81";
 var listenPort = int.TryParse(Environment.GetEnvironmentVariable("ISUP_LISTEN_PORT"), out var lp) ? lp : 7660;
 var controlPort = int.TryParse(Environment.GetEnvironmentVariable("CONTROL_PORT"), out var cp) ? cp : 8091;
+var mediaPort = int.TryParse(Environment.GetEnvironmentVariable("MEDIA_PORT"), out var mp) ? mp : 8092;
+var mediaPublicBase = (Environment.GetEnvironmentVariable("MEDIA_PUBLIC_BASE") ?? $"http://{publicHost}:{mediaPort}").TrimEnd('/');
 var certPath = Environment.GetEnvironmentVariable("GATEWAY_TLS_CERT") ?? "";
 var keyPath = Environment.GetEnvironmentVariable("GATEWAY_TLS_KEY") ?? "";
 
@@ -36,6 +38,7 @@ PreloadNative(AppContext.BaseDirectory);
 
 var cms = new CmsListener(isupKey.Trim(), publicHost, listenPort);
 cms.Start();
+var media = new MediaStore(TimeSpan.FromSeconds(120));
 
 var cert = X509Certificate2.CreateFromPemFile(certPath, keyPath);
 cert = new X509Certificate2(cert.Export(X509ContentType.Pfx));
@@ -45,11 +48,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Listen(IPAddress.Any, controlPort, listen => listen.UseHttps(cert));
+    options.Listen(IPAddress.Any, mediaPort);
 });
 var app = builder.Build();
 
 app.Use(async (ctx, next) =>
 {
+    if (ctx.Connection.LocalPort == mediaPort)
+    {
+        if (HttpMethods.IsGet(ctx.Request.Method) && ctx.Request.Path.StartsWithSegments("/f"))
+        {
+            await next();
+            return;
+        }
+        ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
     if (!BearerOk(ctx.Request.Headers.Authorization.ToString(), token))
     {
         ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -101,7 +115,52 @@ app.MapPost("/devices/{ehomeId}/isapi", async (string ehomeId, HttpRequest reque
     return Results.Json(payload);
 });
 
-Console.WriteLine($"[isup] CMS 0.0.0.0:{listenPort} controle https 0.0.0.0:{controlPort}");
+app.MapPost("/media", async (HttpRequest request) =>
+{
+    MediaUpload? upload;
+    try
+    {
+        upload = await request.ReadFromJsonAsync<MediaUpload>();
+    }
+    catch (JsonException)
+    {
+        return Results.Json(new { error = "json invalido" }, statusCode: StatusCodes.Status400BadRequest);
+    }
+    if (upload == null || string.IsNullOrEmpty(upload.BodyBase64))
+    {
+        return Results.Json(new { error = "bodyBase64 obrigatorio" }, statusCode: StatusCodes.Status400BadRequest);
+    }
+    byte[] bytes;
+    try
+    {
+        bytes = Convert.FromBase64String(upload.BodyBase64);
+    }
+    catch (FormatException)
+    {
+        return Results.Json(new { error = "bodyBase64 invalido" }, statusCode: StatusCodes.Status400BadRequest);
+    }
+    if (bytes.Length < 3 || bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes.Length > MediaStore.MaxBytes)
+    {
+        return Results.Json(new { error = "jpeg invalido ou maior que 512 KB" }, statusCode: StatusCodes.Status400BadRequest);
+    }
+    var mediaToken = media.Put(bytes);
+    Console.WriteLine($"[isup] media put {mediaToken[..6]} len={bytes.Length}");
+    return Results.Json(new { url = $"{mediaPublicBase}/f/{mediaToken}.jpg", expiresInSec = 120 });
+});
+
+app.MapGet("/f/{file}", (string file, HttpContext ctx) =>
+{
+    if (ctx.Connection.LocalPort != mediaPort || !file.EndsWith(".jpg", StringComparison.Ordinal))
+    {
+        return Results.NotFound();
+    }
+    var mediaToken = file[..^4];
+    var bytes = media.Get(mediaToken);
+    Console.WriteLine($"[isup] media get {(mediaToken.Length >= 6 ? mediaToken[..6] : mediaToken)} from={ctx.Connection.RemoteIpAddress} hit={bytes != null}");
+    return bytes == null ? Results.NotFound() : Results.Bytes(bytes, "image/jpeg");
+});
+
+Console.WriteLine($"[isup] CMS 0.0.0.0:{listenPort} controle https 0.0.0.0:{controlPort} media http 0.0.0.0:{mediaPort}");
 app.Run();
 
 static void LinkNativeAliases(string dir)
@@ -292,6 +351,53 @@ sealed record IsapiCommand(
     JsonElement? Body,
     string? BodyBase64,
     JsonElement? Credentials);
+
+sealed record MediaUpload(string? BodyBase64);
+
+/// <summary>JPEG em memória para o leitor baixar via faceURL (o passthrough ISUP não leva multipart binário).</summary>
+sealed class MediaStore
+{
+    public const int MaxBytes = 512 * 1024;
+    private const int MaxEntries = 200;
+    private readonly TimeSpan ttl;
+    private readonly object gate = new();
+    private readonly Dictionary<string, (byte[] Bytes, DateTimeOffset ExpiresAt)> items = new(StringComparer.Ordinal);
+
+    public MediaStore(TimeSpan ttl)
+    {
+        this.ttl = ttl;
+    }
+
+    public string Put(byte[] bytes)
+    {
+        var id = RandomNumberGenerator.GetHexString(32, lowercase: true);
+        var now = DateTimeOffset.UtcNow;
+        lock (gate)
+        {
+            foreach (var key in items.Where(pair => pair.Value.ExpiresAt <= now).Select(pair => pair.Key).ToList())
+            {
+                items.Remove(key);
+            }
+            if (items.Count >= MaxEntries)
+            {
+                items.Remove(items.MinBy(pair => pair.Value.ExpiresAt).Key);
+            }
+            items[id] = (bytes, now + ttl);
+        }
+        return id;
+    }
+
+    public byte[]? Get(string id)
+    {
+        lock (gate)
+        {
+            if (!items.TryGetValue(id, out var item)) return null;
+            if (item.ExpiresAt > DateTimeOffset.UtcNow) return item.Bytes;
+            items.Remove(id);
+            return null;
+        }
+    }
+}
 
 sealed class CmsListener
 {

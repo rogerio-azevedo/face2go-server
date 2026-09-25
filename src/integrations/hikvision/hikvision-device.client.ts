@@ -5,6 +5,7 @@ import {
   hikvisionEnsureBlockListAuth,
   hikvisionSetFaceDuplicateCheck,
 } from './hikvision-acs-cfg.client';
+import { hikvisionGatewayPublishMedia } from './hikvision-gateway-auth';
 import { hikvisionIsapiRequest } from './hikvision-isapi-request';
 import { resolveHikvisionDevicePictureUrl } from './hikvision-picture-url.util';
 import {
@@ -310,33 +311,34 @@ export function buildHikvisionFaceMultipartBody(
   };
 }
 
-async function sendHikvisionFaceMultipart(
-  connection: HikvisionReaderConnection,
+export function buildHikvisionFaceUrlBody(
+  employeeNo: string,
+  faceUrl: string,
+  faceLib: HikvisionFaceLibRef,
+): Record<string, string> {
+  return {
+    faceLibType: faceLib.faceLibType,
+    FDID: faceLib.fdid,
+    FPID: employeeNo,
+    faceURL: faceUrl,
+  };
+}
+
+function multipartFaceRequest(
   method: 'POST' | 'PUT',
   url: string,
   employeeNo: string,
   jpegBuffer: Buffer,
   imageFieldName: HikvisionFaceMultipartFieldName,
   faceLib: HikvisionFaceLibRef,
-): Promise<void> {
+) {
   const { body, contentType } = buildHikvisionFaceMultipartBody(
     employeeNo,
     jpegBuffer,
     faceLib,
     { imageFieldName },
   );
-
-  syncLog('hikvision:upsertFaceRequest', {
-    employeeNo,
-    method,
-    url,
-    imageFieldName,
-    jpegBytes: jpegBuffer.length,
-    faceLibType: faceLib.faceLibType,
-    fdid: faceLib.fdid,
-  });
-
-  const response = await hikvisionIsapiRequest(connection, {
+  return {
     method,
     url,
     headers: {
@@ -347,7 +349,58 @@ async function sendHikvisionFaceMultipart(
     transformRequest: [(data: unknown) => data],
     maxBodyLength: Infinity,
     maxContentLength: Infinity,
+  };
+}
+
+/** O passthrough ISUP não leva multipart binário: o leitor baixa a foto do gateway. */
+function isFaceUrlTransport(connection: HikvisionReaderConnection): boolean {
+  return connection.connectionMode === 'auto_register';
+}
+
+async function sendHikvisionFaceImage(
+  connection: HikvisionReaderConnection,
+  method: 'POST' | 'PUT',
+  url: string,
+  employeeNo: string,
+  jpegBuffer: Buffer,
+  imageFieldName: HikvisionFaceMultipartFieldName,
+  faceLib: HikvisionFaceLibRef,
+): Promise<void> {
+  const viaFaceUrl = isFaceUrlTransport(connection);
+
+  syncLog('hikvision:upsertFaceRequest', {
+    employeeNo,
+    method,
+    url,
+    transport: viaFaceUrl ? 'faceURL' : 'multipart',
+    imageFieldName: viaFaceUrl ? undefined : imageFieldName,
+    jpegBytes: jpegBuffer.length,
+    faceLibType: faceLib.faceLibType,
+    fdid: faceLib.fdid,
   });
+
+  const response = await hikvisionIsapiRequest(
+    connection,
+    viaFaceUrl
+      ? {
+          method,
+          url,
+          headers: { 'Content-Type': 'application/json' },
+          data: buildHikvisionFaceUrlBody(
+            employeeNo,
+            await hikvisionGatewayPublishMedia(jpegBuffer),
+            faceLib,
+          ),
+        }
+      : multipartFaceRequest(
+          method,
+          url,
+          employeeNo,
+          jpegBuffer,
+          imageFieldName,
+          faceLib,
+        ),
+  );
 
   const status = extractResponseStatus(response.data);
   syncLog('hikvision:upsertFaceResponse', {
@@ -508,7 +561,10 @@ async function hikvisionPostFaceDataRecord(
       faceLib,
     );
   } catch (firstError) {
-    if (isFaceAlreadyExistsError(firstError)) {
+    if (
+      isFaceAlreadyExistsError(firstError) ||
+      isFaceUrlTransport(connection)
+    ) {
       throw firstError;
     }
     await hikvisionPostFaceDataRecordOnce(
@@ -689,7 +745,7 @@ async function hikvisionPutFaceSetupOnce(
   imageFieldName: HikvisionFaceMultipartFieldName,
   faceLib: HikvisionFaceLibRef,
 ): Promise<void> {
-  await sendHikvisionFaceMultipart(
+  await sendHikvisionFaceImage(
     connection,
     'PUT',
     faceSetupUrl(connection),
@@ -707,7 +763,7 @@ async function hikvisionPostFaceDataRecordOnce(
   imageFieldName: HikvisionFaceMultipartFieldName,
   faceLib: HikvisionFaceLibRef,
 ): Promise<void> {
-  await sendHikvisionFaceMultipart(
+  await sendHikvisionFaceImage(
     connection,
     'POST',
     faceDataRecordUrl(connection),
@@ -733,7 +789,10 @@ async function hikvisionPutFaceSetup(
       faceLib,
     );
   } catch (firstError) {
-    if (isFaceAlreadyExistsError(firstError)) {
+    if (
+      isFaceAlreadyExistsError(firstError) ||
+      isFaceUrlTransport(connection)
+    ) {
       throw firstError;
     }
     await hikvisionPutFaceSetupOnce(
