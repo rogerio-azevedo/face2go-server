@@ -24,6 +24,7 @@ import type {
 import {
   buildEnrollmentCsv,
   enrollmentExportFilename,
+  groupIncludesLogin,
   groupIncludesVehicle,
   percentOf,
 } from './enrollment-report.utils';
@@ -97,13 +98,21 @@ export class ReportsService {
       query.page !== undefined ? String(query.page) : undefined,
       query.pageSize !== undefined ? String(query.pageSize) : undefined,
     );
-    const [rows, counts, hasFacialReaders] = await Promise.all([
+    const [rows, counts, readerTotal] = await Promise.all([
       this.reports.listEnrollment(filters, { offset, limit: pageSize }),
       this.reports.summarizeEnrollment(filters),
-      this.reports.hasActiveFacialReaders(client.id),
+      this.reports.countActiveFacialReaders(client.id),
     ]);
     const includeVehicle = groupIncludesVehicle(query.group);
-    const includeLogin = query.group !== 'students';
+    const includeLogin = groupIncludesLogin(query.group);
+    const hasFacialReaders = readerTotal > 0;
+    const faceIds = rows
+      .map((row) => row.faceId)
+      .filter((faceId): faceId is number => faceId != null);
+    const syncedByFace = await this.reports.countSyncedByFaceIds(
+      client.id,
+      faceIds,
+    );
     const data = await Promise.all(
       rows.map(async (row) => ({
         id: row.id,
@@ -116,6 +125,9 @@ export class ReportsService {
         deviceSyncStatus: row.deviceSyncStatus,
         deviceSyncError: row.deviceSyncError,
         hasFacialReaders,
+        readerSyncSynced:
+          row.faceId != null ? (syncedByFace.get(row.faceId) ?? 0) : null,
+        readerSyncTotal: hasFacialReaders ? readerTotal : null,
         hasLogin: includeLogin ? row.hasLogin : undefined,
       })),
     );
@@ -150,8 +162,9 @@ export class ReportsService {
       ...(includeStatusFilters
         ? {
             hasFace: query.hasFace,
-            hasVehicle:
-              query.group === 'students' ? undefined : query.hasVehicle,
+            hasVehicle: groupIncludesVehicle(query.group)
+              ? query.hasVehicle
+              : undefined,
             syncFailed: query.syncFailed,
           }
         : {}),

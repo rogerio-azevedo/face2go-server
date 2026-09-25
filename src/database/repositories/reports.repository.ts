@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import * as personReaderSyncQueries from '../queries/person-reader-sync.queries';
 import * as reportsQueries from '../queries/reports.queries';
 import { BaseRepository } from './base.repository';
 
@@ -22,5 +23,17 @@ export class ReportsRepository extends BaseRepository {
 
   hasActiveFacialReaders(clientId: string) {
     return reportsQueries.hasActiveFacialReaders(this.db, clientId);
+  }
+
+  countActiveFacialReaders(clientId: string) {
+    return reportsQueries.countActiveFacialReaders(this.db, clientId);
+  }
+
+  countSyncedByFaceIds(clientId: string, faceIds: number[]) {
+    return personReaderSyncQueries.countSyncedPersonReaderSyncByFaceIds(
+      this.db,
+      clientId,
+      faceIds,
+    );
   }
 }

@@ -15,6 +15,7 @@ describe('enrollment-report.utils', () => {
     expect(groupIncludesVehicle('students')).toBe(false);
     expect(groupIncludesVehicle('responsibles')).toBe(true);
     expect(groupIncludesVehicle('members')).toBe(true);
+    expect(groupIncludesVehicle('registrations')).toBe(false);
   });
 
   it('gera CSV de alunos com turma, sincronismo e face', () => {
@@ -77,5 +78,27 @@ describe('enrollment-report.utils', () => {
     ]);
     expect(csv).toContain('Nome,Função,Acesso login,Sincronismo,Face,Veículo');
     expect(csv).toContain('Maria,Professor,—,Erro,Sim,Não');
+  });
+
+  it('gera CSV de cadastros sem login, turma e veículo', () => {
+    const csv = buildEnrollmentCsv('registrations', [
+      {
+        id: '1',
+        name: 'Carla',
+        className: null,
+        photoKey: 'face.jpg',
+        roleName: null,
+        hasFace: true,
+        hasVehicle: false,
+        deviceSyncStatus: 'sync_failed',
+        deviceSyncError: 'Timeout',
+        hasLogin: false,
+      },
+    ]);
+    expect(csv).toContain('Nome,Sincronismo,Face');
+    expect(csv).toContain('Carla,Erro,Sim');
+    expect(csv).not.toContain('Veículo');
+    expect(csv).not.toContain('Acesso login');
+    expect(csv).not.toContain('Turma');
   });
 });

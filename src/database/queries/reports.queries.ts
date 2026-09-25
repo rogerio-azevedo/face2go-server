@@ -16,6 +16,7 @@ import {
   clientMembers,
   clientRoles,
   facialReaders,
+  registrations,
   responsibles,
   schoolClasses,
   studentClasses,
@@ -24,7 +25,11 @@ import {
 import { unaccentIlike } from './search-utils';
 import * as studentClassesQueries from './student-classes.queries';
 
-export type EnrollmentGroup = 'students' | 'responsibles' | 'members';
+export type EnrollmentGroup =
+  | 'students'
+  | 'responsibles'
+  | 'members'
+  | 'registrations';
 
 export type EnrollmentReportFilters = {
   clientId: string;
@@ -48,6 +53,7 @@ export type EnrollmentListRow = {
   className: string | null;
   roleName: string | null;
   photoKey: string | null;
+  faceId?: number | null;
   hasFace: boolean;
   hasVehicle: boolean;
   deviceSyncStatus: 'pending_sync' | 'synced' | 'sync_failed' | null;
@@ -168,6 +174,25 @@ function responsibleWhere(filters: EnrollmentReportFilters): SQL | undefined {
   return and(...conditions);
 }
 
+function registrationWhere(filters: EnrollmentReportFilters): SQL | undefined {
+  const conditions: SQL[] = [
+    eq(registrations.clientId, filters.clientId),
+    eq(registrations.status, 'approved'),
+    eq(registrations.isActive, true),
+  ];
+  const searchCond = nameSearch(registrations.name, filters.search);
+  if (searchCond) conditions.push(searchCond);
+  const faceCond = matchBool(
+    hasCompleteFaceSql(registrations.faceId, registrations.faceImageKey),
+    filters.hasFace,
+  );
+  if (faceCond) conditions.push(faceCond);
+  if (filters.syncFailed) {
+    conditions.push(eq(registrations.deviceSyncStatus, 'sync_failed'));
+  }
+  return and(...conditions);
+}
+
 function memberWhere(filters: EnrollmentReportFilters): SQL | undefined {
   const conditions: SQL[] = [
     eq(clientMembers.clientId, filters.clientId),
@@ -247,6 +272,25 @@ async function summarizeMembers(
   };
 }
 
+async function summarizeRegistrations(
+  db: AppDb,
+  filters: EnrollmentReportFilters,
+): Promise<EnrollmentSummaryCounts> {
+  const [row] = await db
+    .select({
+      total: count(),
+      withFace: sql<number>`(count(*) filter (where ${hasCompleteFaceSql(registrations.faceId, registrations.faceImageKey)}))::int`,
+    })
+    .from(registrations)
+    .where(registrationWhere(filters));
+
+  return {
+    total: toCount(row?.total),
+    withFace: toCount(row?.withFace),
+    withVehicle: 0,
+  };
+}
+
 export async function summarizeEnrollment(
   db: AppDb,
   filters: EnrollmentReportFilters,
@@ -256,6 +300,9 @@ export async function summarizeEnrollment(
   }
   if (filters.group === 'responsibles') {
     return summarizeResponsibles(db, filters);
+  }
+  if (filters.group === 'registrations') {
+    return summarizeRegistrations(db, filters);
   }
   return summarizeMembers(db, filters);
 }
@@ -293,6 +340,7 @@ async function listStudents(
       id: students.id,
       name: students.name,
       photoKey: students.photoKey,
+      faceId: students.faceId,
       hasFace: hasCompleteFaceSelect(students.faceId, students.photoKey),
       deviceSyncStatus: students.deviceSyncStatus,
       deviceSyncError: students.deviceSyncError,
@@ -311,6 +359,7 @@ async function listStudents(
       id: row.id,
       name: row.name,
       photoKey: row.photoKey ?? null,
+      faceId: row.faceId ?? null,
       roleName: null,
       hasFace: toBool(row.hasFace),
       hasVehicle: false,
@@ -331,6 +380,7 @@ async function listResponsibles(
       id: responsibles.id,
       name: responsibles.name,
       photoKey: responsibles.photoKey,
+      faceId: responsibles.faceId,
       hasFace: hasCompleteFaceSelect(
         responsibles.faceId,
         responsibles.photoKey,
@@ -354,11 +404,53 @@ async function listResponsibles(
     className: null,
     roleName: null,
     photoKey: row.photoKey ?? null,
+    faceId: row.faceId ?? null,
     hasFace: toBool(row.hasFace),
     hasVehicle: toBool(row.hasVehicle),
     deviceSyncStatus: row.deviceSyncStatus ?? null,
     deviceSyncError: row.deviceSyncError ?? null,
     hasLogin: row.userId != null,
+  }));
+}
+
+async function listRegistrations(
+  db: AppDb,
+  filters: EnrollmentReportFilters,
+  options: EnrollmentListOptions,
+): Promise<EnrollmentListRow[]> {
+  const q = db
+    .select({
+      id: registrations.id,
+      name: registrations.name,
+      photoKey: registrations.faceImageKey,
+      faceId: registrations.faceId,
+      hasFace: hasCompleteFaceSelect(
+        registrations.faceId,
+        registrations.faceImageKey,
+      ),
+      deviceSyncStatus: registrations.deviceSyncStatus,
+      deviceSyncError: registrations.deviceSyncError,
+    })
+    .from(registrations)
+    .where(registrationWhere(filters))
+    .orderBy(asc(registrations.name));
+
+  if (options.limit !== undefined) q.limit(options.limit);
+  if (options.offset !== undefined) q.offset(options.offset);
+
+  const rows = await q;
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name?.trim() || 'Sem nome',
+    className: null,
+    roleName: null,
+    photoKey: row.photoKey ?? null,
+    faceId: row.faceId ?? null,
+    hasFace: toBool(row.hasFace),
+    hasVehicle: false,
+    deviceSyncStatus: row.deviceSyncStatus ?? null,
+    deviceSyncError: row.deviceSyncError ?? null,
+    hasLogin: false,
   }));
 }
 
@@ -372,6 +464,7 @@ async function listMembers(
       id: clientMembers.id,
       name: clientMembers.name,
       photoKey: clientMembers.photoKey,
+      faceId: clientMembers.faceId,
       roleName: clientRoles.name,
       hasFace: hasCompleteFaceSelect(
         clientMembers.faceId,
@@ -397,6 +490,7 @@ async function listMembers(
     className: null,
     roleName: row.roleName ?? null,
     photoKey: row.photoKey ?? null,
+    faceId: row.faceId ?? null,
     hasFace: toBool(row.hasFace),
     hasVehicle: toBool(row.hasVehicle),
     deviceSyncStatus: row.deviceSyncStatus ?? null,
@@ -415,6 +509,9 @@ export async function listEnrollment(
   }
   if (filters.group === 'responsibles') {
     return listResponsibles(db, filters, options);
+  }
+  if (filters.group === 'registrations') {
+    return listRegistrations(db, filters, options);
   }
   return listMembers(db, filters, options);
 }
@@ -437,6 +534,25 @@ export async function hasActiveFacialReaders(
     )
     .limit(1);
   return Boolean(row);
+}
+
+export async function countActiveFacialReaders(
+  db: AppDb,
+  clientId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ total: count() })
+    .from(facialReaders)
+    .where(
+      and(
+        eq(facialReaders.clientId, clientId),
+        eq(facialReaders.isActive, true),
+        isNotNull(facialReaders.username),
+        isNotNull(facialReaders.passwordEncrypted),
+        isNotNull(facialReaders.ip),
+      ),
+    );
+  return toCount(row?.total);
 }
 
 export async function listActiveSchoolClassesByClient(

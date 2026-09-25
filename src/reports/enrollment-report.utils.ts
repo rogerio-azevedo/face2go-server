@@ -7,13 +7,14 @@ export function percentOf(part: number, total: number): number {
 }
 
 export function groupIncludesVehicle(group: EnrollmentGroup): boolean {
-  return group !== 'students';
+  return group === 'responsibles' || group === 'members';
 }
 
 export const ENROLLMENT_GROUP_LABEL: Record<EnrollmentGroup, string> = {
   students: 'Alunos',
   responsibles: 'Responsáveis',
   members: 'Membros',
+  registrations: 'Usuários',
 };
 
 function csvCell(value: string): string {
@@ -46,7 +47,7 @@ function syncLabel(row: EnrollmentListRow): string {
 }
 
 export function groupIncludesLogin(group: EnrollmentGroup): boolean {
-  return group !== 'students';
+  return group === 'responsibles' || group === 'members';
 }
 
 export function buildEnrollmentCsv(
@@ -87,6 +88,7 @@ export function enrollmentExportFilename(group: EnrollmentGroup): string {
     students: 'alunos',
     responsibles: 'responsaveis',
     members: 'membros',
+    registrations: 'usuarios',
   };
   return `relatorio-cadastro-${slug[group]}.csv`;
 }

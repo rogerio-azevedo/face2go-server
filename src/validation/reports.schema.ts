@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const enrollmentGroupSchema = z.enum(
-  ['students', 'responsibles', 'members'],
+  ['students', 'responsibles', 'members', 'registrations'],
   { message: 'Grupo inválido.' },
 );
 
@@ -84,5 +84,7 @@ export const enrollmentListItemSchema = z.object({
     .nullable(),
   deviceSyncError: z.string().nullable().optional(),
   hasFacialReaders: z.boolean(),
+  readerSyncSynced: z.number().int().nullable().optional(),
+  readerSyncTotal: z.number().int().nullable().optional(),
   hasLogin: z.boolean().optional(),
 });
