@@ -39,7 +39,7 @@ export async function observeDeviceSyncJob(
       });
       return;
     }
-    if (job.status === 'failed') {
+    if (job.status === 'failed' || job.status === 'canceled') {
       writeSseEvent(res, {
         type: 'error',
         message: job.error ?? 'Falha no sync.',
@@ -65,7 +65,10 @@ export async function observeDeviceSyncJobs(
   for (;;) {
     const rows = await queue.listByIds(jobIds);
     const done = rows.filter(
-      (row) => row.status === 'done' || row.status === 'failed',
+      (row) =>
+        row.status === 'done' ||
+        row.status === 'failed' ||
+        row.status === 'canceled',
     ).length;
     if (done !== lastDone) {
       writeSseEvent(res, {

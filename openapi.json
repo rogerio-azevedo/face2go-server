@@ -30,6 +30,264 @@
         ]
       }
     },
+    "/clients/{clientId}/device-sync-jobs": {
+      "get": {
+        "operationId": "ClientDeviceSyncJobsController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "done",
+                    "failed",
+                    "canceled"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "active"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "face.person",
+                "face.reader",
+                "face.school",
+                "lpr.vehicle",
+                "lpr.camera"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSyncJobListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Fila de sync de dispositivos do cliente",
+        "tags": [
+          "device-sync-jobs"
+        ]
+      }
+    },
+    "/clients/{clientId}/device-sync-jobs/summary": {
+      "get": {
+        "operationId": "ClientDeviceSyncJobsController_summary",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSyncJobSummaryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Contagem de jobs por status",
+        "tags": [
+          "device-sync-jobs"
+        ]
+      }
+    },
+    "/clients/{clientId}/device-sync-jobs/cancel-queued": {
+      "post": {
+        "operationId": "ClientDeviceSyncJobsController_cancelQueued",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSyncCancelQueuedResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancela todos os jobs ainda na fila",
+        "tags": [
+          "device-sync-jobs"
+        ]
+      }
+    },
+    "/clients/{clientId}/device-sync-jobs/{jobId}/cancel": {
+      "post": {
+        "operationId": "ClientDeviceSyncJobsController_cancel",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSyncJobCancelResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancela um job (na fila: imediato; em execução: no próximo item)",
+        "tags": [
+          "device-sync-jobs"
+        ]
+      }
+    },
+    "/clients/{clientId}/device-sync-jobs/{jobId}/retry": {
+      "post": {
+        "operationId": "ClientDeviceSyncJobsController_retry",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSyncJobDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reenfileira um job com falha ou cancelado",
+        "tags": [
+          "device-sync-jobs"
+        ]
+      }
+    },
     "/companies/{id}/features": {
       "get": {
         "operationId": "CompanyFeaturesController_list",
@@ -11381,6 +11639,252 @@
       }
     },
     "schemas": {
+      "DeviceSyncJobListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "jobId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "face.person",
+                    "face.reader",
+                    "face.school",
+                    "lpr.vehicle",
+                    "lpr.camera"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "done",
+                    "failed",
+                    "canceled"
+                  ]
+                },
+                "targetId": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "entityKind": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "force": {
+                  "type": "boolean"
+                },
+                "processed": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "attempts": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "cancelRequested": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "startedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "finishedAt": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "jobId",
+                "kind",
+                "status",
+                "targetId",
+                "label",
+                "entityKind",
+                "force",
+                "processed",
+                "total",
+                "attempts",
+                "cancelRequested",
+                "error",
+                "createdAt",
+                "startedAt",
+                "finishedAt"
+              ]
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "page": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "DeviceSyncJobSummaryDto": {
+        "type": "object",
+        "properties": {
+          "queued": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "running": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "done": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "canceled": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "queued",
+          "running",
+          "done",
+          "failed",
+          "canceled"
+        ]
+      },
+      "DeviceSyncCancelQueuedResultDto": {
+        "type": "object",
+        "properties": {
+          "canceled": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "canceled"
+        ]
+      },
+      "DeviceSyncJobCancelResultDto": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "canceled",
+              "cancel_requested"
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ]
+      },
+      "DeviceSyncJobDto": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed",
+              "canceled"
+            ]
+          },
+          "force": {
+            "type": "boolean"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "entityKind": {
+            "type": "string"
+          },
+          "processed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "jobId",
+          "kind",
+          "status",
+          "force",
+          "targetId",
+          "processed",
+          "total",
+          "error"
+        ]
+      },
       "ToggleCompanyFeatureDto": {
         "type": "object",
         "properties": {

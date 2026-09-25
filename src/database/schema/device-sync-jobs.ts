@@ -27,6 +27,7 @@ export const deviceSyncJobStatusEnum = pgEnum('device_sync_job_status', [
   'running',
   'done',
   'failed',
+  'canceled',
 ]);
 
 export const deviceSyncJobs = pgTable(
@@ -48,6 +49,12 @@ export const deviceSyncJobs = pgTable(
     processed: integer('processed').notNull().default(0),
     total: integer('total').notNull().default(0),
     error: text('error'),
+    /** Instância do worker dona do job enquanto `running`. */
+    lockedBy: text('locked_by'),
+    /** Sem batida recente, o reaper devolve o job para a fila. */
+    heartbeatAt: timestamp('heartbeat_at'),
+    attempts: integer('attempts').notNull().default(0),
+    cancelRequested: boolean('cancel_requested').notNull().default(false),
     createdBy: uuid('created_by'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -59,7 +66,10 @@ export const deviceSyncJobs = pgTable(
       .on(t.dedupeKey)
       .where(sql`${t.status} = 'queued'`),
     index('device_sync_jobs_status_created_idx').on(t.status, t.createdAt),
-    index('device_sync_jobs_client_idx').on(t.clientId),
+    index('device_sync_jobs_client_created_idx').on(t.clientId, t.createdAt),
+    index('device_sync_jobs_target_active_idx')
+      .on(t.kind, t.targetId)
+      .where(sql`${t.status} IN ('queued', 'running')`),
   ],
 );
 

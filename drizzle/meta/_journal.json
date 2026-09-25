@@ -561,6 +561,13 @@
       "when": 1779480000000,
       "tag": "0079_device_sync_jobs_dedupe_queued",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1779490000000,
+      "tag": "0080_device_sync_jobs_lease",
+      "breakpoints": true
     }
   ]
 }

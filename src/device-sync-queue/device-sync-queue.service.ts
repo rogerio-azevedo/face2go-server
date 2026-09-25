@@ -92,12 +92,39 @@ export class DeviceSyncQueueService {
     return jobQueries.listDeviceSyncJobsByIds(this.database.db, ids);
   }
 
-  claimNext() {
-    return jobQueries.claimNextDeviceSyncJob(this.database.db);
+  claimNext(workerId: string) {
+    return jobQueries.claimNextDeviceSyncJob(this.database.db, workerId);
   }
 
-  requeueOrphans() {
-    return jobQueries.requeueOrphanRunningJobs(this.database.db);
+  heartbeat(id: string, workerId: string) {
+    return jobQueries.heartbeatDeviceSyncJob(this.database.db, id, workerId);
+  }
+
+  isCancelRequested(id: string) {
+    return jobQueries.isDeviceSyncJobCancelRequested(this.database.db, id);
+  }
+
+  finish(
+    id: string,
+    workerId: string,
+    patch: Parameters<typeof jobQueries.finishDeviceSyncJob>[3],
+  ) {
+    return jobQueries.finishDeviceSyncJob(
+      this.database.db,
+      id,
+      workerId,
+      patch,
+    );
+  }
+
+  recoverRunning(scope: jobQueries.RecoverRunningScope, maxAttempts: number) {
+    return jobQueries.recoverRunningJobs(this.database.db, scope, maxAttempts);
+  }
+
+  purgeFinished(
+    opts: Parameters<typeof jobQueries.purgeFinishedDeviceSyncJobs>[1],
+  ) {
+    return jobQueries.purgeFinishedDeviceSyncJobs(this.database.db, opts);
   }
 
   update(
