@@ -23,16 +23,10 @@ import type {
   TelegramWebhookDto,
   UpdateTelegramChatDto,
 } from '../validation/dto/telegram-alerts.dto';
+import { formatBlockedAttemptMessage } from './format-blocked-attempt-message';
 import { TelegramAlertsRepository } from './telegram-alerts.repository';
 
 const LINK_TTL_MS = 15 * 60 * 1000;
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
 
 function secretsMatch(expected: string, received: string | undefined): boolean {
   if (!received) {
@@ -133,7 +127,7 @@ export class TelegramAlertsService {
       if (chats.length === 0) {
         return;
       }
-      const text = this.formatBlockedAttempt(payload);
+      const text = formatBlockedAttemptMessage(payload);
       await Promise.all(
         chats.map((chat) => this.deliver(chat.chatId, text, snapUrl)),
       );
@@ -252,28 +246,6 @@ export class TelegramAlertsService {
     if (!message.ok && message.blocked) {
       await this.repository.deactivateByChatId(chatId);
     }
-  }
-
-  private formatBlockedAttempt(payload: AccessBlockedAttemptPayload): string {
-    const person = escapeHtml(
-      payload.personName?.trim() || `Face ${payload.faceId}`,
-    );
-    const reason = escapeHtml(payload.blockReason?.trim() || 'não informado');
-    const when = payload.eventDate
-      ? payload.eventDate.toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          dateStyle: 'short',
-          timeStyle: 'short',
-        })
-      : 'agora';
-    return [
-      '<b>Tentativa de acesso bloqueada</b>',
-      `Pessoa: ${person}`,
-      `Motivo: ${reason}`,
-      `Leitor: ${escapeHtml(payload.readerName)}`,
-      `Cliente: ${escapeHtml(payload.clientName)}`,
-      `Quando: ${when}`,
-    ].join('\n');
   }
 
   private clientIdOf(user: JwtPayload): string {
