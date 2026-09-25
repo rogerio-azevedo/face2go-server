@@ -230,6 +230,7 @@ export class AccessesService {
     }
 
     const eventDate = dateFromIntelbrasUtc(data.CreateTime ?? data.UTC);
+    const status: 'granted' | 'denied' = denied ? 'denied' : 'granted';
 
     const docFields = {
       companyId: ctx.companyId,
@@ -241,7 +242,7 @@ export class AccessesService {
       personName,
       personId,
       personType,
-      status: denied ? 'denied' : 'granted',
+      status,
       errorCode: data.ErrorCode ?? null,
       userType: data.UserType ?? null,
       cardType: data.CardType ?? null,
