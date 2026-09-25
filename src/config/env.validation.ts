@@ -102,6 +102,10 @@ export const envSchema = z.object({
    */
   HIK_GATEWAY_URL: z.string().url().optional(),
   HIK_GATEWAY_TOKEN: z.string().min(16).optional(),
+  /** Bot API do Telegram. Sem token, alertas por Telegram ficam desligados. */
+  TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+  TELEGRAM_BOT_USERNAME: z.string().min(1).optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().min(1).optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

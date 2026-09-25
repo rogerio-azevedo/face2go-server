@@ -10691,6 +10691,147 @@
         ]
       }
     },
+    "/telegram/webhook": {
+      "post": {
+        "operationId": "TelegramWebhookController_webhook",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramWebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Webhook do bot de alertas do Telegram",
+        "tags": [
+          "telegram-alerts"
+        ]
+      }
+    },
+    "/client/telegram-alerts": {
+      "get": {
+        "operationId": "TelegramAlertsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar chats do Telegram vinculados ao cliente",
+        "tags": [
+          "telegram-alerts"
+        ]
+      }
+    },
+    "/client/telegram-alerts/link-token": {
+      "post": {
+        "operationId": "TelegramAlertsController_createLinkToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTelegramLinkTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar link de vínculo de usuário ou grupo",
+        "tags": [
+          "telegram-alerts"
+        ]
+      }
+    },
+    "/client/telegram-alerts/{id}": {
+      "patch": {
+        "operationId": "TelegramAlertsController_setActive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTelegramChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ativar ou desativar um chat do Telegram",
+        "tags": [
+          "telegram-alerts"
+        ]
+      },
+      "delete": {
+        "operationId": "TelegramAlertsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remover um chat do Telegram",
+        "tags": [
+          "telegram-alerts"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthController_ping",
@@ -12875,6 +13016,47 @@
         },
         "required": [
           "pushToken"
+        ]
+      },
+      "TelegramWebhookDto": {
+        "type": "object",
+        "properties": {
+          "update_id": {
+            "type": "number"
+          },
+          "message": {},
+          "my_chat_member": {}
+        }
+      },
+      "CreateTelegramLinkTokenDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "group"
+            ]
+          },
+          "targetUserId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "UpdateTelegramChatDto": {
+        "type": "object",
+        "properties": {
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "isActive"
         ]
       },
       "SimulateFaceAccessDto": {

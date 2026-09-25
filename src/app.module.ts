@@ -48,6 +48,7 @@ import { SchoolClassesModule } from './school-classes/school-classes.module';
 import { ShiftsModule } from './shifts/shifts.module';
 import { StorageModule } from './storage/storage.module';
 import { StudentsModule } from './students/students.module';
+import { TelegramAlertsModule } from './telegram-alerts/telegram-alerts.module';
 import { VehiclesModule } from './vehicles/vehicles.module';
 import { GeocodingModule } from './geocoding/geocoding.module';
 import { PanicEventsModule } from './panic-events/panic-events.module';
@@ -105,6 +106,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     MeModule,
     DashboardModule,
     NotificationsModule,
+    TelegramAlertsModule,
     HealthModule,
     IntelbrasPushModule,
     LegalDocumentsModule,

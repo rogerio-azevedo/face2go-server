@@ -6,6 +6,7 @@ import * as clientUsersQueries from '../database/queries/client-users.queries';
 import { EmailService } from '../email/email.service';
 import { MonitoringGateway } from '../realtime/monitoring.gateway';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { TelegramAlertsService } from '../telegram-alerts/telegram-alerts.service';
 import {
   ACCESS_BLOCKED_ATTEMPT,
   type AccessBlockedAttemptPayload,
@@ -20,6 +21,7 @@ export class AccessBlockedAttemptListener {
     private readonly emailService: EmailService,
     private readonly monitoringGateway: MonitoringGateway,
     private readonly r2: R2StorageService,
+    private readonly telegramAlerts: TelegramAlertsService,
   ) {}
 
   @OnEvent(ACCESS_BLOCKED_ATTEMPT, { async: true })
@@ -42,6 +44,8 @@ export class AccessBlockedAttemptListener {
       snapUrl,
     });
 
+    const telegram = this.telegramAlerts.notifyBlockedAttempt(payload, snapUrl);
+
     try {
       const admins = await clientUsersQueries.listActiveClientAdminEmails(
         this.database.db,
@@ -51,30 +55,29 @@ export class AccessBlockedAttemptListener {
         this.logger.warn(
           `Nenhum client_admin ativo para notificar (client=${payload.clientId} bloqueado="${payload.personName}")`,
         );
-        return;
+      } else {
+        await Promise.all(
+          admins.map((admin) =>
+            this.emailService
+              .sendBlockedAttemptEmail(
+                admin.email,
+                admin.name,
+                payload.personName ?? `Face ${payload.faceId}`,
+                payload.blockReason,
+                payload.readerName,
+                payload.clientName,
+                payload.eventDate,
+              )
+              .catch((err: unknown) => {
+                this.logger.warn(
+                  `Falha ao enviar e-mail de tentativa bloqueada para ${admin.email}: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                );
+              }),
+          ),
+        );
       }
-
-      await Promise.all(
-        admins.map((admin) =>
-          this.emailService
-            .sendBlockedAttemptEmail(
-              admin.email,
-              admin.name,
-              payload.personName ?? `Face ${payload.faceId}`,
-              payload.blockReason,
-              payload.readerName,
-              payload.clientName,
-              payload.eventDate,
-            )
-            .catch((err: unknown) => {
-              this.logger.warn(
-                `Falha ao enviar e-mail de tentativa bloqueada para ${admin.email}: ${
-                  err instanceof Error ? err.message : String(err)
-                }`,
-              );
-            }),
-        ),
-      );
     } catch (err: unknown) {
       this.logger.warn(
         `Falha ao notificar admins do cliente ${payload.clientId}: ${
@@ -82,5 +85,7 @@ export class AccessBlockedAttemptListener {
         }`,
       );
     }
+
+    await telegram;
   }
 }

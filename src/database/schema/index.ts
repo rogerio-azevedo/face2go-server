@@ -25,3 +25,4 @@ export * from './vehicles';
 export * from './shifts';
 export * from './legal-documents';
 export * from './presence-emergency';
+export * from './telegram';
