@@ -140,8 +140,8 @@ export async function requeueOrphanRunningJobs(db: AppDb): Promise<number> {
     )
     UPDATE device_sync_jobs AS j
     SET status = CASE
-          WHEN ranked.has_queued OR ranked.rn > 1 THEN 'failed'
-          ELSE 'queued'
+          WHEN ranked.has_queued OR ranked.rn > 1 THEN CAST('failed' AS device_sync_job_status)
+          ELSE CAST('queued' AS device_sync_job_status)
         END,
         error = CASE
           WHEN ranked.has_queued OR ranked.rn > 1
