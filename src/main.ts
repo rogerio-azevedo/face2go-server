@@ -23,7 +23,7 @@ async function bootstrap() {
   });
 
   app.useGlobalFilters(new HttpExceptionFilter());
-  // No SIGTERM do deploy o worker devolve à fila os jobs que estava rodando.
+  // No SIGTERM do deploy o worker devolve à fila os jobs que estava rodando
   app.enableShutdownHooks();
 
   app.use('/device-events', raw({ type: '*/*', limit: '10mb' }));
