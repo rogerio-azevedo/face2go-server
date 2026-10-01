@@ -44,6 +44,15 @@ describe('extractCollidingFaceId', () => {
     ).toBeNull();
   });
 
+  it('lê employeeNo e FPID de XML', () => {
+    const xml =
+      '<?xml version="1.0"?>' +
+      '<ResponseStatus><subStatusCode>faceDuplicate</subStatusCode>' +
+      '<employeeNo>22</employeeNo><UserID>24</UserID>' +
+      '<MatchList><FPID>22</FPID></MatchList></ResponseStatus>';
+    expect(extractCollidingFaceId({ response: { data: xml } }, 24)).toBe(22);
+  });
+
   it('não inventa colidente no alreadyExistThisFace real (MinMoe)', () => {
     expect(
       extractCollidingFaceId(

@@ -4,6 +4,10 @@ import https from 'node:https';
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
 
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
+import {
+  hikvisionRawErrorView,
+  logHikvisionRaw,
+} from './hikvision-raw-log.util';
 
 function gatewayHttpsAgent(): https.Agent {
   return new https.Agent({
@@ -183,34 +187,60 @@ export async function hikvisionGatewayIsapiRequest(
   const method = String(opts.method ?? 'GET');
   const path = isapiPathFromUrl(String(opts.url ?? ''));
   const timeout = Math.max(Number(opts.timeout ?? 0) || 0, 30_000);
-  const response = await axios.post(
-    `${base}/devices/${encodeURIComponent(deviceId)}/isapi`,
-    {
-      method,
-      path,
-      headers: headerRecord(opts.headers),
-      ...encodeBody(opts.data),
-      credentials: {
-        username: connection.username,
-        password: connection.password,
+  let response: AxiosResponse;
+  try {
+    response = await axios.post(
+      `${base}/devices/${encodeURIComponent(deviceId)}/isapi`,
+      {
+        method,
+        path,
+        headers: headerRecord(opts.headers),
+        ...encodeBody(opts.data),
+        credentials: {
+          username: connection.username,
+          password: connection.password,
+        },
       },
-    },
-    {
-      timeout,
-      headers: { Authorization: `Bearer ${token}` },
-      httpsAgent: secure ? gatewayHttpsAgent() : undefined,
-      httpAgent: secure ? undefined : gatewayHttpAgent,
-      validateStatus: () => true,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    },
-  );
+      {
+        timeout,
+        headers: { Authorization: `Bearer ${token}` },
+        httpsAgent: secure ? gatewayHttpsAgent() : undefined,
+        httpAgent: secure ? undefined : gatewayHttpAgent,
+        validateStatus: () => true,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+      },
+    );
+  } catch (error) {
+    const view = hikvisionRawErrorView(error);
+    logHikvisionRaw({
+      transport: 'gateway',
+      method,
+      url: String(opts.url ?? path),
+      requestHeaders: opts.headers,
+      requestData: opts.data,
+      httpStatus: view.httpStatus,
+      responseData: view.responseData,
+      responseType: opts.responseType,
+    });
+    throw error;
+  }
   if (response.status >= 400) {
     const data = response.data as { error?: unknown } | string;
     const message =
       typeof data === 'object' && data?.error != null
         ? String(data.error)
         : `gateway HTTP ${response.status}`;
+    logHikvisionRaw({
+      transport: 'gateway',
+      method,
+      url: String(opts.url ?? path),
+      requestHeaders: opts.headers,
+      requestData: opts.data,
+      httpStatus: response.status,
+      responseData: response.data,
+      responseType: opts.responseType,
+    });
     const err = new Error(message) as Error & {
       response?: { status?: number; data?: unknown };
     };
@@ -225,6 +255,16 @@ export async function hikvisionGatewayIsapiRequest(
   };
   const status = payload.status ?? 200;
   const data = decodeGatewayBody(payload, opts.responseType);
+  logHikvisionRaw({
+    transport: 'gateway',
+    method,
+    url: String(opts.url ?? path),
+    requestHeaders: opts.headers,
+    requestData: opts.data,
+    httpStatus: status,
+    responseData: data,
+    responseType: opts.responseType,
+  });
   if (status >= 400) {
     const err = new Error(`Hikvision ISAPI ${status}`) as Error & {
       response?: { status?: number; data?: unknown };

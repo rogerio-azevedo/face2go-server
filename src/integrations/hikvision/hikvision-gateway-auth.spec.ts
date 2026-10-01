@@ -57,6 +57,7 @@ describe('hikvisionGatewayIsapiRequest', () => {
     process.env.HIK_GATEWAY_URL = 'https://172.31.4.98:8091';
     process.env.HIK_GATEWAY_TOKEN = 'token-de-teste-123456';
     process.env.READER_GATEWAY_TLS_INSECURE = '1';
+    delete process.env.HIKVISION_DEBUG_RAW;
   });
 
   it('envia o ISAPI pelo gateway e devolve o JSON parseado', async () => {
@@ -100,6 +101,38 @@ describe('hikvisionGatewayIsapiRequest', () => {
       }),
       expect.any(Object),
     );
+  });
+
+  it('loga o corpo do leitor inteiro quando HIKVISION_DEBUG_RAW=1', async () => {
+    process.env.HIKVISION_DEBUG_RAW = '1';
+    const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    post.mockResolvedValue({
+      status: 200,
+      data: {
+        status: 400,
+        body: JSON.stringify({
+          statusCode: 4,
+          subStatusCode: 'alreadyExistThisFace',
+          errorMsg: 'saveFacePic',
+        }),
+      },
+    });
+    await expect(
+      hikvisionGatewayIsapiRequest(connection, {
+        method: 'POST',
+        url: 'http://10.0.0.9/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json',
+        headers: { 'Content-Type': 'application/json' },
+        data: { FPID: '184', faceURL: 'http://gw/face.jpg' },
+      }),
+    ).rejects.toThrow(/ISAPI 400/);
+    const raw = spy.mock.calls.find((call) => call[0] === '[HikvisionRAW]');
+    expect(raw).toBeDefined();
+    const line = String(raw?.[1]);
+    expect(line).toContain('alreadyExistThisFace');
+    expect(line).toContain('saveFacePic');
+    expect(line).toContain('"FPID":"184"');
+    expect(line).not.toContain('segredo');
+    spy.mockRestore();
   });
 
   it('falha sem as envs em vez de abrir o IP do leitor', async () => {

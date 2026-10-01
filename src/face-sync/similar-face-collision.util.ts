@@ -23,8 +23,31 @@ function parseFaceId(value: unknown): number | null {
   return null;
 }
 
+const XML_FACE_ID_TAGS = [
+  'employeeNo',
+  'employeeNoString',
+  'FPID',
+  'UserID',
+] as const;
+
+function collectFaceIdsFromXml(xml: string, into: Set<number>): void {
+  for (const tag of XML_FACE_ID_TAGS) {
+    const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, 'gi');
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(xml)) !== null) {
+      const id = parseFaceId(match[1]);
+      if (id != null) into.add(id);
+    }
+  }
+}
+
 function collectFaceIds(node: unknown, into: Set<number>, depth: number): void {
   if (depth > 8 || node == null) return;
+  if (typeof node === 'string') {
+    const trimmed = node.trim();
+    if (trimmed.startsWith('<')) collectFaceIdsFromXml(trimmed, into);
+    return;
+  }
   if (Array.isArray(node)) {
     for (const item of node) collectFaceIds(item, into, depth + 1);
     return;

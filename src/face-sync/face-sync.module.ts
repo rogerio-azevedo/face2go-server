@@ -7,6 +7,7 @@ import { DeviceSyncWorkerService } from '../device-sync-queue/device-sync-worker
 import { LprPlateSyncModule } from '../lpr-plate-sync/lpr-plate-sync.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { SchoolAccessModule } from '../school-access/school-access.module';
+import { FaceMatchModule } from '../face-match/face-match.module';
 import { StorageModule } from '../storage/storage.module';
 import {
   ClientFaceSyncController,
@@ -22,6 +23,7 @@ import { FaceSyncListener } from './face-sync.listener';
     DatabaseModule,
     PermissionsModule,
     StorageModule,
+    FaceMatchModule,
     SchoolAccessModule,
     DeviceSyncQueueModule,
     LprPlateSyncModule,

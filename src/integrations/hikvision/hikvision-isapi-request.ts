@@ -8,6 +8,10 @@ import {
 } from './hikvision-digest-auth';
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
 import { hikvisionGatewayIsapiRequest } from './hikvision-gateway-auth';
+import {
+  hikvisionRawErrorView,
+  logHikvisionRaw,
+} from './hikvision-raw-log.util';
 
 function readerHttpTimeoutMs(): number {
   const fromEnv = Number(process.env.FACIAL_READER_HTTP_TIMEOUT_MS);
@@ -75,6 +79,23 @@ function hikvisionClient(
   return created;
 }
 
+function logLocalIsapi(
+  opts: AxiosRequestConfig,
+  httpStatus: number | undefined,
+  responseData: unknown,
+): void {
+  logHikvisionRaw({
+    transport: 'local',
+    method: String(opts.method ?? 'GET'),
+    url: String(opts.url ?? ''),
+    requestHeaders: opts.headers,
+    requestData: opts.data,
+    httpStatus,
+    responseData,
+    responseType: opts.responseType,
+  });
+}
+
 async function hikvisionIsapiRequestOnce(
   connection: Pick<
     HikvisionReaderConnection,
@@ -86,21 +107,29 @@ async function hikvisionIsapiRequestOnce(
   const { digest, axiosInst } = hikvisionClient(connection, timeoutMs);
 
   try {
-    return await digest.request(opts);
+    const response = await digest.request(opts);
+    logLocalIsapi(opts, response.status, response.data);
+    return response;
   } catch (firstErr: unknown) {
     const status = (firstErr as AxiosLikeError).response?.status;
     if (status !== 401) {
+      const view = hikvisionRawErrorView(firstErr);
+      logLocalIsapi(opts, view.httpStatus, view.responseData);
       throw firstErr;
     }
 
     try {
-      return await requestWithBasicAuth(
+      const response = await requestWithBasicAuth(
         axiosInst,
         connection.username,
         connection.password,
         opts,
       );
+      logLocalIsapi(opts, response.status, response.data);
+      return response;
     } catch {
+      const view = hikvisionRawErrorView(firstErr);
+      logLocalIsapi(opts, view.httpStatus, view.responseData);
       throw firstErr;
     }
   }

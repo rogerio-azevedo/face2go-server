@@ -62,6 +62,7 @@ import {
   withCollidingPerson,
 } from './similar-face-collision.util';
 import { AccessTimeZoneService } from './access-time-zone.service';
+import { FaceMatchService } from '../face-match/face-match.service';
 import {
   formatRestrictedReaderSyncError,
   isPersonAllowedOnReader,
@@ -128,6 +129,7 @@ export class FaceSyncService {
     private readonly permissionsService: PermissionsService,
     private readonly accessTimeZone: AccessTimeZoneService,
     private readonly queue: DeviceSyncQueueService,
+    private readonly faceMatch: FaceMatchService,
   ) {}
 
   takePersistHook(jobId: string) {
@@ -317,6 +319,14 @@ export class FaceSyncService {
       validDateEnd,
       logContext: logPrefix.trim() || undefined,
       imageBytes: imageBuffer.length,
+    });
+
+    await this.faceMatch.rememberPhoto({
+      clientId,
+      faceId,
+      photoKey,
+      imageBuffer,
+      blocked,
     });
 
     try {
@@ -622,13 +632,22 @@ export class FaceSyncService {
         collidingIds.length > 0
           ? await listPersonsByFaceIds(this.database.db, clientId, collidingIds)
           : new Map<number, { name: string }>();
-      const messages = outcomes.map((outcome) => {
+      const namedByReader = outcomes.map((outcome) => {
         if (!outcome) return null;
         if (outcome.collidingFaceId == null) return outcome.message;
         return withCollidingPerson(outcome.message, {
           faceId: outcome.collidingFaceId,
           name: collidingPeople.get(outcome.collidingFaceId)?.name,
         });
+      });
+      const messages = await this.faceMatch.annotateUnnamedDuplicates({
+        clientId,
+        faceId,
+        imageBuffer,
+        messages: namedByReader,
+        collidingFaceIds: outcomes.map(
+          (outcome) => outcome?.collidingFaceId ?? null,
+        ),
       });
 
       const failures = messages.filter((msg): msg is string => msg !== null);

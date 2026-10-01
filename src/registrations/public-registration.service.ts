@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 
+import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
@@ -75,6 +76,7 @@ export class PublicRegistrationService {
       clientName: bundle.client.name,
       clientType: bundle.client.type,
       logoUrl: bundle.client.logoUrl,
+      appBrand: resolveClientAppBrand(bundle.client.ienhFilialCode),
       fields: (
         await resolveFieldsConsideringRestrictMinors(
           this.database.db,

@@ -41,6 +41,7 @@ import {
   retryOnUnauthorizedDeviceError,
 } from '../../face-sync/recover-unauthorized-if-exists.util';
 import { invalidateHikvisionClientCache } from './hikvision-isapi-request';
+import { isHikvisionRawLogEnabled } from './hikvision-raw-log.util';
 import { restoreSimilarFaceLock } from '../similar-face-lock.util';
 
 export const HIKVISION_FACE_LIB_TYPE = 'blackFD';
@@ -613,12 +614,33 @@ async function enrollDespiteSimilarFace(
   if (uploadError) throw uploadError;
 }
 
+/** Modelo, trava de face duplicada e se o firmware expõe busca por imagem. */
+async function dumpHikvisionRawContext(
+  connection: HikvisionReaderConnection,
+): Promise<void> {
+  if (!isHikvisionRawLogEnabled()) return;
+  const urls = [
+    `${connection.baseUrl}/ISAPI/System/deviceInfo?format=json`,
+    `${connection.baseUrl}/ISAPI/AccessControl/AcsCfg?format=json`,
+    `${connection.baseUrl}/ISAPI/Intelligent/FDLib/capabilities?format=json`,
+  ];
+  for (const url of urls) {
+    try {
+      await hikvisionIsapiRequest(connection, { method: 'GET', url });
+    } catch {
+      // O logger RAW já gravou o corpo do erro.
+    }
+  }
+}
+
 export async function hikvisionUpsertFace(
   connection: HikvisionReaderConnection,
   employeeNo: string,
   jpegBuffer: Buffer,
   options?: { alreadyNormalized?: boolean; allowSimilarFace?: boolean },
 ): Promise<void> {
+  await dumpHikvisionRawContext(connection);
+
   const inputFormat = detectImageFormat(jpegBuffer);
   syncLog('hikvision:normalizeFaceInput', {
     employeeNo,

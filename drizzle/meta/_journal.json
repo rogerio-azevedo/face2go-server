@@ -575,6 +575,13 @@
       "when": 1779500000000,
       "tag": "0081_telegram_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1779510000000,
+      "tag": "0082_client_face_embeddings",
+      "breakpoints": true
     }
   ]
 }

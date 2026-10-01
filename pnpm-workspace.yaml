@@ -3,6 +3,7 @@ allowBuilds:
   "@newrelic/native-metrics": true
   "@scarf/scarf": false
   esbuild: true
+  onnxruntime-node: true
   protobufjs: true
   sharp: true
   unrs-resolver: true

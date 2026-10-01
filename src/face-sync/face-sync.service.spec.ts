@@ -16,6 +16,7 @@ import * as hikvision from '../integrations/hikvision';
 import { PermissionsService } from '../permissions/permissions.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { AccessTimeZoneService } from './access-time-zone.service';
+import { FaceMatchService } from '../face-match/face-match.service';
 import * as faceImageVariants from './face-image-variants';
 import {
   FaceSyncService,
@@ -104,6 +105,16 @@ describe('FaceSyncService', () => {
         },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
         { provide: DeviceSyncQueueService, useValue: queue },
+        {
+          provide: FaceMatchService,
+          useValue: {
+            rememberPhoto: jest.fn().mockResolvedValue(undefined),
+            annotateUnnamedDuplicates: jest.fn(
+              (input: { messages: Array<string | null> }) =>
+                Promise.resolve(input.messages),
+            ),
+          },
+        },
       ],
     }).compile();
 

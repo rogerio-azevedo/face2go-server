@@ -60,6 +60,11 @@ export const envSchema = z.object({
   LPR_STREAM_VERBOSE: z.string().optional(),
   /** Log JSON no console (evento/raw + dedup) em cada ingestão LPR. Ex.: `1`. */
   LPR_DEBUG_RAW: z.string().optional(),
+  /**
+   * Corpo ISAPI Hikvision inteiro no console (`[HikvisionRAW]`).
+   * `1` liga. JPEG/multipart ficam de fora.
+   */
+  HIKVISION_DEBUG_RAW: z.string().optional(),
   /** Log estruturado de eventos LPR (snap + eventManager) para estudo de correlação. Ex.: `1`. */
   LPR_EVENT_LOG: z.string().optional(),
   /** Cloudflare R2 (upload de fotos no cadastro público). */

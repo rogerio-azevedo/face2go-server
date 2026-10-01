@@ -13,6 +13,7 @@ export * from './device-sync-jobs';
 export * from './vehicle-camera-sync';
 export * from './cameras';
 export * from './faces';
+export * from './client-face-embeddings';
 export * from './registrations';
 export * from './schools';
 export * from './students';
