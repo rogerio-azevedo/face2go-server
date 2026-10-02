@@ -407,7 +407,7 @@ export async function approveRegistration(
       and(
         eq(registrations.id, registrationId),
         eq(registrations.clientId, clientId),
-        eq(registrations.status, 'draft'),
+        inArray(registrations.status, ['draft', 'rejected']),
         isNotNull(registrations.submittedAt),
       ),
     )

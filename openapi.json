@@ -10691,9 +10691,36 @@
             "bearer": []
           }
         ],
-        "summary": "Contagens do painel (escopo empresa ou cliente conforme o papel)",
+        "summary": "Contagens do painel da empresa",
         "tags": [
           "dashboard"
+        ]
+      }
+    },
+    "/client/dashboard": {
+      "get": {
+        "operationId": "ClientDashboardController_getOverview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientDashboardDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Painel da unidade: pendências, pessoas, leitores e acessos do dia",
+        "tags": [
+          "client-dashboard"
         ]
       }
     },
@@ -13039,6 +13066,186 @@
         },
         "required": [
           "imageBase64"
+        ]
+      },
+      "ClientDashboardDto": {
+        "type": "object",
+        "properties": {
+          "clientType": {
+            "type": "string",
+            "enum": [
+              "office",
+              "clinic",
+              "condominium",
+              "school",
+              "other"
+            ]
+          },
+          "timezoneOffsetMinutes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "registrations": {
+            "type": "object",
+            "properties": {
+              "pending": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "approved": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "pending",
+              "approved"
+            ]
+          },
+          "activeRegistrationLinks": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "people": {
+            "type": "object",
+            "properties": {
+              "members": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "students": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "responsibles": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "members",
+              "students",
+              "responsibles"
+            ]
+          },
+          "schoolClasses": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "vehicles": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "cameras": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "readers": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "online": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "total",
+              "online"
+            ]
+          },
+          "accessesToday": {
+            "type": "object",
+            "properties": {
+              "granted": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "denied": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "granted",
+              "denied"
+            ]
+          },
+          "recentAccesses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "personName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "readerName": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "granted",
+                    "denied"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "readerDirection": {
+                  "type": "string",
+                  "enum": [
+                    "in",
+                    "out",
+                    null
+                  ],
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "personName",
+                "readerName",
+                "status",
+                "createdAt",
+                "readerDirection"
+              ]
+            }
+          }
+        },
+        "required": [
+          "clientType",
+          "timezoneOffsetMinutes",
+          "registrations",
+          "activeRegistrationLinks",
+          "people",
+          "schoolClasses",
+          "vehicles",
+          "cameras",
+          "readers",
+          "accessesToday",
+          "recentAccesses"
         ]
       },
       "UpdatePushTokenDto": {

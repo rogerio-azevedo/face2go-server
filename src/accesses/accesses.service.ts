@@ -8,6 +8,10 @@ import { Types } from 'mongoose';
 
 import { clients } from '../database/schema';
 import { DatabaseService } from '../database/database.service';
+import {
+  calendarDateInOffset,
+  createdAtRangeFilter,
+} from '../common/parse-access-list-datetime';
 import { buildFacialAccessMongoFilter } from './build-facial-access-list-filter';
 import { findAccessPersonIdsByLocation } from './find-access-person-ids-by-location';
 import { resolveAccessPersonByFaceId } from './resolve-access-person';
@@ -68,6 +72,18 @@ export type AccessListResponse = {
 
 export type ClientAccessListResponse = AccessListResponse & {
   timezoneOffsetMinutes: number;
+};
+
+export type ClientDashboardAccessSummary = {
+  accessesToday: { granted: number; denied: number };
+  recentAccesses: {
+    id: string;
+    personName: string | null;
+    readerName: string;
+    status: 'granted' | 'denied';
+    createdAt: string;
+    readerDirection: 'in' | 'out' | null;
+  }[];
 };
 
 export type AccessListQueryOptions = {
@@ -497,6 +513,76 @@ export class AccessesService {
     return {
       ...list,
       timezoneOffsetMinutes: row?.timezoneOffsetMinutes ?? 0,
+    };
+  }
+
+  /**
+   * Liberados/negados do dia civil do cliente e os 5 acessos mais recentes.
+   */
+  async getClientDashboardSummary(
+    companyId: string,
+    clientId: string,
+    timezoneOffsetMinutes: number,
+  ): Promise<ClientDashboardAccessSummary> {
+    const today = calendarDateInOffset(timezoneOffsetMinutes);
+    const createdAt = createdAtRangeFilter(today, today, timezoneOffsetMinutes);
+    const todayFilter = {
+      companyId,
+      clientId,
+      ...(createdAt ? { createdAt } : {}),
+    };
+
+    const [grouped, docs] = await Promise.all([
+      this.accessModel
+        .aggregate<{ _id: 'granted' | 'denied'; total: number }>([
+          { $match: todayFilter },
+          {
+            $group: {
+              _id: {
+                $cond: [{ $eq: ['$status', 'denied'] }, 'denied', 'granted'],
+              },
+              total: { $sum: 1 },
+            },
+          },
+        ])
+        .exec(),
+      this.accessModel
+        .find({ companyId, clientId })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean()
+        .exec(),
+    ]);
+
+    let granted = 0;
+    let denied = 0;
+    for (const row of grouped) {
+      if (row._id === 'denied') denied = row.total;
+      else granted += row.total;
+    }
+
+    const recentAccesses = docs.map((doc) => {
+      const row = doc as FacialAccessDocument & {
+        _id: { toString(): string };
+        createdAt?: Date;
+        readerDirection?: 'in' | 'out' | null;
+      };
+      return {
+        id: row._id.toString(),
+        personName: row.personName ?? null,
+        readerName: row.readerName,
+        status:
+          row.status === 'denied' ? ('denied' as const) : ('granted' as const),
+        createdAt: row.createdAt
+          ? row.createdAt.toISOString()
+          : new Date().toISOString(),
+        readerDirection: row.readerDirection ?? null,
+      };
+    });
+
+    return {
+      accessesToday: { granted, denied },
+      recentAccesses,
     };
   }
 

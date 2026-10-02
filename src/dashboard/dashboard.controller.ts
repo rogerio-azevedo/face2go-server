@@ -13,15 +13,9 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('stats')
-  @Roles(
-    'company_admin',
-    'company_operator',
-    'client_admin',
-    'client_operator',
-    'face_user',
-  )
+  @Roles('company_admin', 'company_operator')
   @ApiOperation({
-    summary: 'Contagens do painel (escopo empresa ou cliente conforme o papel)',
+    summary: 'Contagens do painel da empresa',
   })
   getStats(@CurrentUser() user: JwtPayload) {
     return this.dashboardService.getStats(user);
