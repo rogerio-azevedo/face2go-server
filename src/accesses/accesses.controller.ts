@@ -65,6 +65,7 @@ export class AccessesController {
       block: query.block,
       unit: query.unit,
       readerId: query.readerId,
+      onlyDenied: query.onlyDenied,
     });
   }
 }

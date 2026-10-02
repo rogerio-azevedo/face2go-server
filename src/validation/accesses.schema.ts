@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { optionalBoolQuery } from './zod-utils';
+
 const optionalDateQuery = z
   .string()
   .trim()
@@ -22,6 +24,7 @@ export const clientAccessesListQuerySchema = z.object({
   block: optionalTextQuery(50),
   unit: optionalTextQuery(50),
   readerId: optionalTextQuery(64),
+  onlyDenied: optionalBoolQuery,
 });
 
 export const companyAccessesListQuerySchema =

@@ -72,6 +72,7 @@ export class ClientAccessesController {
       block: query.block,
       unit: query.unit,
       readerId: query.readerId,
+      onlyDenied: query.onlyDenied,
     });
   }
 }

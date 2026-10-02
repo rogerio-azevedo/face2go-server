@@ -8,6 +8,7 @@ export type FacialAccessListQuery = {
   endDate?: string;
   name?: string;
   readerId?: string;
+  onlyDenied?: boolean;
   timezoneOffsetMinutes?: number;
 };
 
@@ -32,6 +33,9 @@ export function buildFacialAccessMongoFilter(
   const readerId = query.readerId?.trim();
   if (readerId) {
     filter.readerId = readerId;
+  }
+  if (query.onlyDenied) {
+    filter.status = 'denied';
   }
 
   const createdAt = createdAtRangeFilter(

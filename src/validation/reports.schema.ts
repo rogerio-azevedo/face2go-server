@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { optionalBoolQuery } from './zod-utils';
+
 export const enrollmentGroupSchema = z.enum(
   ['students', 'responsibles', 'members', 'registrations'],
   { message: 'Grupo inválido.' },
@@ -20,19 +22,6 @@ const optionalSearch = z
   .max(200)
   .optional()
   .transform((value) => (value ? value : undefined));
-
-const optionalBoolQuery = z.preprocess(
-  (value) => {
-    if (value === true || value === 'true') return 'true';
-    if (value === false || value === 'false') return 'false';
-    if (value === undefined || value === null || value === '') return undefined;
-    return value;
-  },
-  z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((value) => (value === undefined ? undefined : value === 'true')),
-);
 
 export const enrollmentReportQuerySchema = z.object({
   group: enrollmentGroupSchema,

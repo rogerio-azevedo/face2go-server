@@ -79,6 +79,7 @@ export type AccessListQueryOptions = {
   block?: string;
   unit?: string;
   readerId?: string;
+  onlyDenied?: boolean;
 };
 
 @Injectable()
@@ -419,6 +420,7 @@ export class AccessesService {
         endDate: options.endDate,
         name: options.name,
         readerId: options.readerId,
+        onlyDenied: options.onlyDenied,
         timezoneOffsetMinutes,
       },
       locationIds,

@@ -2729,6 +2729,18 @@
             }
           },
           {
+            "name": "onlyDenied",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
             "name": "clientId",
             "required": false,
             "in": "query",
@@ -2848,6 +2860,18 @@
             "schema": {
               "maxLength": 64,
               "type": "string"
+            }
+          },
+          {
+            "name": "onlyDenied",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
             }
           }
         ],
@@ -3608,6 +3632,18 @@
             "schema": {
               "maxLength": 64,
               "type": "string"
+            }
+          },
+          {
+            "name": "onlyDenied",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
             }
           }
         ],
