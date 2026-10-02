@@ -8,6 +8,10 @@
       {
         "include": "face-match/models/*.onnx",
         "watchAssets": true
+      },
+      {
+        "include": "email/assets/**/*",
+        "watchAssets": true
       }
     ]
   }

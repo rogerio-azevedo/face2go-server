@@ -49,6 +49,7 @@ export class SmtpEmailSender implements EmailSender {
       subject: params.subject,
       text: params.text,
       html: params.html,
+      attachments: params.attachments,
     });
 
     this.logger.log(`E-mail enviado via SMTP para ${params.to}`);

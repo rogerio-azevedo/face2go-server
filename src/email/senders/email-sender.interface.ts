@@ -1,8 +1,15 @@
+export interface EmailAttachment {
+  filename: string;
+  path: string;
+  cid: string;
+}
+
 export interface EmailSendParams {
   to: string;
   subject: string;
   text: string;
   html: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface EmailSender {

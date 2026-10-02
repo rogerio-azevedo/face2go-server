@@ -1,6 +1,11 @@
-import { SendEmailCommand, SESClient } from '@aws-sdk/client-ses';
+import {
+  SendEmailCommand,
+  SendRawEmailCommand,
+  SESClient,
+} from '@aws-sdk/client-ses';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import MailComposer from 'nodemailer/lib/mail-composer';
 
 import type { EmailSendParams, EmailSender } from './email-sender.interface';
 
@@ -43,6 +48,26 @@ export class SesEmailSender implements EmailSender {
   async send(params: EmailSendParams): Promise<void> {
     if (!this.client || !this.fromEmail) {
       throw new Error('SES não configurado');
+    }
+
+    if (params.attachments?.length) {
+      const raw = await new MailComposer({
+        from: this.fromEmail,
+        to: params.to,
+        subject: params.subject,
+        text: params.text,
+        html: params.html,
+        attachments: params.attachments,
+      })
+        .compile()
+        .build();
+
+      await this.client.send(
+        new SendRawEmailCommand({
+          RawMessage: { Data: raw },
+        }),
+      );
+      return;
     }
 
     await this.client.send(
