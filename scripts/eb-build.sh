@@ -47,4 +47,7 @@ cat > dist/build-info.json <<EOF
 {"builtAt":"${BUILT_AT}","commit":"${BUILD_COMMIT}","deployMarker":"${DEPLOY_MARKER}","routesVerified":["join-context","select-context"]}
 EOF
 
+# O compile precisa das devDependencies. A instância só recebe o que a API carrega.
+pnpm prune --prod
+
 echo "Build OK: builtAt=${BUILT_AT} commit=${BUILD_COMMIT}"
