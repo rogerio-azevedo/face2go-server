@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
+import { EmailModule } from '../email/email.module';
 import { RegistrationEventsRepository } from '../database/repositories/registration-events.repository';
 import { RegistrationFaceRetakeRepository } from '../database/repositories/registration-face-retake.repository';
 import { FaceSyncModule } from '../face-sync/face-sync.module';
@@ -26,6 +27,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
 @Module({
   imports: [
     DatabaseModule,
+    EmailModule,
     PermissionsModule,
     StorageModule,
     FaceSyncModule,

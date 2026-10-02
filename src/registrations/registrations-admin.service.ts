@@ -19,6 +19,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { MembersService } from '../members/members.service';
 import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { EmailService } from '../email/email.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { zodFirstMessage } from '../validation/zod-utils';
 import type {
@@ -64,6 +65,7 @@ export class RegistrationsAdminService {
     private readonly membersService: MembersService,
     private readonly personProfile: PersonProfileService,
     private readonly events: RegistrationEventsService,
+    private readonly emailService: EmailService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -438,6 +440,23 @@ export class RegistrationsAdminService {
       } catch (err: unknown) {
         this.logger.warn(
           `Falha ao criar membro pós-aprovação reg=${registrationId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+
+    const email = rowOut.email?.trim();
+    if (email) {
+      try {
+        await this.emailService.sendRegistrationApprovedEmail({
+          to: email,
+          name: rowOut.name,
+          clientName: client.name,
+        });
+      } catch (err: unknown) {
+        this.logger.warn(
+          `Falha ao enviar e-mail de aprovação reg=${registrationId}: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );

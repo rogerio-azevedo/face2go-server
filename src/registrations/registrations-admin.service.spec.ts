@@ -6,6 +6,7 @@ import { DatabaseService } from '../database/database.service';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as membersQueries from '../database/queries/members.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
+import { EmailService } from '../email/email.service';
 import { FaceSyncService } from '../face-sync/face-sync.service';
 import { MembersService } from '../members/members.service';
 import { PermissionsService } from '../permissions/permissions.service';
@@ -53,6 +54,7 @@ describe('RegistrationsAdminService lifecycle', () => {
     upsertFromApprovedRegistration: jest.Mock;
   };
   let personProfile: { shouldRemoveFaceFromReader: jest.Mock };
+  let email: { sendRegistrationApprovedEmail: jest.Mock };
 
   beforeEach(async () => {
     faceSync = {
@@ -79,6 +81,9 @@ describe('RegistrationsAdminService lifecycle', () => {
     personProfile = {
       shouldRemoveFaceFromReader: jest.fn().mockResolvedValue(true),
     };
+    email = {
+      sendRegistrationApprovedEmail: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -93,6 +98,7 @@ describe('RegistrationsAdminService lifecycle', () => {
         { provide: FaceSyncService, useValue: faceSync },
         { provide: MembersService, useValue: members },
         { provide: PersonProfileService, useValue: personProfile },
+        { provide: EmailService, useValue: email },
       ],
     }).compile();
 
@@ -254,6 +260,7 @@ describe('RegistrationsAdminService lifecycle', () => {
       'admin-1',
       { resetReaderProgress: true, blocked: false },
     );
+    expect(email.sendRegistrationApprovedEmail).not.toHaveBeenCalled();
   });
 
   it('bloqueia cadastro e registra o motivo na timeline', async () => {
@@ -308,5 +315,60 @@ describe('RegistrationsAdminService lifecycle', () => {
       'admin-1',
       { resetReaderProgress: true, blocked: true },
     );
+    expect(email.sendRegistrationApprovedEmail).not.toHaveBeenCalled();
+  });
+
+  function mockApprove(row: Record<string, unknown>) {
+    jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
+      id: 'client-1',
+      companyId: 'company-1',
+    } as never);
+    jest.spyOn(clientsQueries, 'getClientByIdOnly').mockResolvedValue({
+      id: 'client-1',
+      name: 'Escola Alfa',
+      type: 'school',
+    } as never);
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(row as never);
+    jest
+      .spyOn(registrationsQueries, 'approveRegistration')
+      .mockResolvedValue(row as never);
+  }
+
+  it('envia e-mail quando o cadastro aprovado tem e-mail', async () => {
+    mockApprove({
+      id: 'reg-1',
+      clientId: 'client-1',
+      status: 'approved',
+      isActive: true,
+      submittedAt: new Date(),
+      name: 'Ana',
+      email: 'ana@example.com',
+    });
+
+    await service.approveForCompanyUser(companyAdmin(), 'client-1', 'reg-1');
+
+    expect(email.sendRegistrationApprovedEmail).toHaveBeenCalledWith({
+      to: 'ana@example.com',
+      name: 'Ana',
+      clientName: 'Escola Alfa',
+    });
+  });
+
+  it('não envia e-mail quando o cadastro aprovado não tem e-mail', async () => {
+    mockApprove({
+      id: 'reg-1',
+      clientId: 'client-1',
+      status: 'approved',
+      isActive: true,
+      submittedAt: new Date(),
+      name: 'Ana',
+      email: null,
+    });
+
+    await service.approveForCompanyUser(companyAdmin(), 'client-1', 'reg-1');
+
+    expect(email.sendRegistrationApprovedEmail).not.toHaveBeenCalled();
   });
 });

@@ -204,6 +204,47 @@ Equipe Face2Go`;
       `E-mail de tentativa bloqueada enviado para ${to} (pessoa="${personName}")`,
     );
   }
+
+  async sendRegistrationApprovedEmail(params: {
+    to: string;
+    name: string | null | undefined;
+    clientName: string;
+  }): Promise<void> {
+    const { to, name, clientName } = params;
+    const greeting = name?.trim() ? `Olá, ${name.trim()}` : 'Olá';
+    const place = clientName.trim() || 'seu local';
+
+    if (!this.sender.isConfigured()) {
+      this.logger.warn(
+        `[${this.sender.provider.toUpperCase()} desabilitado] Cadastro aprovado em ${place} — destinatário ${to}`,
+      );
+      return;
+    }
+
+    const subject = 'Face2Go — cadastro aprovado';
+    const text = `${greeting},
+
+Seu cadastro em ${place} foi aprovado.
+
+O acesso facial já pode ser usado.
+
+Equipe Face2Go`;
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #1a1a2e;">
+  <p>${escapeHtml(greeting)},</p>
+  <p>Seu cadastro em <strong>${escapeHtml(place)}</strong> foi aprovado.</p>
+  <p>O acesso facial já pode ser usado.</p>
+  <p>Equipe Face2Go</p>
+</body>
+</html>`;
+
+    await this.sender.send({ to, subject, text, html });
+    this.logger.log(
+      `E-mail de cadastro aprovado enviado para ${to} (cliente="${place}")`,
+    );
+  }
 }
 
 function escapeHtml(value: string): string {
