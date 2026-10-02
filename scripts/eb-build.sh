@@ -47,7 +47,18 @@ cat > dist/build-info.json <<EOF
 {"builtAt":"${BUILT_AT}","commit":"${BUILD_COMMIT}","deployMarker":"${DEPLOY_MARKER}","routesVerified":["join-context","select-context"]}
 EOF
 
-# O compile precisa das devDependencies. A instância só recebe o que a API carrega.
-pnpm prune --prod
+# O compile precisa das devDependencies. A instância só recebe arquivos reais
+# de produção: o layout padrão do pnpm aponta para o store do CodeBuild e o
+# zip chega com links quebrados (Cannot find module 'newrelic').
+export NODE_ENV=production
+rm -rf node_modules
+pnpm install --frozen-lockfile --prod \
+  --config.node-linker=hoisted \
+  --config.package-import-method=copy
+
+if [ ! -d node_modules/newrelic ]; then
+  echo "FATAL: node_modules/newrelic ausente após o install de produção."
+  exit 1
+fi
 
 echo "Build OK: builtAt=${BUILT_AT} commit=${BUILD_COMMIT}"
