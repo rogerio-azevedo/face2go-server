@@ -4,8 +4,6 @@ import { join } from 'path';
 export type BuildInfo = {
   builtAt: string | null;
   commit: string | null;
-  deployMarker: string | null;
-  routesVerified?: string[];
 };
 
 export type HealthPayload = {
@@ -21,7 +19,6 @@ export function readBuildInfo(): BuildInfo {
     return {
       builtAt: null,
       commit: null,
-      deployMarker: null,
     };
   }
 
@@ -32,17 +29,11 @@ export function readBuildInfo(): BuildInfo {
     return {
       builtAt: typeof parsed.builtAt === 'string' ? parsed.builtAt : null,
       commit: typeof parsed.commit === 'string' ? parsed.commit : null,
-      deployMarker:
-        typeof parsed.deployMarker === 'string' ? parsed.deployMarker : null,
-      routesVerified: Array.isArray(parsed.routesVerified)
-        ? parsed.routesVerified
-        : undefined,
     };
   } catch {
     return {
       builtAt: null,
       commit: null,
-      deployMarker: null,
     };
   }
 }
@@ -55,7 +46,7 @@ function shortCommit(commit: string | null): string {
 export function getHealthPayload(): HealthPayload {
   const build = readBuildInfo();
 
-  if (!build.builtAt || !build.deployMarker) {
+  if (!build.builtAt) {
     return {
       ok: true,
       message:
@@ -68,7 +59,7 @@ export function getHealthPayload(): HealthPayload {
 
   return {
     ok: true,
-    message: `API online — deploy "${build.deployMarker}" compilado em ${build.builtAt} (commit ${commitLabel}).`,
+    message: `API online — commit ${commitLabel} compilado em ${build.builtAt}.`,
     build,
   };
 }

@@ -41,10 +41,9 @@ if [ -z "$BUILD_COMMIT" ] && [ -n "$PREVIOUS_COMMIT" ] && [ "$PREVIOUS_COMMIT" !
 fi
 BUILD_COMMIT="${BUILD_COMMIT:-unknown}"
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-DEPLOY_MARKER="context-auth-build-v2"
 
 cat > dist/build-info.json <<EOF
-{"builtAt":"${BUILT_AT}","commit":"${BUILD_COMMIT}","deployMarker":"${DEPLOY_MARKER}","routesVerified":["join-context","select-context"]}
+{"builtAt":"${BUILT_AT}","commit":"${BUILD_COMMIT}"}
 EOF
 
 # O compile precisa das devDependencies. A instância só recebe arquivos reais
