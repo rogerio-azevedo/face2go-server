@@ -3,9 +3,12 @@ import { z } from 'zod';
 
 import {
   blockRegistrationSchema,
+  createRegistrationNoteSchema,
   exportRegistrationsQuerySchema,
   listRegistrationsQuerySchema,
   publicCheckDocumentSchema,
+  registrationEventSchema,
+  unblockRegistrationSchema,
   updateRegistrationSchema,
 } from '../registrations.schema';
 
@@ -62,6 +65,18 @@ export class UpdateRegistrationDto extends createZodDto(
 
 export class BlockRegistrationDto extends createZodDto(
   blockRegistrationSchema,
+) {}
+
+export class UnblockRegistrationDto extends createZodDto(
+  unblockRegistrationSchema,
+) {}
+
+export class CreateRegistrationNoteDto extends createZodDto(
+  createRegistrationNoteSchema,
+) {}
+
+export class RegistrationEventDto extends createZodDto(
+  registrationEventSchema,
 ) {}
 
 export class PublicCheckDocumentDto extends createZodDto(

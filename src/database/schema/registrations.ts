@@ -30,6 +30,16 @@ export const deviceSyncStatusEnum = pgEnum('device_sync_status', [
   'sync_failed',
 ]);
 
+export const registrationEventTypeEnum = pgEnum('registration_event_type', [
+  'note',
+  'approved',
+  'rejected',
+  'blocked',
+  'unblocked',
+  'deleted',
+  'restored',
+]);
+
 export const clientFaceCounters = pgTable('client_face_counters', {
   clientId: uuid('client_id')
     .primaryKey()
@@ -140,6 +150,32 @@ export const registrationFaceRetakeLinks = pgTable(
   ],
 );
 
+/** Timeline append-only: anotações e mudanças de status do cadastro. */
+export const registrationEvents = pgTable(
+  'registration_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    registrationId: uuid('registration_id')
+      .notNull()
+      .references(() => registrations.id, { onDelete: 'cascade' }),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => clients.id, { onDelete: 'cascade' }),
+    type: registrationEventTypeEnum('type').notNull(),
+    body: text('body'),
+    authorUserId: text('author_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => [
+    index('registration_events_reg_created_idx').on(
+      t.registrationId,
+      t.createdAt,
+    ),
+  ],
+);
+
 export const registrationLinksRelations = relations(
   registrationLinks,
   ({ one, many }) => ({
@@ -155,17 +191,39 @@ export const registrationLinksRelations = relations(
   }),
 );
 
-export const registrationsRelations = relations(registrations, ({ one }) => ({
-  registrationLink: one(registrationLinks, {
-    fields: [registrations.registrationLinkId],
-    references: [registrationLinks.id],
+export const registrationsRelations = relations(
+  registrations,
+  ({ one, many }) => ({
+    registrationLink: one(registrationLinks, {
+      fields: [registrations.registrationLinkId],
+      references: [registrationLinks.id],
+    }),
+    client: one(clients, {
+      fields: [registrations.clientId],
+      references: [clients.id],
+    }),
+    approvedBy: one(users, {
+      fields: [registrations.approvedByUserId],
+      references: [users.id],
+    }),
+    events: many(registrationEvents),
   }),
-  client: one(clients, {
-    fields: [registrations.clientId],
-    references: [clients.id],
+);
+
+export const registrationEventsRelations = relations(
+  registrationEvents,
+  ({ one }) => ({
+    registration: one(registrations, {
+      fields: [registrationEvents.registrationId],
+      references: [registrations.id],
+    }),
+    client: one(clients, {
+      fields: [registrationEvents.clientId],
+      references: [clients.id],
+    }),
+    author: one(users, {
+      fields: [registrationEvents.authorUserId],
+      references: [users.id],
+    }),
   }),
-  approvedBy: one(users, {
-    fields: [registrations.approvedByUserId],
-    references: [users.id],
-  }),
-}));
+);

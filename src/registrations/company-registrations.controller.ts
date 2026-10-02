@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiProduces,
   ApiTags,
@@ -21,8 +22,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
   BlockRegistrationDto,
+  CreateRegistrationNoteDto,
   ExportRegistrationsQueryDto,
   ListRegistrationsQueryDto,
+  RegistrationEventDto,
+  UnblockRegistrationDto,
   UpdateRegistrationDto,
 } from '../validation/dto/registrations.dto';
 import { RegistrationsAdminService } from './registrations-admin.service';
@@ -126,11 +130,45 @@ export class CompanyRegistrationsController {
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() body: UnblockRegistrationDto,
   ) {
     return this.registrationsAdmin.unblockForCompanyUser(
       user,
       clientId,
       registrationId,
+      body,
+    );
+  }
+
+  @Get(':registrationId/events')
+  @ApiOperation({ summary: 'Timeline de ocorrências do cadastro' })
+  @ApiOkResponse({ type: RegistrationEventDto, isArray: true })
+  listEvents(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.listEventsForCompanyUser(
+      user,
+      clientId,
+      registrationId,
+    );
+  }
+
+  @Post(':registrationId/events')
+  @ApiOperation({ summary: 'Registrar anotação na timeline do cadastro' })
+  @ApiOkResponse({ type: RegistrationEventDto })
+  addEventNote(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() body: CreateRegistrationNoteDto,
+  ) {
+    return this.registrationsAdmin.addEventNoteForCompanyUser(
+      user,
+      clientId,
+      registrationId,
+      body.body,
     );
   }
 

@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiProduces,
   ApiTags,
@@ -21,8 +22,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
   BlockRegistrationDto,
+  CreateRegistrationNoteDto,
   ExportRegistrationsQueryDto,
   ListRegistrationsQueryDto,
+  RegistrationEventDto,
+  UnblockRegistrationDto,
   UpdateRegistrationDto,
 } from '../validation/dto/registrations.dto';
 import { RegistrationsAdminService } from './registrations-admin.service';
@@ -105,8 +109,41 @@ export class ClientRegistrationsController {
   unblock(
     @CurrentUser() user: JwtPayload,
     @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() body: UnblockRegistrationDto,
   ) {
-    return this.registrationsAdmin.unblockForClientTenant(user, registrationId);
+    return this.registrationsAdmin.unblockForClientTenant(
+      user,
+      registrationId,
+      body,
+    );
+  }
+
+  @Get(':registrationId/events')
+  @ApiOperation({ summary: 'Timeline de ocorrências do cadastro' })
+  @ApiOkResponse({ type: RegistrationEventDto, isArray: true })
+  listEvents(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+  ) {
+    return this.registrationsAdmin.listEventsForClientTenant(
+      user,
+      registrationId,
+    );
+  }
+
+  @Post(':registrationId/events')
+  @ApiOperation({ summary: 'Registrar anotação na timeline do cadastro' })
+  @ApiOkResponse({ type: RegistrationEventDto })
+  addEventNote(
+    @CurrentUser() user: JwtPayload,
+    @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() body: CreateRegistrationNoteDto,
+  ) {
+    return this.registrationsAdmin.addEventNoteForClientTenant(
+      user,
+      registrationId,
+      body.body,
+    );
   }
 
   @Post(':registrationId/reject')

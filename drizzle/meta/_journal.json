@@ -582,6 +582,13 @@
       "when": 1779510000000,
       "tag": "0082_client_face_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1779520000000,
+      "tag": "0083_registration_events",
+      "breakpoints": true
     }
   ]
 }

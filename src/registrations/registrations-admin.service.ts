@@ -9,8 +9,10 @@ import {
 import { z } from 'zod';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import type { AppDb } from '../database/database.types';
 import * as clientsQueries from '../database/queries/clients.queries';
 import * as membersQueries from '../database/queries/members.queries';
+import type { RegistrationEventType } from '../database/queries/registration-events.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { DatabaseService } from '../database/database.service';
 import { PermissionsService } from '../permissions/permissions.service';
@@ -25,8 +27,10 @@ import type {
 } from '../validation/registrations.schema';
 import {
   blockRegistrationSchema,
+  unblockRegistrationSchema,
   updateRegistrationSchema,
 } from '../validation/registrations.schema';
+import { RegistrationEventsService } from './registration-events.service';
 import { isMinor, toIsoDateString } from '../common/utils/birth-date';
 import {
   normalizeRegistrationFields,
@@ -59,6 +63,7 @@ export class RegistrationsAdminService {
     private readonly faceSync: FaceSyncService,
     private readonly membersService: MembersService,
     private readonly personProfile: PersonProfileService,
+    private readonly events: RegistrationEventsService,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -371,11 +376,20 @@ export class RegistrationsAdminService {
       );
     }
 
-    const updated = await registrationsQueries.approveRegistration(
-      this.database.db,
-      registrationId,
-      clientId,
-      decidedByUserId,
+    const updated = await this.withEvent(
+      {
+        clientId,
+        registrationId,
+        type: 'approved',
+        authorUserId: decidedByUserId,
+      },
+      (db) =>
+        registrationsQueries.approveRegistration(
+          db,
+          registrationId,
+          clientId,
+          decidedByUserId,
+        ),
     );
     if (!updated) {
       throw new NotFoundException(
@@ -462,12 +476,23 @@ export class RegistrationsAdminService {
     if (!parsed.success) {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
-    const updated = await registrationsQueries.rejectRegistration(
-      this.database.db,
-      registrationId,
-      clientId,
-      decidedByUserId,
-      parsed.data.notes?.trim() ?? null,
+    const notes = parsed.data.notes?.trim() ?? null;
+    const updated = await this.withEvent(
+      {
+        clientId,
+        registrationId,
+        type: 'rejected',
+        authorUserId: decidedByUserId,
+        body: notes,
+      },
+      (db) =>
+        registrationsQueries.rejectRegistration(
+          db,
+          registrationId,
+          clientId,
+          decidedByUserId,
+          notes,
+        ),
     );
     if (!updated) {
       throw new NotFoundException(
@@ -532,12 +557,22 @@ export class RegistrationsAdminService {
       );
     }
 
-    const updated = await registrationsQueries.blockRegistration(
-      this.database.db,
-      registrationId,
-      clientId,
-      decidedByUserId,
-      reason,
+    const updated = await this.withEvent(
+      {
+        clientId,
+        registrationId,
+        type: 'blocked',
+        authorUserId: decidedByUserId,
+        body: reason,
+      },
+      (db) =>
+        registrationsQueries.blockRegistration(
+          db,
+          registrationId,
+          clientId,
+          decidedByUserId,
+          reason,
+        ),
     );
     if (!updated) {
       throw new NotFoundException(
@@ -609,20 +644,26 @@ export class RegistrationsAdminService {
     user: JwtPayload,
     clientId: string,
     registrationId: string,
+    body: unknown = {},
   ) {
     await this.ensureCompanyCanAccessClient(user, clientId);
-    return this.unblockShared(clientId, registrationId, user.sub);
+    return this.unblockShared(clientId, registrationId, user.sub, body);
   }
 
-  async unblockForClientTenant(user: JwtPayload, registrationId: string) {
+  async unblockForClientTenant(
+    user: JwtPayload,
+    registrationId: string,
+    body: unknown = {},
+  ) {
     const clientId = this.ensureClientTenant(user);
-    return this.unblockShared(clientId, registrationId, user.sub);
+    return this.unblockShared(clientId, registrationId, user.sub, body);
   }
 
   private async unblockShared(
     clientId: string,
     registrationId: string,
     decidedByUserId: string,
+    body: unknown,
   ) {
     const existing = await registrationsQueries.getRegistrationByIdForClient(
       this.database.db,
@@ -638,10 +679,22 @@ export class RegistrationsAdminService {
       throw new BadRequestException('Cadastro não está bloqueado.');
     }
 
-    const updated = await registrationsQueries.unblockRegistration(
-      this.database.db,
-      registrationId,
-      clientId,
+    const parsed = unblockRegistrationSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const reason = parsed.data.reason ?? null;
+
+    const updated = await this.withEvent(
+      {
+        clientId,
+        registrationId,
+        type: 'unblocked',
+        authorUserId: decidedByUserId,
+        body: reason,
+      },
+      (db) =>
+        registrationsQueries.unblockRegistration(db, registrationId, clientId),
     );
     if (!updated) {
       throw new NotFoundException(
@@ -854,16 +907,20 @@ export class RegistrationsAdminService {
   ) {
     this.ensureCompanyAdmin(user);
     await this.ensureCompanyCanAccessClient(user, clientId);
-    return this.softDeleteShared(clientId, registrationId);
+    return this.softDeleteShared(clientId, registrationId, user.sub);
   }
 
   async softDeleteForClientTenant(user: JwtPayload, registrationId: string) {
     this.ensureClientAdmin(user);
     const clientId = this.ensureClientTenant(user);
-    return this.softDeleteShared(clientId, registrationId);
+    return this.softDeleteShared(clientId, registrationId, user.sub);
   }
 
-  private async softDeleteShared(clientId: string, registrationId: string) {
+  private async softDeleteShared(
+    clientId: string,
+    registrationId: string,
+    decidedByUserId: string,
+  ) {
     const row = await registrationsQueries.getRegistrationByIdForClient(
       this.database.db,
       registrationId,
@@ -909,11 +966,20 @@ export class RegistrationsAdminService {
       false,
     );
 
-    const updated = await registrationsQueries.setRegistrationActive(
-      this.database.db,
-      registrationId,
-      clientId,
-      false,
+    const updated = await this.withEvent(
+      {
+        clientId,
+        registrationId,
+        type: 'deleted',
+        authorUserId: decidedByUserId,
+      },
+      (db) =>
+        registrationsQueries.setRegistrationActive(
+          db,
+          registrationId,
+          clientId,
+          false,
+        ),
     );
     if (!updated) {
       throw new NotFoundException('Cadastro não encontrado.');
@@ -955,11 +1021,20 @@ export class RegistrationsAdminService {
       throw new BadRequestException('Cadastro não está excluído.');
     }
 
-    const updated = await registrationsQueries.setRegistrationActive(
-      this.database.db,
-      registrationId,
-      clientId,
-      true,
+    const updated = await this.withEvent(
+      {
+        clientId,
+        registrationId,
+        type: 'restored',
+        authorUserId: decidedByUserId,
+      },
+      (db) =>
+        registrationsQueries.setRegistrationActive(
+          db,
+          registrationId,
+          clientId,
+          true,
+        ),
     );
     if (!updated) {
       throw new NotFoundException('Cadastro não encontrado.');
@@ -1002,5 +1077,66 @@ export class RegistrationsAdminService {
       clientId,
     );
     return this.mapRowForClient(restored ?? updated, clientId);
+  }
+
+  async listEventsForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    registrationId: string,
+  ) {
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.events.list(clientId, registrationId);
+  }
+
+  async addEventNoteForCompanyUser(
+    user: JwtPayload,
+    clientId: string,
+    registrationId: string,
+    body: string,
+  ) {
+    await this.ensureCompanyCanAccessClient(user, clientId);
+    return this.events.addNote(clientId, registrationId, user.sub, body);
+  }
+
+  async listEventsForClientTenant(user: JwtPayload, registrationId: string) {
+    const clientId = this.ensureClientTenant(user);
+    return this.events.list(clientId, registrationId);
+  }
+
+  async addEventNoteForClientTenant(
+    user: JwtPayload,
+    registrationId: string,
+    body: string,
+  ) {
+    const clientId = this.ensureClientTenant(user);
+    return this.events.addNote(clientId, registrationId, user.sub, body);
+  }
+
+  private async withEvent<T>(
+    event: {
+      clientId: string;
+      registrationId: string;
+      type: RegistrationEventType;
+      authorUserId: string;
+      body?: string | null;
+    },
+    change: (db: AppDb) => Promise<T | undefined>,
+  ): Promise<T | undefined> {
+    return this.database.db.transaction(async (tx) => {
+      const db = tx as unknown as AppDb;
+      const result = await change(db);
+      if (result === undefined) return undefined;
+      await this.events.record(
+        {
+          clientId: event.clientId,
+          registrationId: event.registrationId,
+          type: event.type,
+          authorUserId: event.authorUserId,
+          body: event.body ?? null,
+        },
+        db,
+      );
+      return result;
+    });
   }
 }

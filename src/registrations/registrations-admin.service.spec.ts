@@ -11,6 +11,7 @@ import { MembersService } from '../members/members.service';
 import { PermissionsService } from '../permissions/permissions.service';
 import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
+import { RegistrationEventsService } from './registration-events.service';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
 function companyAdmin(): JwtPayload {
@@ -33,6 +34,12 @@ function companyOperator(): JwtPayload {
 
 describe('RegistrationsAdminService lifecycle', () => {
   let service: RegistrationsAdminService;
+  const db: {
+    transaction: (fn: (tx: object) => Promise<unknown>) => Promise<unknown>;
+  } = {
+    transaction: (fn) => fn(db),
+  };
+  const events = { record: jest.fn().mockResolvedValue({ id: 'evt-1' }) };
   let faceSync: {
     removePersonFromReaders: jest.Mock;
     enqueueApprovedRegistrationJob: jest.Mock;
@@ -76,7 +83,8 @@ describe('RegistrationsAdminService lifecycle', () => {
     const module = await Test.createTestingModule({
       providers: [
         RegistrationsAdminService,
-        { provide: DatabaseService, useValue: { db: {} } },
+        { provide: DatabaseService, useValue: { db } },
+        { provide: RegistrationEventsService, useValue: events },
         { provide: PermissionsService, useValue: {} },
         {
           provide: R2StorageService,
@@ -225,16 +233,80 @@ describe('RegistrationsAdminService lifecycle', () => {
       'company',
     );
 
-    expect(clearMember).toHaveBeenCalledWith({}, 'client-1', 'reg-1', {
+    expect(clearMember).toHaveBeenCalledWith(db, 'client-1', 'reg-1', {
       blockReason: null,
       blockedAt: null,
       blockedByUserId: null,
     });
+    expect(events.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: 'client-1',
+        registrationId: 'reg-1',
+        type: 'unblocked',
+        authorUserId: 'admin-1',
+        body: null,
+      }),
+      db,
+    );
     expect(faceSync.enqueueApprovedRegistrationJob).toHaveBeenCalledWith(
       'reg-1',
       'client-1',
       'admin-1',
       { resetReaderProgress: true, blocked: false },
+    );
+  });
+
+  it('bloqueia cadastro e registra o motivo na timeline', async () => {
+    jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
+      id: 'client-1',
+      companyId: 'company-1',
+    } as never);
+    const approvedRow = {
+      id: 'reg-1',
+      clientId: 'client-1',
+      status: 'approved',
+      isActive: true,
+      submittedAt: new Date(),
+      faceId: 1,
+      faceImageKey: 'k',
+      name: 'Rogerio',
+    };
+    const blockedRow = {
+      ...approvedRow,
+      status: 'blocked',
+      blockReason: 'Furto no mercado',
+      blockedAt: new Date(),
+    };
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValueOnce(approvedRow as never)
+      .mockResolvedValueOnce(blockedRow as never);
+    jest
+      .spyOn(registrationsQueries, 'blockRegistration')
+      .mockResolvedValue(blockedRow as never);
+    jest
+      .spyOn(membersQueries, 'setMemberBlockByRegistrationId')
+      .mockResolvedValue(null);
+
+    await service.blockForCompanyUser(companyAdmin(), 'client-1', 'reg-1', {
+      reason: 'Furto no mercado',
+    });
+
+    expect(events.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: 'client-1',
+        registrationId: 'reg-1',
+        type: 'blocked',
+        authorUserId: 'admin-1',
+        body: 'Furto no mercado',
+      }),
+      db,
+    );
+    expect(faceSync.enqueueApprovedRegistrationJob).toHaveBeenCalledWith(
+      'reg-1',
+      'client-1',
+      'admin-1',
+      { resetReaderProgress: true, blocked: true },
     );
   });
 });

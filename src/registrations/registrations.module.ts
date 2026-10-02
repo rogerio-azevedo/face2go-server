@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
+import { RegistrationEventsRepository } from '../database/repositories/registration-events.repository';
 import { RegistrationFaceRetakeRepository } from '../database/repositories/registration-face-retake.repository';
 import { FaceSyncModule } from '../face-sync/face-sync.module';
 import { MembersModule } from '../members/members.module';
@@ -17,6 +18,7 @@ import { PublicRegisterController } from './public-register.controller';
 import { PublicFaceRetakeController } from './public-face-retake.controller';
 import { PublicRegistrationService } from './public-registration.service';
 import { RegistrationConfigService } from './registration-config.service';
+import { RegistrationEventsService } from './registration-events.service';
 import { RegistrationFaceRetakeService } from './registration-face-retake.service';
 import { RegistrationLinksService } from './registration-links.service';
 import { RegistrationsAdminService } from './registrations-admin.service';
@@ -46,6 +48,8 @@ import { RegistrationsAdminService } from './registrations-admin.service';
     PublicRegistrationService,
     RegistrationFaceRetakeService,
     RegistrationFaceRetakeRepository,
+    RegistrationEventsRepository,
+    RegistrationEventsService,
     RegistrationsAdminService,
   ],
   exports: [

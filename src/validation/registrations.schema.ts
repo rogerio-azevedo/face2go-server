@@ -21,6 +21,37 @@ export const blockRegistrationSchema = z.object({
   reason: z.string().trim().min(3).max(2000),
 });
 
+export const unblockRegistrationSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .max(2000)
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+});
+
+export const registrationEventTypeSchema = z.enum([
+  'note',
+  'approved',
+  'rejected',
+  'blocked',
+  'unblocked',
+  'deleted',
+  'restored',
+]);
+
+export const createRegistrationNoteSchema = z.object({
+  body: z.string().trim().min(3).max(2000),
+});
+
+export const registrationEventSchema = z.object({
+  id: z.uuid(),
+  type: registrationEventTypeSchema,
+  body: z.string().nullable(),
+  authorName: z.string().nullable(),
+  createdAt: z.string(),
+});
+
 const optionalLocationFilter = z
   .string()
   .trim()
