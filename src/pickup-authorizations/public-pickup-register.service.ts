@@ -68,6 +68,7 @@ export class PublicPickupRegisterService {
     );
     return {
       clientName: client.name,
+      clientType: client.type,
       appBrand: resolveClientAppBrand(client.ienhFilialCode),
       guestName: row.guestName ?? '',
       needsGuestData: !row.guestName,

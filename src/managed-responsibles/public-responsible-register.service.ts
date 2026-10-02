@@ -67,6 +67,7 @@ export class PublicResponsibleRegisterService {
       );
     return {
       clientName: client.name,
+      clientType: client.type,
       appBrand: resolveClientAppBrand(client.ienhFilialCode),
       inviterName,
       studentLinks: students.map((s) => ({
