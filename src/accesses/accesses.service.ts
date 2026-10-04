@@ -92,8 +92,8 @@ export type AccessListQueryOptions = {
   endDate?: string;
   page?: number;
   name?: string;
-  block?: string;
-  unit?: string;
+  blockId?: string;
+  unitId?: string;
   readerId?: string;
   onlyDenied?: boolean;
 };
@@ -416,15 +416,13 @@ export class AccessesService {
       timezoneOffsetMinutes = row.timezoneOffsetMinutes ?? 0;
     }
 
-    const wantsLocation = Boolean(
-      options.block?.trim() || options.unit?.trim(),
-    );
+    const wantsLocation = Boolean(options.blockId?.trim() || options.unitId?.trim());
     const locationIds = wantsLocation
       ? await findAccessPersonIdsByLocation(this.database.db, {
           companyId,
           clientId: options.clientId,
-          block: options.block,
-          unit: options.unit,
+          blockId: options.blockId,
+          unitId: options.unitId,
         })
       : undefined;
 

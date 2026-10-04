@@ -8,6 +8,15 @@ const optionalDateQuery = z
   .optional()
   .transform((value) => (value ? value : undefined));
 
+const optionalUuidQuery = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => (value ? value : undefined))
+  .refine((value) => value == null || z.uuid().safeParse(value).success, {
+    message: 'Identificador inválido.',
+  });
+
 const optionalTextQuery = (max: number) =>
   z
     .string()
@@ -21,8 +30,8 @@ export const clientAccessesListQuerySchema = z.object({
   endDate: optionalDateQuery,
   page: z.coerce.number().int().min(1).optional(),
   name: optionalTextQuery(80),
-  block: optionalTextQuery(50),
-  unit: optionalTextQuery(50),
+  blockId: optionalUuidQuery,
+  unitId: optionalUuidQuery,
   readerId: optionalTextQuery(64),
   onlyDenied: optionalBoolQuery,
 });

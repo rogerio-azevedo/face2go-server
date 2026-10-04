@@ -22,8 +22,17 @@ describe('namesMismatch', () => {
     expect(namesMismatch('JOAO SILVA', 'João Silva')).toBe(false);
   });
 
-  it('aceita o formato gravado no leitor (primeiro + último)', () => {
-    expect(namesMismatch('MARIA SILVA', 'Maria da Costa Silva')).toBe(false);
+  it('aceita o nome completo quando ele cabe no leitor', () => {
+    expect(namesMismatch('MAYA 2 TESTE', 'Maya 2 teste')).toBe(false);
+  });
+
+  it('marca o formato antigo primeiro+último quando o nome completo cabe', () => {
+    expect(namesMismatch('MAYA TESTE', 'Maya 2 teste')).toBe(true);
+  });
+
+  it('aceita primeiro + último só quando o cadastro não cabe em 50 caracteres', () => {
+    const system = `Maria ${'Nomemeio '.repeat(5)}Silva`;
+    expect(namesMismatch('MARIA SILVA', system)).toBe(false);
   });
 
   it('marca divergência quando os nomes são de pessoas diferentes', () => {

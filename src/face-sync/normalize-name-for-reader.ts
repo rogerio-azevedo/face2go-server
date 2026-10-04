@@ -1,5 +1,18 @@
+function sanitizeReaderName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ç/gi, 'c')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
 /**
  * Normaliza o nome para o leitor Intelbras/Dahua (CardName).
+ * Mantém todos os tokens quando cabem em `maxLength`.
+ * Nomes maiores caem para primeiro + último.
  */
 export function normalizeNameForFacialReader(
   fullName: string,
@@ -18,34 +31,20 @@ export function normalizeNameForFacialReader(
     return '';
   }
 
-  let normalizedName = '';
-  if (nameParts.length === 1) {
-    normalizedName = nameParts[0];
-  } else if (nameParts.length === 2) {
-    normalizedName = `${nameParts[0]} ${nameParts[1]}`;
-  } else {
-    normalizedName = `${nameParts[0]} ${nameParts[nameParts.length - 1]}`;
-  }
+  const full = sanitizeReaderName(nameParts.join(' '));
+  if (!full) return '';
+  if (full.length <= maxLength) return full;
 
-  normalizedName = normalizedName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ç/gi, 'c')
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toUpperCase();
+  const short =
+    nameParts.length >= 2
+      ? sanitizeReaderName(`${nameParts[0]} ${nameParts[nameParts.length - 1]}`)
+      : full;
 
-  if (normalizedName.length > maxLength) {
-    const firstName = normalizedName.split(' ')[0];
-    if (firstName.length <= maxLength) {
-      normalizedName = firstName;
-    } else {
-      normalizedName = normalizedName.substring(0, maxLength).trim();
-    }
-  }
+  if (short && short.length <= maxLength) return short;
 
-  return normalizedName;
+  const firstName = (short || full).split(' ')[0] ?? '';
+  if (firstName.length > 0 && firstName.length <= maxLength) return firstName;
+  return (short || full).substring(0, maxLength).trim();
 }
 
 /** Nome da zona de tempo no leitor (AccessTimeSchedule[n].Name). */

@@ -1511,6 +1511,307 @@
         ]
       }
     },
+    "/clients/{clientId}/blocks": {
+      "get": {
+        "operationId": "ClientBlocksController_list",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar blocos e unidades do condomínio",
+        "tags": [
+          "client-blocks"
+        ]
+      },
+      "post": {
+        "operationId": "ClientBlocksController_createBlock",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClientBlockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar bloco",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/clients/{clientId}/blocks/{blockId}": {
+      "patch": {
+        "operationId": "ClientBlocksController_updateBlock",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blockId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClientBlockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar bloco",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/clients/{clientId}/blocks/{blockId}/units": {
+      "post": {
+        "operationId": "ClientBlocksController_createUnit",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blockId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClientUnitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Criar unidade",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/clients/{clientId}/blocks/{blockId}/units/generate": {
+      "post": {
+        "operationId": "ClientBlocksController_generateUnits",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blockId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateClientUnitsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar unidades em intervalo numérico",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/clients/{clientId}/units/{unitId}": {
+      "patch": {
+        "operationId": "ClientBlocksController_updateUnit",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClientUnitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Atualizar unidade",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/clients/{clientId}/units/{unitId}/merge": {
+      "post": {
+        "operationId": "ClientBlocksController_mergeUnit",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeClientUnitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unir unidade na de destino e desativar a origem",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
     "/client-invite-links/{code}": {
       "get": {
         "operationId": "ClientInviteLinksController_preview",
@@ -2702,20 +3003,18 @@
             }
           },
           {
-            "name": "block",
+            "name": "blockId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
           {
-            "name": "unit",
+            "name": "unitId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
@@ -2836,20 +3135,18 @@
             }
           },
           {
-            "name": "block",
+            "name": "blockId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
           {
-            "name": "unit",
+            "name": "unitId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
@@ -3608,20 +3905,18 @@
             }
           },
           {
-            "name": "block",
+            "name": "blockId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
           {
-            "name": "unit",
+            "name": "unitId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
@@ -4265,20 +4560,18 @@
             }
           },
           {
-            "name": "block",
+            "name": "blockId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
           {
-            "name": "unit",
+            "name": "unitId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
@@ -4338,20 +4631,18 @@
             }
           },
           {
-            "name": "block",
+            "name": "blockId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
           {
-            "name": "unit",
+            "name": "unitId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
@@ -4806,20 +5097,18 @@
             }
           },
           {
-            "name": "block",
+            "name": "blockId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
           {
-            "name": "unit",
+            "name": "unitId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
@@ -4887,20 +5176,18 @@
             }
           },
           {
-            "name": "block",
+            "name": "blockId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
           {
-            "name": "unit",
+            "name": "unitId",
             "required": false,
             "in": "query",
             "schema": {
-              "maxLength": 50,
               "type": "string"
             }
           },
@@ -12694,6 +12981,90 @@
           }
         }
       },
+      "CreateClientBlockDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateClientBlockDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateClientUnitDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "GenerateClientUnitsDto": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "UpdateClientUnitDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MergeClientUnitDto": {
+        "type": "object",
+        "properties": {
+          "targetUnitId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "targetUnitId"
+        ]
+      },
       "PatchClientUserProfileDto": {
         "type": "object",
         "properties": {
@@ -12966,6 +13337,12 @@
           "additionalData": {
             "type": "object",
             "additionalProperties": {}
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
           }
         },
         "required": [

@@ -29,23 +29,32 @@ async function normalizeForBrand(
 }
 
 /**
- * Lê a variante pronta no R2; se não existir, normaliza, grava e devolve.
+ * Variante só vale se foi gravada depois (ou junto) do master atual.
+ * Force sync baixa o master novo; uma variante antiga reenviaria a foto velha.
  */
-export async function loadOrCreateReaderFaceVariant(
+async function variantIsFresh(
+  r2: R2StorageService,
+  variantKey: string,
+  masterKey: string,
+): Promise<boolean> {
+  const [variantHead, masterHead] = await Promise.all([
+    r2.headObject(variantKey),
+    r2.headObject(masterKey),
+  ]);
+  const variantAt = variantHead?.lastModified?.getTime();
+  const masterAt = masterHead?.lastModified?.getTime();
+  if (variantAt == null || masterAt == null) return false;
+  return variantAt >= masterAt;
+}
+
+async function writeReaderFaceVariant(
   r2: R2StorageService,
   masterKey: string,
   masterBuffer: Buffer,
   brand: ReaderFaceBrand,
 ): Promise<Buffer> {
-  const key = readerFaceVariantKey(masterKey, brand);
-  try {
-    const got = await r2.getObjectBytes(key);
-    if (got.buffer.length >= 256) return got.buffer;
-  } catch {
-    /* miss — gera abaixo */
-  }
-
   const variant = await normalizeForBrand(masterBuffer, brand);
+  const key = readerFaceVariantKey(masterKey, brand);
   try {
     await r2.putObject(key, variant, 'image/jpeg');
   } catch {
@@ -54,14 +63,37 @@ export async function loadOrCreateReaderFaceVariant(
   return variant;
 }
 
-/** Pré-computa as variantes por marca na ingestão. Falha isolada não interrompe o upload. */
+/**
+ * Lê a variante pronta no R2 se ela não for mais velha que o master;
+ * senão normaliza o buffer atual, grava e devolve.
+ */
+export async function loadOrCreateReaderFaceVariant(
+  r2: R2StorageService,
+  masterKey: string,
+  masterBuffer: Buffer,
+  brand: ReaderFaceBrand,
+): Promise<Buffer> {
+  const key = readerFaceVariantKey(masterKey, brand);
+  if (await variantIsFresh(r2, key, masterKey)) {
+    try {
+      const got = await r2.getObjectBytes(key);
+      if (got.buffer.length >= 256) return got.buffer;
+    } catch {
+      /* miss — gera abaixo */
+    }
+  }
+
+  return writeReaderFaceVariant(r2, masterKey, masterBuffer, brand);
+}
+
+/** Regrava as variantes a partir do master atual. Falha isolada não interrompe o upload. */
 export async function storeReaderFaceVariants(
   r2: R2StorageService,
   masterKey: string,
   masterBuffer: Buffer,
 ): Promise<void> {
   await Promise.allSettled([
-    loadOrCreateReaderFaceVariant(r2, masterKey, masterBuffer, 'intelbras'),
-    loadOrCreateReaderFaceVariant(r2, masterKey, masterBuffer, 'hikvision'),
+    writeReaderFaceVariant(r2, masterKey, masterBuffer, 'intelbras'),
+    writeReaderFaceVariant(r2, masterKey, masterBuffer, 'hikvision'),
   ]);
 }

@@ -621,6 +621,58 @@ describe('FaceSyncService', () => {
     expect(outcome.deviceSyncError).toBeNull();
   });
 
+  it('não fala com o leitor quando o progresso já está synced', async () => {
+    mockSyncReaders();
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2000-01-01');
+    jest
+      .spyOn(personReaderSyncQueries, 'listPersonReaderSyncByFace')
+      .mockResolvedValue(
+        mercadoReaders().map((reader) => ({
+          readerId: reader.id,
+          status: 'synced',
+          error: null,
+        })),
+      );
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 3,
+      name: 'Maya 2 teste',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'members/c/m/face.jpg',
+      resetReaderProgress: false,
+    });
+
+    expect(hikvision.hikvisionSyncFace).not.toHaveBeenCalled();
+    expect(outcome.deviceSyncStatus).toBe('synced');
+    expect(outcome.deviceSyncError).toBeNull();
+  });
+
+  it('resetReaderProgress apaga o progresso e reenvia ao leitor', async () => {
+    mockSyncReaders();
+    jest
+      .spyOn(personBirthDateQueries, 'getBirthDateByFaceId')
+      .mockResolvedValue('2000-01-01');
+    const deleted = jest
+      .spyOn(personReaderSyncQueries, 'deletePersonReaderSyncByFace')
+      .mockResolvedValue(undefined);
+
+    const outcome = await service.syncPersonOnReaders({
+      clientId: 'client-1',
+      faceId: 3,
+      name: 'Maya 2 teste',
+      imageBuffer: Buffer.from('raw'),
+      photoKey: 'members/c/m/face.jpg',
+      resetReaderProgress: true,
+    });
+
+    expect(deleted).toHaveBeenCalledWith(expect.anything(), 'client-1', 3);
+    expect(hikvision.hikvisionSyncFace).toHaveBeenCalled();
+    expect(outcome.deviceSyncStatus).toBe('synced');
+  });
+
   it('adulto sem data marca o 18+ como parcial explícito', async () => {
     mockSyncReaders();
     jest

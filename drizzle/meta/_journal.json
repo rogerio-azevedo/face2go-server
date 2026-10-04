@@ -589,6 +589,13 @@
       "when": 1779520000000,
       "tag": "0083_registration_events",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1779530000000,
+      "tag": "0084_client_blocks_units",
+      "breakpoints": true
     }
   ]
 }

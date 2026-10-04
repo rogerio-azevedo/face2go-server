@@ -15,6 +15,7 @@ import * as membersQueries from '../database/queries/members.queries';
 import type { RegistrationEventType } from '../database/queries/registration-events.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { DatabaseService } from '../database/database.service';
+import { ClientBlocksRepository } from '../client-blocks/client-blocks.repository';
 import { PermissionsService } from '../permissions/permissions.service';
 import { MembersService } from '../members/members.service';
 import { PersonProfileService } from '../people/person-profile.service';
@@ -39,6 +40,7 @@ import {
 } from './registration-additional-data';
 import { assertDocumentAvailableInClient } from './registration-document-unique';
 import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
+import { resolveCondominiumUnit } from './resolve-condominium-unit';
 import {
   buildPaginatedResult,
   parseListPaginationParams,
@@ -66,6 +68,7 @@ export class RegistrationsAdminService {
     private readonly personProfile: PersonProfileService,
     private readonly events: RegistrationEventsService,
     private readonly emailService: EmailService,
+    private readonly blocks: ClientBlocksRepository,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -160,6 +163,7 @@ export class RegistrationsAdminService {
       birthDate,
       isMinor: birthDate ? isMinor(birthDate) : null,
       additionalData: row.additionalData,
+      unitId: row.unitId ?? null,
       status: row.status,
       isActive: row.isActive,
       submittedAt: row.submittedAt,
@@ -246,8 +250,8 @@ export class RegistrationsAdminService {
       {
         status: query.status,
         search: query.search,
-        block: query.block,
-        unit: query.unit,
+        blockId: query.blockId,
+        unitId: query.unitId,
         room: query.room,
       },
     );
@@ -267,8 +271,8 @@ export class RegistrationsAdminService {
     const listOpts = {
       status: query.status,
       search,
-      block: query.block,
-      unit: query.unit,
+      blockId: query.blockId,
+      unitId: query.unitId,
       room: query.room,
       offset,
       limit: pageSize,
@@ -286,8 +290,8 @@ export class RegistrationsAdminService {
         {
           status: query.status,
           search,
-          block: query.block,
-          unit: query.unit,
+          blockId: query.blockId,
+          unitId: query.unitId,
           room: query.room,
         },
       ),
@@ -860,19 +864,35 @@ export class RegistrationsAdminService {
         client.registrationConfig,
       )
     ).fields;
-    const normalized = normalizeRegistrationFields(fieldsConfig, {
-      document: parsed.data.document,
-      phone: parsed.data.phone,
-      email: parsed.data.email,
-      birthDate: parsed.data.birthDate,
-      additionalData: parsed.data.additionalData,
-    });
+    const isCondominium = client.type === 'condominium';
+    const normalized = normalizeRegistrationFields(
+      fieldsConfig,
+      {
+        document: parsed.data.document,
+        phone: parsed.data.phone,
+        email: parsed.data.email,
+        birthDate: parsed.data.birthDate,
+        additionalData: parsed.data.additionalData,
+      },
+      { skipBlockUnit: isCondominium },
+    );
     const merged = mergeHiddenRegistrationFields(fieldsConfig, normalized, {
       document: row.document,
       phone: row.phone,
       email: row.email,
       birthDate: toIsoDateString(row.birthDate),
       additionalData: row.additionalData,
+    });
+    const location = await resolveCondominiumUnit({
+      clientType: client.type,
+      config: fieldsConfig,
+      requestedUnitId: parsed.data.unitId,
+      additionalData: merged.additionalData,
+      existingUnitId: row.unitId,
+      catalog: {
+        loadActiveUnit: (id) => this.blocks.getActiveUnitLocation(clientId, id),
+        countActiveUnits: () => this.blocks.countActiveUnits(clientId),
+      },
     });
 
     const linkedMember = await membersQueries.getMemberByRegistrationId(
@@ -899,7 +919,8 @@ export class RegistrationsAdminService {
         phone: merged.phone,
         email: merged.email,
         birthDate: merged.birthDate,
-        additionalData: merged.additionalData,
+        additionalData: location.additionalData,
+        unitId: location.unitId,
       },
     );
     if (!updated) {

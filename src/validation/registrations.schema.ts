@@ -52,12 +52,14 @@ export const registrationEventSchema = z.object({
   createdAt: z.string(),
 });
 
-const optionalLocationFilter = z
+const optionalUuidFilter = z
   .string()
   .trim()
-  .max(50)
   .optional()
-  .transform((value) => (value ? value : undefined));
+  .transform((value) => (value ? value : undefined))
+  .refine((value) => value == null || z.uuid().safeParse(value).success, {
+    message: 'Identificador inválido.',
+  });
 
 export const listRegistrationsQuerySchema = z.object({
   status: registrationListFilterSchema.optional(),
@@ -69,9 +71,14 @@ export const listRegistrationsQuerySchema = z.object({
     .max(200)
     .optional()
     .transform((value) => (value ? value : undefined)),
-  block: optionalLocationFilter,
-  unit: optionalLocationFilter,
-  room: optionalLocationFilter,
+  blockId: optionalUuidFilter,
+  unitId: optionalUuidFilter,
+  room: z
+    .string()
+    .trim()
+    .max(50)
+    .optional()
+    .transform((value) => (value ? value : undefined)),
 });
 
 export type ListRegistrationsQuery = z.infer<
@@ -90,8 +97,8 @@ export const registrationExportStatusSchema = z.enum([
 export const exportRegistrationsQuerySchema = z.object({
   status: registrationExportStatusSchema,
   search: listRegistrationsQuerySchema.shape.search,
-  block: listRegistrationsQuerySchema.shape.block,
-  unit: listRegistrationsQuerySchema.shape.unit,
+  blockId: listRegistrationsQuerySchema.shape.blockId,
+  unitId: listRegistrationsQuerySchema.shape.unitId,
   room: listRegistrationsQuerySchema.shape.room,
 });
 
@@ -132,6 +139,7 @@ export const updateRegistrationSchema = z.object({
   email: z.string().trim().max(255).optional(),
   birthDate: optionalBirthDate,
   additionalData: z.record(z.string(), z.unknown()).optional(),
+  unitId: z.uuid().nullable().optional(),
 });
 
 export const publicCheckDocumentSchema = z.object({
@@ -155,6 +163,7 @@ export const publicSubmitRegistrationSchema = z.object({
   birthDate: optionalBirthDate,
   faceImageKey: z.string().min(1),
   additionalData: z.record(z.string(), z.unknown()).optional(),
+  unitId: z.uuid().nullable().optional(),
   truthDeclared: z.boolean().refine((v) => v === true, {
     message: 'É necessário confirmar a declaração de veracidade.',
   }),

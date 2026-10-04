@@ -5,6 +5,7 @@ import { DatabaseService } from '../database/database.service';
 import * as membersQueries from '../database/queries/members.queries';
 import * as readersQueries from '../database/queries/readers.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
+import { ClientBlocksRepository } from '../client-blocks/client-blocks.repository';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { PublicRegistrationService } from './public-registration.service';
 import { DOCUMENT_ALREADY_MEMBER_MESSAGE } from './registration-document-unique';
@@ -22,6 +23,19 @@ describe('PublicRegistrationService', () => {
         {
           provide: R2StorageService,
           useValue: { assertObjectExists: jest.fn() },
+        },
+        {
+          provide: ClientBlocksRepository,
+          useValue: {
+            getActiveUnitLocation: jest.fn().mockResolvedValue({
+              unitId: '11111111-1111-4111-8111-111111111111',
+              blockId: '22222222-2222-4222-8222-222222222222',
+              blockName: 'A',
+              unitName: '101',
+            }),
+            countActiveUnits: jest.fn().mockResolvedValue(1),
+            listActiveCatalog: jest.fn().mockResolvedValue([]),
+          },
         },
       ],
     }).compile();
@@ -62,7 +76,7 @@ describe('PublicRegistrationService', () => {
       phone: '51999999999',
       email: 'morador@example.com',
       faceImageKey: `company-1/client-1/${registrationId}/face.jpg`,
-      additionalData: { block: 'A', unit: '101' },
+      unitId: '11111111-1111-4111-8111-111111111111',
       truthDeclared: true,
     };
 

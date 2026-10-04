@@ -15,6 +15,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth';
+import { clientUnits } from './client-blocks';
 import { clients } from './clients';
 
 export const registrationStatusEnum = pgEnum('registration_status', [
@@ -90,6 +91,10 @@ export const registrations = pgTable(
       unit?: string;
       room?: string;
     } | null>(),
+    /** Unidade do catálogo do condomínio. Fonte da verdade; o JSON guarda o nome. */
+    unitId: uuid('unit_id').references(() => clientUnits.id, {
+      onDelete: 'restrict',
+    }),
     status: registrationStatusEnum('status').notNull().default('draft'),
     isActive: boolean('is_active').default(true).notNull(),
     approvedByUserId: text('approved_by_user_id').references(() => users.id, {
@@ -120,6 +125,7 @@ export const registrations = pgTable(
       t.status,
       t.submittedAt,
     ),
+    index('registrations_unit_id_idx').on(t.unitId),
   ],
 );
 

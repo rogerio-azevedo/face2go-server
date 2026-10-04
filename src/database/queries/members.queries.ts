@@ -352,6 +352,7 @@ export async function insertMember(
     deviceSyncedAt?: Date | null;
     deviceSyncError?: string | null;
     additionalData?: ClientMemberRow['additionalData'];
+    unitId?: string | null;
     isActive?: boolean;
   },
 ) {
@@ -374,6 +375,7 @@ export async function insertMember(
       deviceSyncedAt: input.deviceSyncedAt ?? null,
       deviceSyncError: input.deviceSyncError ?? null,
       additionalData: input.additionalData ?? null,
+      unitId: input.unitId ?? null,
       isActive: input.isActive ?? true,
       updatedAt: new Date(),
     })
@@ -401,6 +403,7 @@ export async function updateMember(
       | 'deviceSyncedAt'
       | 'deviceSyncError'
       | 'additionalData'
+      | 'unitId'
       | 'isActive'
       | 'canEnrollStudentFace'
       | 'canEnrollMemberFace'

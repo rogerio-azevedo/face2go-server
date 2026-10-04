@@ -822,7 +822,7 @@ export class ResponsiblesService {
         responsibleId,
       ),
       logContext: `responsible-sync=${responsibleId}`,
-      resetReaderProgress: false,
+      resetReaderProgress: true,
       allowSimilarFace: options?.allowSimilarFace === true,
       previousDeviceSyncError: row.deviceSyncError,
       blocked: responsible.blockedAt != null,

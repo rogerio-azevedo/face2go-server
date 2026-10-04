@@ -208,7 +208,7 @@ export class ManagedResponsiblesService {
     );
     const photoKey = `responsibles/${params.clientId}/${params.responsibleId}/face.jpg`;
     await this.r2.putObject(photoKey, params.imageBuffer, 'image/jpeg');
-    void storeReaderFaceVariants(this.r2, photoKey, params.imageBuffer);
+    await storeReaderFaceVariants(this.r2, photoKey, params.imageBuffer);
 
     await responsiblesQueries.updateResponsibleFace(
       this.database.db,

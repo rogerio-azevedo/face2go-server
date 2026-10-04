@@ -105,7 +105,7 @@ export class PublicResponsibleRegisterService {
       ext,
     );
     await this.r2.putObject(key, buffer, contentType);
-    void storeReaderFaceVariants(this.r2, key, buffer);
+    await storeReaderFaceVariants(this.r2, key, buffer);
     return { faceImageKey: key };
   }
 

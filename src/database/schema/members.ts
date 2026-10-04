@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm';
 import {
   date,
+  index,
   jsonb,
   pgTable,
   text,
@@ -13,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { users } from './auth';
+import { clientUnits } from './client-blocks';
 import { clients } from './clients';
 import { deviceSyncStatusEnum } from './registrations';
 import { registrations } from './registrations';
@@ -73,6 +75,10 @@ export const clientMembers = pgTable(
       unit?: string;
       room?: string;
     } | null>(),
+    /** Unidade do catálogo do condomínio. Fonte da verdade; o JSON guarda o nome. */
+    unitId: uuid('unit_id').references(() => clientUnits.id, {
+      onDelete: 'restrict',
+    }),
     isActive: boolean('is_active').default(true).notNull(),
     blockReason: text('block_reason'),
     blockedAt: timestamp('blocked_at'),
@@ -96,6 +102,7 @@ export const clientMembers = pgTable(
       t.faceId,
     ),
     uniqueIndex('client_members_registration_unique').on(t.registrationId),
+    index('client_members_unit_id_idx').on(t.unitId),
   ],
 );
 

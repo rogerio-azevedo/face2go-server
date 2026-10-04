@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 
 import { resolveClientAppBrand } from '../common/utils/client-app-brand';
+import { ClientBlocksRepository } from '../client-blocks/client-blocks.repository';
 import { DatabaseService } from '../database/database.service';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import { storeReaderFaceVariants } from '../face-sync/face-image-variants';
@@ -18,6 +19,7 @@ import {
 } from '../validation/registrations.schema';
 import { zodFirstMessage } from '../validation/zod-utils';
 import { normalizeRegistrationFields } from './registration-additional-data';
+import { resolveCondominiumUnit } from './resolve-condominium-unit';
 import { assertDocumentAvailableInClient } from './registration-document-unique';
 import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
 
@@ -61,6 +63,7 @@ export class PublicRegistrationService {
   constructor(
     private readonly database: DatabaseService,
     private readonly r2: R2StorageService,
+    private readonly blocks: ClientBlocksRepository,
   ) {}
 
   async getPreview(code: string) {
@@ -85,6 +88,10 @@ export class PublicRegistrationService {
           bundle.client.registrationConfig,
         )
       ).fields,
+      blocks:
+        bundle.client.type === 'condominium'
+          ? await this.blocks.listActiveCatalog(bundle.client.id)
+          : [],
     };
   }
 
@@ -150,7 +157,7 @@ export class PublicRegistrationService {
     );
 
     await this.r2.putObject(key, buffer, contentType);
-    void storeReaderFaceVariants(this.r2, key, buffer);
+    await storeReaderFaceVariants(this.r2, key, buffer);
     return { faceImageKey: key };
   }
 
@@ -202,6 +209,7 @@ export class PublicRegistrationService {
       birthDate,
       faceImageKey,
       additionalData,
+      unitId,
     } = parsed.data;
     const truthDeclaredAt = new Date();
 
@@ -213,12 +221,27 @@ export class PublicRegistrationService {
         bundle.client.registrationConfig,
       )
     ).fields;
-    const normalized = normalizeRegistrationFields(fieldsConfig, {
-      document,
-      phone,
-      email,
-      birthDate,
-      additionalData,
+    const isCondominium = bundle.client.type === 'condominium';
+    const normalized = normalizeRegistrationFields(
+      fieldsConfig,
+      {
+        document,
+        phone,
+        email,
+        birthDate,
+        additionalData,
+      },
+      { skipBlockUnit: isCondominium },
+    );
+    const location = await resolveCondominiumUnit({
+      clientType: bundle.client.type,
+      config: fieldsConfig,
+      requestedUnitId: unitId,
+      additionalData: normalized.additionalData,
+      catalog: {
+        loadActiveUnit: (id) => this.blocks.getActiveUnitLocation(bundle.client.id, id),
+        countActiveUnits: () => this.blocks.countActiveUnits(bundle.client.id),
+      },
     });
 
     await assertDocumentAvailableInClient(
@@ -259,7 +282,8 @@ export class PublicRegistrationService {
           email: normalized.email,
           birthDate: normalized.birthDate,
           faceImageKey,
-          additionalData: normalized.additionalData,
+          additionalData: location.additionalData,
+          unitId: location.unitId,
           truthDeclaredAt,
         },
       );

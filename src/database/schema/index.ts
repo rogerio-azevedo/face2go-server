@@ -5,6 +5,7 @@ export * from './invite-links';
 export * from './permissions';
 export * from './clients';
 export * from './client-addresses';
+export * from './client-blocks';
 export * from './client-display-devices';
 export * from './client-panic-config';
 export * from './readers';

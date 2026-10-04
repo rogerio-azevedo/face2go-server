@@ -10,6 +10,7 @@ import { AccessesModule } from './accesses/accesses.module';
 import { CamerasModule } from './cameras/cameras.module';
 import { ClientsModule } from './clients/clients.module';
 import { ClientAddressesModule } from './client-addresses/client-addresses.module';
+import { ClientBlocksModule } from './client-blocks/client-blocks.module';
 import { ClientInviteLinksModule } from './client-invite-links/client-invite-links.module';
 import { CompaniesModule } from './companies/companies.module';
 import { CompanyFeaturesModule } from './company-features/company-features.module';
@@ -83,6 +84,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     CompanyFeaturesModule,
     ClientsModule,
     ClientAddressesModule,
+    ClientBlocksModule,
     ClientInviteLinksModule,
     ReadersModule,
     CamerasModule,

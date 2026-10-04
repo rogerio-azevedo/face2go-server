@@ -13,6 +13,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { PersonProfileService } from '../people/person-profile.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { RegistrationEventsService } from './registration-events.service';
+import { ClientBlocksRepository } from '../client-blocks/client-blocks.repository';
 import { RegistrationsAdminService } from './registrations-admin.service';
 
 function companyAdmin(): JwtPayload {
@@ -99,6 +100,7 @@ describe('RegistrationsAdminService lifecycle', () => {
         { provide: MembersService, useValue: members },
         { provide: PersonProfileService, useValue: personProfile },
         { provide: EmailService, useValue: email },
+        { provide: ClientBlocksRepository, useValue: {} },
       ],
     }).compile();
 

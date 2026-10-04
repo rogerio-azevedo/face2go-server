@@ -819,12 +819,69 @@ function buildAccessCardUpdateParams(args: {
 }
 
 /**
+ * photoOnly não reescreve zonas, mas o CardName precisa acompanhar o cadastro.
+ * Reaplica as zonas já gravadas no cartão para o update não zerá-las.
+ */
+async function updateCardNameOnPhotoOnly(args: {
+  reader: PlainReaderCredential;
+  auth: IntelbrasDigestAuth;
+  base: string;
+  label: string;
+  faceId: string;
+  normalizedName: string;
+  fallbackTimeSectionIds: number[];
+}): Promise<void> {
+  const { reader, auth, base, label, faceId, normalizedName } = args;
+  try {
+    const existingCard = await intelbrasFindCardByUserId(reader, faceId);
+    const recNo =
+      existingCard?.RecNo != null
+        ? parseInt(existingCard.RecNo, 10)
+        : Number.NaN;
+    if (!Number.isFinite(recNo) || recNo <= 0) {
+      syncLog('upsertFace:photoOnly:semCartao', { reader: label, faceId });
+      return;
+    }
+
+    const timeSectionIds =
+      existingCard?.timeSectionIndices &&
+      existingCard.timeSectionIndices.length > 0
+        ? existingCard.timeSectionIndices
+        : args.fallbackTimeSectionIds;
+    const cardParams = buildAccessCardUpdateParams({
+      recNo,
+      faceId,
+      normalizedName,
+      timeSectionIds,
+      validDateStart: existingCard?.ValidDateStart,
+      validDateEnd: existingCard?.ValidDateEnd,
+    });
+    const cardUrl = `${base}/cgi-bin/recordUpdater.cgi?${cardParams}`;
+    const cardResp = await digestRequest(auth, { method: 'GET', url: cardUrl });
+    syncLog('upsertFace:photoOnly:cardName', {
+      reader: label,
+      faceId,
+      recNo,
+      name: normalizedName,
+      status: cardResp.status,
+      body: truncateForLog(cardResp.data),
+    });
+  } catch (err) {
+    syncLogError('upsertFace:photoOnly:cardName', err, {
+      reader: label,
+      faceId,
+    });
+    throw attachReaderSyncStepError(err, 'cartão de acesso');
+  }
+}
+
+/**
  * Cria/atualiza cartão de acesso (nome + zonas) e envia a foto ao leitor Intelbras/Dahua.
  * Pré-requisito: AccessTimeSchedule[n] já configurada no leitor quando timeSectionIds ≠ [255]
  * (use AccessTimeZoneService.ensureZonesOnSingleReader antes desta chamada).
  */
 export type IntelbrasUpsertFaceOptions = {
-  /** Só troca a foto — pula busca/update do cartão (validado no leitor real). */
+  /** Troca a foto e o CardName, sem regravar zonas a partir do cadastro. */
   photoOnly?: boolean;
   /** Aplica perfil nativo Bloqueados (UserType=1) após cartão + foto. */
   blocked?: boolean;
@@ -951,6 +1008,15 @@ export async function intelbrasUpsertFaceOnReader(
       }
     } else {
       syncLog('upsertFace:photoOnly', { reader: label, faceId });
+      await updateCardNameOnPhotoOnly({
+        reader,
+        auth,
+        base,
+        label,
+        faceId,
+        normalizedName,
+        fallbackTimeSectionIds: timeSectionIds,
+      });
     }
 
     let faceExists = false;

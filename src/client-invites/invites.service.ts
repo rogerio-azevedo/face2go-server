@@ -662,7 +662,7 @@ export class InvitesService {
       ext,
     );
     await this.r2.putObject(key, buffer, contentType);
-    void storeReaderFaceVariants(this.r2, key, buffer);
+    await storeReaderFaceVariants(this.r2, key, buffer);
 
     const submitted = await inviteQueries.inviteUpdateGuestFaceSubmitted(
       this.database.db,

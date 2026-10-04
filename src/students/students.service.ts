@@ -482,7 +482,7 @@ export class StudentsService {
         studentId,
       ),
       logContext: `student-sync=${studentId}`,
-      resetReaderProgress: false,
+      resetReaderProgress: true,
       allowSimilarFace: options?.allowSimilarFace === true,
       previousDeviceSyncError: student.deviceSyncError,
       blocked: student.blockedAt != null,

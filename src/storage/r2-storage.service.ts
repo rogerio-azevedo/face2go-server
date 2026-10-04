@@ -146,6 +146,19 @@ export class R2StorageService {
     return this.createPresignedGetUrl(key);
   }
 
+  async headObject(
+    key: string,
+  ): Promise<{ lastModified?: Date } | null> {
+    try {
+      const resp = await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      return { lastModified: resp.LastModified };
+    } catch {
+      return null;
+    }
+  }
+
   async assertObjectExists(key: string): Promise<void> {
     try {
       await this.client.send(

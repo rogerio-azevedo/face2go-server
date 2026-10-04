@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ClientBlocksModule } from '../client-blocks/client-blocks.module';
 import { DatabaseModule } from '../database/database.module';
 import { EmailModule } from '../email/email.module';
 import { RegistrationEventsRepository } from '../database/repositories/registration-events.repository';
@@ -27,6 +28,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
 @Module({
   imports: [
     DatabaseModule,
+    ClientBlocksModule,
     EmailModule,
     PermissionsModule,
     StorageModule,

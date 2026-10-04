@@ -191,7 +191,7 @@ export class PersonProfileService {
     const photoKey = canonicalFacePhotoKey(clientId, target);
 
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
-    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+    await storeReaderFaceVariants(this.r2, photoKey, buffer);
 
     await this.writeFaceToBond(clientId, target, {
       faceId,
@@ -372,7 +372,7 @@ export class PersonProfileService {
     const buffer =
       sourceBuffer ?? (await this.r2.getObjectBytes(face.photoKey)).buffer;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
-    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+    await storeReaderFaceVariants(this.r2, photoKey, buffer);
     return { ...face, photoKey };
   }
 

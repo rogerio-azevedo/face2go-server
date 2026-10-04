@@ -689,7 +689,7 @@ export class MembersService {
         memberId,
       ),
       logContext: `member-sync=${memberId}`,
-      resetReaderProgress: false,
+      resetReaderProgress: true,
       allowSimilarFace: options?.allowSimilarFace === true,
       previousDeviceSyncError: row.deviceSyncError,
       blocked: row.blockedAt != null,
@@ -1080,6 +1080,7 @@ export class MembersService {
       deviceSyncedAt: registration.deviceSyncedAt,
       deviceSyncError: registration.deviceSyncError,
       additionalData: registration.additionalData,
+      unitId: registration.unitId,
       isActive: true,
     });
   }
@@ -1127,6 +1128,7 @@ export class MembersService {
         document: registration.document,
         birthDate: toIsoDateString(registration.birthDate),
         additionalData: registration.additionalData,
+        unitId: registration.unitId,
       },
     );
   }

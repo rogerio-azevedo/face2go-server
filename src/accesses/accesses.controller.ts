@@ -62,8 +62,8 @@ export class AccessesController {
       endDate: query.endDate,
       page: query.page,
       name: query.name,
-      block: query.block,
-      unit: query.unit,
+      blockId: query.blockId,
+      unitId: query.unitId,
       readerId: query.readerId,
       onlyDenied: query.onlyDenied,
     });

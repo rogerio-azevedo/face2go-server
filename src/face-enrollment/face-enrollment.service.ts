@@ -240,7 +240,7 @@ export class FaceEnrollmentService {
       id: responsibleId,
     });
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
-    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+    await storeReaderFaceVariants(this.r2, photoKey, buffer);
 
     const photoOnly = responsible.deviceSyncStatus === 'synced';
 
@@ -400,7 +400,7 @@ export class FaceEnrollmentService {
 
     const photoKey = `students/${clientId}/${studentId}/face.jpg`;
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
-    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+    await storeReaderFaceVariants(this.r2, photoKey, buffer);
 
     const photoOnly = student.deviceSyncStatus === 'synced';
 
@@ -945,7 +945,7 @@ export class FaceEnrollmentService {
       id: memberId,
     });
     await this.r2.putObject(photoKey, buffer, 'image/jpeg');
-    void storeReaderFaceVariants(this.r2, photoKey, buffer);
+    await storeReaderFaceVariants(this.r2, photoKey, buffer);
 
     const photoOnly = member.deviceSyncStatus === 'synced';
 

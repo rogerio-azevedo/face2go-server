@@ -52,6 +52,7 @@ export function normalizeRegistrationFields(
     birthDate?: string | null;
     additionalData?: Record<string, unknown>;
   },
+  options?: { skipBlockUnit?: boolean },
 ): NormalizedRegistrationFields {
   const document = applyScalarRule(
     config.document,
@@ -81,19 +82,21 @@ export function normalizeRegistrationFields(
 
   const additional: { block?: string; unit?: string; room?: string } = {};
 
-  const block = applyScalarRule(
-    config.block,
-    coerceTrimmedString(input.additionalData?.block),
-    'o bloco',
-  );
-  if (block) additional.block = block;
+  if (!options?.skipBlockUnit) {
+    const block = applyScalarRule(
+      config.block,
+      coerceTrimmedString(input.additionalData?.block),
+      'o bloco',
+    );
+    if (block) additional.block = block;
 
-  const unit = applyScalarRule(
-    config.unit,
-    coerceTrimmedString(input.additionalData?.unit),
-    'a unidade',
-  );
-  if (unit) additional.unit = unit;
+    const unit = applyScalarRule(
+      config.unit,
+      coerceTrimmedString(input.additionalData?.unit),
+      'a unidade',
+    );
+    if (unit) additional.unit = unit;
+  }
 
   const room = applyScalarRule(
     config.room,

@@ -16,6 +16,7 @@ import {
 import type { AppDb } from '../database.types';
 import {
   clientFaceCounters,
+  clientUnits,
   clients,
   registrationLinks,
   registrations,
@@ -175,6 +176,7 @@ export async function insertRegistration(
     birthDate: string | null;
     faceImageKey: string;
     additionalData: RegistrationRow['additionalData'];
+    unitId?: string | null;
     truthDeclaredAt: Date;
   },
 ): Promise<RegistrationRow> {
@@ -192,6 +194,7 @@ export async function insertRegistration(
       birthDate: input.birthDate,
       faceImageKey: input.faceImageKey,
       additionalData: input.additionalData,
+      unitId: input.unitId ?? null,
       status: 'draft',
       submittedAt: now,
       truthDeclaredAt: input.truthDeclaredAt,
@@ -231,8 +234,8 @@ export type RegistrationStatusCounts = Record<
 export type RegistrationListQueryOptions = {
   status?: RegistrationListFilter;
   search?: string;
-  block?: string;
-  unit?: string;
+  blockId?: string;
+  unitId?: string;
   room?: string;
   offset?: number;
   limit?: number;
@@ -240,7 +243,7 @@ export type RegistrationListQueryOptions = {
 
 type RegistrationListFilterOptions = Pick<
   RegistrationListQueryOptions,
-  'status' | 'search' | 'block' | 'unit' | 'room'
+  'status' | 'search' | 'blockId' | 'unitId' | 'room'
 >;
 
 function registrationSearchCondition(search?: string): SQL | undefined {
@@ -257,19 +260,19 @@ function registrationSearchCondition(search?: string): SQL | undefined {
   return or(...conds);
 }
 
-function additionalDataFieldEquals(
-  key: 'block' | 'unit' | 'room',
-  value?: string,
-): SQL | undefined {
+function roomEquals(value?: string): SQL | undefined {
   const term = value?.trim();
   if (!term) return undefined;
-  if (key === 'block') {
-    return sql`coalesce(${registrations.additionalData}->>'block', '') ilike ${term}`;
-  }
-  if (key === 'unit') {
-    return sql`coalesce(${registrations.additionalData}->>'unit', '') ilike ${term}`;
-  }
   return sql`coalesce(${registrations.additionalData}->>'room', '') ilike ${term}`;
+}
+
+function unitBelongsToBlock(blockId?: string): SQL | undefined {
+  if (!blockId) return undefined;
+  return sql`exists (
+    select 1 from ${clientUnits}
+    where ${clientUnits.id} = ${registrations.unitId}
+      and ${clientUnits.blockId} = ${blockId}
+  )`;
 }
 
 function submittedRegistrationsWhere(
@@ -292,11 +295,10 @@ function submittedRegistrationsWhere(
   }
   const searchCond = registrationSearchCondition(options.search);
   if (searchCond) conds.push(searchCond);
-  const blockCond = additionalDataFieldEquals('block', options.block);
+  if (options.unitId) conds.push(eq(registrations.unitId, options.unitId));
+  const blockCond = unitBelongsToBlock(options.blockId);
   if (blockCond) conds.push(blockCond);
-  const unitCond = additionalDataFieldEquals('unit', options.unit);
-  if (unitCond) conds.push(unitCond);
-  const roomCond = additionalDataFieldEquals('room', options.room);
+  const roomCond = roomEquals(options.room);
   if (roomCond) conds.push(roomCond);
   return and(...conds);
 }
@@ -562,6 +564,7 @@ export async function updateRegistrationProfile(
     email: string | null;
     birthDate: string | null;
     additionalData: RegistrationRow['additionalData'];
+    unitId: string | null;
   },
 ): Promise<RegistrationRow | undefined> {
   const now = new Date();
@@ -574,6 +577,7 @@ export async function updateRegistrationProfile(
       email: patch.email,
       birthDate: patch.birthDate,
       additionalData: patch.additionalData,
+      unitId: patch.unitId,
       updatedAt: now,
     })
     .where(
