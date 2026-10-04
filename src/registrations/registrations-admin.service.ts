@@ -130,7 +130,7 @@ export class RegistrationsAdminService {
   ): Promise<string | null> {
     if (!faceImageKey) return null;
     try {
-      return await this.r2.createPresignedPortraitGetUrl(faceImageKey);
+      return await this.r2.createPresignedGetUrl(faceImageKey);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(

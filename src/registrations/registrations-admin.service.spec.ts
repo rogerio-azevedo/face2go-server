@@ -94,7 +94,7 @@ describe('RegistrationsAdminService lifecycle', () => {
         { provide: PermissionsService, useValue: {} },
         {
           provide: R2StorageService,
-          useValue: { createPresignedPortraitGetUrl: jest.fn() },
+          useValue: { createPresignedGetUrl: jest.fn() },
         },
         { provide: FaceSyncService, useValue: faceSync },
         { provide: MembersService, useValue: members },
