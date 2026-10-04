@@ -228,6 +228,9 @@ export function normalizeHikvisionAccessEvent(
     name: pickEventStr(event, 'name', 'Name'),
     time:
       pickEventStr(event, 'time', 'Time', 'dateTime', 'DateTime') ??
+      (nestedAlert
+        ? pickEventStr(nestedAlert, 'dateTime', 'DateTime')
+        : undefined) ??
       pickEventStr(root, 'dateTime', 'DateTime'),
     pictureURL: pickEventStr(event, 'pictureURL', 'PictureURL'),
     status,
@@ -337,7 +340,9 @@ export async function hikvisionProbeAlertStreamSupported(
 }
 
 const HIKVISION_PLAUSIBLE_TIME_MIN_MS = Date.UTC(2020, 0, 1);
-const HIKVISION_PLAUSIBLE_TIME_SKEW_MS = 24 * 60 * 60 * 1000;
+const HIKVISION_PLAUSIBLE_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
+/** Retransmissão offline do leitor pode entregar eventos de dias atrás. */
+const HIKVISION_PLAUSIBLE_BACKLOG_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Unix seconds do evento; relógio de fábrica (2015) cai no horário do servidor. */
 export function resolveHikvisionEventUnixSeconds(
@@ -349,7 +354,8 @@ export function resolveHikvisionEventUnixSeconds(
     if (
       Number.isFinite(ms) &&
       ms >= HIKVISION_PLAUSIBLE_TIME_MIN_MS &&
-      Math.abs(ms - nowMs) <= HIKVISION_PLAUSIBLE_TIME_SKEW_MS
+      ms - nowMs <= HIKVISION_PLAUSIBLE_FUTURE_SKEW_MS &&
+      nowMs - ms <= HIKVISION_PLAUSIBLE_BACKLOG_MS
     ) {
       return Math.floor(ms / 1000);
     }

@@ -1,14 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 
 import { DatabaseService } from '../database/database.service';
-import {
-  clientBlocks,
-  clientMembers,
-  clientUnits,
-  clients,
-  registrations,
-} from '../database/schema';
+import { clientMembers, clientUnits, registrations } from '../database/schema';
 import {
   ACTIVE_REGISTRATION_STATUSES,
   locationJson,
@@ -26,12 +28,13 @@ export type LocationPersonRow = {
   unit: string | null;
 };
 
-export type LocationCounts = {
-  clientId: string;
-  linked: number;
-  textOnly: number;
-  noLocation: number;
-  groups: number;
+export type LinkedPersonRow = {
+  kind: LocationPersonKind;
+  id: string;
+  name: string | null;
+  faceId: number | null;
+  unitId: string;
+  active: boolean;
 };
 
 /** Texto do JSON normalizado: trim, espaços colapsados e minúsculas. */
@@ -53,68 +56,8 @@ const ACTIVE_STATUSES_SQL = sql.raw(
 export class LocationReviewRepository {
   constructor(private readonly database: DatabaseService) {}
 
-  listCondominiums(companyId: string) {
-    return this.database.db
-      .select({
-        id: clients.id,
-        name: clients.name,
-        isActive: clients.isActive,
-      })
-      .from(clients)
-      .where(
-        and(eq(clients.companyId, companyId), eq(clients.type, 'condominium')),
-      )
-      .orderBy(asc(clients.name));
-  }
-
-  async countActiveUnitsByClient(clientIds: string[]) {
-    if (clientIds.length === 0) return new Map<string, number>();
-    const rows = await this.database.db
-      .select({ clientId: clientUnits.clientId, total: count() })
-      .from(clientUnits)
-      .innerJoin(clientBlocks, eq(clientBlocks.id, clientUnits.blockId))
-      .where(
-        and(
-          inArray(clientUnits.clientId, clientIds),
-          eq(clientUnits.isActive, true),
-          eq(clientBlocks.isActive, true),
-        ),
-      )
-      .groupBy(clientUnits.clientId);
-    return new Map(rows.map((row) => [row.clientId, Number(row.total)]));
-  }
-
-  async countLocationsByCompany(companyId: string): Promise<LocationCounts[]> {
-    const result = await this.database.db.execute(sql`
-      WITH scope AS (
-        SELECT id FROM clients
-        WHERE company_id = ${companyId} AND type = 'condominium'
-      ), people AS (
-        SELECT r.client_id, r.unit_id,
-               ${normColumn('r', 'block')} AS bk,
-               ${normColumn('r', 'unit')} AS uk
-        FROM registrations r
-        WHERE r.client_id IN (SELECT id FROM scope)
-          AND r.is_active AND r.status IN (${ACTIVE_STATUSES_SQL})
-        UNION ALL
-        SELECT m.client_id, m.unit_id,
-               ${normColumn('m', 'block')},
-               ${normColumn('m', 'unit')}
-        FROM client_members m
-        WHERE m.client_id IN (SELECT id FROM scope) AND m.is_active
-      )
-      SELECT client_id AS "clientId",
-        count(*) FILTER (WHERE unit_id IS NOT NULL)::int AS "linked",
-        count(*) FILTER (WHERE unit_id IS NULL AND (bk <> '' OR uk <> ''))::int AS "textOnly",
-        count(*) FILTER (WHERE unit_id IS NULL AND bk = '' AND uk = '')::int AS "noLocation",
-        count(DISTINCT bk || '|' || uk) FILTER (WHERE unit_id IS NULL AND (bk <> '' OR uk <> ''))::int AS "groups"
-      FROM people
-      GROUP BY client_id
-    `);
-    return (result as unknown as { rows?: LocationCounts[] }).rows ?? [];
-  }
-
-  async listPeople(clientId: string): Promise<LocationPersonRow[]> {
+  /** Pessoas ativas sem `unit_id`, com o texto de bloco/unidade. */
+  async listUnlinkedPeople(clientId: string): Promise<LocationPersonRow[]> {
     const [registrationRows, memberRows] = await Promise.all([
       this.database.db
         .select({
@@ -129,6 +72,7 @@ export class LocationReviewRepository {
         .where(
           and(
             eq(registrations.clientId, clientId),
+            isNull(registrations.unitId),
             eq(registrations.isActive, true),
             inArray(registrations.status, [...ACTIVE_REGISTRATION_STATUSES]),
           ),
@@ -146,6 +90,7 @@ export class LocationReviewRepository {
         .where(
           and(
             eq(clientMembers.clientId, clientId),
+            isNull(clientMembers.unitId),
             eq(clientMembers.isActive, true),
           ),
         ),
@@ -157,6 +102,97 @@ export class LocationReviewRepository {
       })),
       ...memberRows.map((row) => ({ ...row, kind: 'member' as const })),
     ];
+  }
+
+  /** Todos com `unit_id`, inclusive inativos (eles também impedem excluir a unidade). */
+  async listLinkedPeople(
+    clientId: string,
+    unitId?: string,
+  ): Promise<LinkedPersonRow[]> {
+    const [registrationRows, memberRows] = await Promise.all([
+      this.database.db
+        .select({
+          id: registrations.id,
+          name: registrations.name,
+          faceId: registrations.faceId,
+          unitId: registrations.unitId,
+          active: sql<boolean>`(${registrations.isActive} AND ${registrations.status} IN (${ACTIVE_STATUSES_SQL}))`,
+        })
+        .from(registrations)
+        .where(
+          and(
+            eq(registrations.clientId, clientId),
+            unitId
+              ? eq(registrations.unitId, unitId)
+              : isNotNull(registrations.unitId),
+          ),
+        ),
+      this.database.db
+        .select({
+          id: clientMembers.id,
+          name: clientMembers.name,
+          faceId: clientMembers.faceId,
+          unitId: clientMembers.unitId,
+          active: clientMembers.isActive,
+        })
+        .from(clientMembers)
+        .where(
+          and(
+            eq(clientMembers.clientId, clientId),
+            unitId
+              ? eq(clientMembers.unitId, unitId)
+              : isNotNull(clientMembers.unitId),
+          ),
+        ),
+    ]);
+    return [
+      ...registrationRows.map((row) => ({
+        ...row,
+        unitId: row.unitId!,
+        kind: 'registration' as const,
+      })),
+      ...memberRows.map((row) => ({
+        ...row,
+        unitId: row.unitId!,
+        kind: 'member' as const,
+      })),
+    ];
+  }
+
+  /** Tira a unidade das pessoas (mantém o texto) e desativa a unidade. */
+  async unlinkUnit(
+    clientId: string,
+    unitId: string,
+  ): Promise<{ registrations: number; members: number }> {
+    return this.database.db.transaction(async (tx) => {
+      const regs = await tx
+        .update(registrations)
+        .set({ unitId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(registrations.clientId, clientId),
+            eq(registrations.unitId, unitId),
+          ),
+        )
+        .returning({ id: registrations.id });
+      const mems = await tx
+        .update(clientMembers)
+        .set({ unitId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(clientMembers.clientId, clientId),
+            eq(clientMembers.unitId, unitId),
+          ),
+        )
+        .returning({ id: clientMembers.id });
+      await tx
+        .update(clientUnits)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(
+          and(eq(clientUnits.id, unitId), eq(clientUnits.clientId, clientId)),
+        );
+      return { registrations: regs.length, members: mems.length };
+    });
   }
 
   /**

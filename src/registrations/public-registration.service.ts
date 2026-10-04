@@ -90,7 +90,9 @@ export class PublicRegistrationService {
       ).fields,
       blocks:
         bundle.client.type === 'condominium'
-          ? await this.blocks.listActiveCatalog(bundle.client.id)
+          ? await this.blocks.listActiveCatalog(bundle.client.id, {
+              includeAdministrative: false,
+            })
           : [],
     };
   }
@@ -239,8 +241,17 @@ export class PublicRegistrationService {
       requestedUnitId: unitId,
       additionalData: normalized.additionalData,
       catalog: {
-        loadActiveUnit: (id) => this.blocks.getActiveUnitLocation(bundle.client.id, id),
-        countActiveUnits: () => this.blocks.countActiveUnits(bundle.client.id),
+        loadActiveUnit: async (id) => {
+          const location = await this.blocks.getActiveUnitLocation(
+            bundle.client.id,
+            id,
+          );
+          return location && !location.isAdministrative ? location : null;
+        },
+        countActiveUnits: () =>
+          this.blocks.countActiveUnits(bundle.client.id, {
+            includeAdministrative: false,
+          }),
       },
     });
 

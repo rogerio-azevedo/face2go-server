@@ -20,10 +20,15 @@ export const updateClientBlockSchema = z
   .object({
     name: blockNameSchema.optional(),
     isActive: z.boolean().optional(),
+    isAdministrative: z.boolean().optional(),
   })
-  .refine((value) => value.name !== undefined || value.isActive !== undefined, {
-    message: 'Nada para atualizar.',
-  });
+  .refine(
+    (value) =>
+      value.name !== undefined ||
+      value.isActive !== undefined ||
+      value.isAdministrative !== undefined,
+    { message: 'Nada para atualizar.' },
+  );
 
 export const createClientUnitSchema = z.object({
   name: unitNameSchema,
@@ -87,6 +92,16 @@ export const bindLocationGroupsSchema = z.object({
   items: z.array(bindLocationGroupSchema).min(1).max(500),
 });
 
+export const moveLocationGroupSchema = z.object({
+  sourceUnitId: z.uuid(),
+  /** `null` desvincula as pessoas, mantendo o texto de bloco/unidade. */
+  targetUnitId: z.uuid().nullable(),
+});
+
+export const moveLocationGroupsSchema = z.object({
+  items: z.array(moveLocationGroupSchema).min(1).max(200),
+});
+
 export type CreateClientBlockInput = z.infer<typeof createClientBlockSchema>;
 export type UpdateClientBlockInput = z.infer<typeof updateClientBlockSchema>;
 export type CreateClientUnitInput = z.infer<typeof createClientUnitSchema>;
@@ -97,6 +112,7 @@ export type GenerateStructureInput = z.infer<typeof generateStructureSchema>;
 export type UpdateClientUnitInput = z.infer<typeof updateClientUnitSchema>;
 export type EnsureLocationUnitInput = z.infer<typeof ensureLocationUnitSchema>;
 export type BindLocationGroupInput = z.infer<typeof bindLocationGroupSchema>;
+export type MoveLocationGroupInput = z.infer<typeof moveLocationGroupSchema>;
 
 export const MAX_GENERATED_UNITS = 500;
 export const MAX_STRUCTURE_BLOCKS = 500;

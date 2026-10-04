@@ -842,11 +842,6 @@ export class RegistrationsAdminService {
         'Cadastro excluído. Restaure antes de editar.',
       );
     }
-    if (row.status !== 'draft' && row.status !== 'approved') {
-      throw new BadRequestException(
-        'Só é possível editar cadastros aguardando aprovação ou já aprovados.',
-      );
-    }
 
     const client = await clientsQueries.getClientByIdOnly(
       this.database.db,

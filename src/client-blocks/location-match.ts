@@ -51,42 +51,62 @@ export function looseKey(value: unknown): string {
     .join('');
 }
 
-export function suggestUnit(
-  catalog: CatalogBlock[],
-  blockText: unknown,
-  unitText: unknown,
-): UnitSuggestion | null {
+/** Pré-calcula as chaves do catálogo ativo para sugerir várias vezes. */
+export function createUnitSuggester(catalog: CatalogBlock[]) {
   const units = catalog
     .filter((block) => block.isActive)
     .flatMap((block) =>
       block.units
         .filter((unit) => unit.isActive)
         .map((unit) => ({
-          unitId: unit.id,
-          blockId: block.id,
-          blockName: block.name,
-          unitName: unit.name,
+          location: {
+            unitId: unit.id,
+            blockId: block.id,
+            blockName: block.name,
+            unitName: unit.name,
+          },
+          blockKey: textKey(block.name),
+          unitKey: textKey(unit.name),
+          looseBlock: looseKey(block.name),
+          looseUnit: looseKey(unit.name),
         })),
     );
 
-  const blockKey = textKey(blockText);
-  const unitKey = textKey(unitText);
-  if (!unitKey) return null;
+  return (
+    blockText: unknown,
+    unitText: unknown,
+    excludeUnitId?: string,
+  ): UnitSuggestion | null => {
+    const blockKey = textKey(blockText);
+    const unitKey = textKey(unitText);
+    if (!unitKey) return null;
+    const pool = excludeUnitId
+      ? units.filter((unit) => unit.location.unitId !== excludeUnitId)
+      : units;
 
-  const exact = units.find(
-    (unit) =>
-      textKey(unit.blockName) === blockKey &&
-      textKey(unit.unitName) === unitKey,
-  );
-  if (exact) return { ...exact, exact: true };
+    const exact = pool.find(
+      (unit) => unit.blockKey === blockKey && unit.unitKey === unitKey,
+    );
+    if (exact) return { ...exact.location, exact: true };
 
-  const looseBlock = looseKey(blockText);
-  const looseUnit = looseKey(unitText);
-  if (!looseUnit) return null;
-  const candidates = units.filter(
-    (unit) =>
-      looseKey(unit.unitName) === looseUnit &&
-      (!looseBlock || looseKey(unit.blockName) === looseBlock),
-  );
-  return candidates.length === 1 ? { ...candidates[0], exact: false } : null;
+    const looseBlock = looseKey(blockText);
+    const looseUnit = looseKey(unitText);
+    if (!looseUnit) return null;
+    const candidates = pool.filter(
+      (unit) =>
+        unit.looseUnit === looseUnit &&
+        (!looseBlock || unit.looseBlock === looseBlock),
+    );
+    return candidates.length === 1
+      ? { ...candidates[0].location, exact: false }
+      : null;
+  };
+}
+
+export function suggestUnit(
+  catalog: CatalogBlock[],
+  blockText: unknown,
+  unitText: unknown,
+): UnitSuggestion | null {
+  return createUnitSuggester(catalog)(blockText, unitText);
 }

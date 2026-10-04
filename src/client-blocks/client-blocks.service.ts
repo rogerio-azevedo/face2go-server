@@ -114,6 +114,7 @@ export class ClientBlocksService {
       updated = await this.blocks.updateBlock(clientId, blockId, {
         name: input.name,
         isActive: input.isActive,
+        isAdministrative: input.isAdministrative,
       });
     } catch (err: unknown) {
       if (isUniqueViolation(err)) {

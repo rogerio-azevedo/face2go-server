@@ -45,6 +45,24 @@ export class HikvisionPushReceiverService {
     this.logger.log(
       `[HikvisionPush] ${row.name} UserID=${event.employeeNoString ?? '—'} foto=${parsed.jpeg ? 'inline' : 'nenhuma'}`,
     );
+    // #region debug-time (temporário)
+    const rawRoot =
+      event.raw && typeof event.raw === 'object'
+        ? (event.raw as Record<string, unknown>)
+        : {};
+    const rawAce =
+      rawRoot.AccessControllerEvent &&
+      typeof rawRoot.AccessControllerEvent === 'object'
+        ? (rawRoot.AccessControllerEvent as Record<string, unknown>)
+        : {};
+    this.logger.log(
+      `[HikvisionPush][debug-time] ${row.name} time=${event.time ?? '—'} ` +
+        `root.dateTime=${JSON.stringify(rawRoot.dateTime ?? null)} ` +
+        `ace.time=${JSON.stringify(rawAce.time ?? null)} ` +
+        `isDataRetransmission=${JSON.stringify(rawRoot.isDataRetransmission ?? null)} ` +
+        `serialNo=${event.serialNo ?? '—'} ct=${params.contentType ?? '—'}`,
+    );
+    // #endregion
     const ctx: ReaderStreamContextLike = {
       id: row.id,
       name: row.name,

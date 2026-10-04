@@ -21,6 +21,7 @@ describe('parseHikvisionPushBody', () => {
     );
     expect(parsed.event?.employeeNoString).toBe('1');
     expect(parsed.event?.minor).toBe(75);
+    expect(parsed.event?.time).toBe('2026-09-25T13:40:00-04:00');
     expect(parsed.jpeg).toBeNull();
   });
 
@@ -57,5 +58,6 @@ describe('parseHikvisionPushBody', () => {
     const parsed = parseHikvisionPushBody('application/xml', Buffer.from(xml));
     expect(parsed.event?.employeeNoString).toBe('1');
     expect(parsed.event?.minor).toBe(75);
+    expect(parsed.event?.time).toBe('2026-09-25T13:40:00-04:00');
   });
 });

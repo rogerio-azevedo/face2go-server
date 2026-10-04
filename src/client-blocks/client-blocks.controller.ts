@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -20,6 +21,7 @@ import {
   UpdateClientBlockDto,
   UpdateClientUnitDto,
 } from '../validation/dto/client-blocks.dto';
+import { ClientBlocksRemovalService } from './client-blocks-removal.service';
 import { ClientBlocksService } from './client-blocks.service';
 
 @ApiTags('client-blocks')
@@ -27,7 +29,10 @@ import { ClientBlocksService } from './client-blocks.service';
 @Roles('company_admin', 'company_operator', 'client_admin', 'client_operator')
 @Controller('clients/:clientId')
 export class ClientBlocksController {
-  constructor(private readonly clientBlocksService: ClientBlocksService) {}
+  constructor(
+    private readonly clientBlocksService: ClientBlocksService,
+    private readonly removalService: ClientBlocksRemovalService,
+  ) {}
 
   @Get('blocks')
   @ApiOperation({ summary: 'Listar blocos e unidades do condomínio' })
@@ -71,6 +76,18 @@ export class ClientBlocksController {
     return this.clientBlocksService.updateBlock(user, clientId, blockId, dto);
   }
 
+  @Delete('blocks/:blockId')
+  @ApiOperation({
+    summary: 'Excluir bloco inativo (e suas unidades) sem pessoas vinculadas',
+  })
+  deleteBlock(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('blockId', ParseUUIDPipe) blockId: string,
+  ) {
+    return this.removalService.deleteBlock(user, clientId, blockId);
+  }
+
   @Post('blocks/:blockId/units')
   @ApiOperation({ summary: 'Criar unidade' })
   createUnit(
@@ -102,5 +119,27 @@ export class ClientBlocksController {
     @Body() dto: UpdateClientUnitDto,
   ) {
     return this.clientBlocksService.updateUnit(user, clientId, unitId, dto);
+  }
+
+  @Get('units/:unitId/people')
+  @ApiOperation({
+    summary: 'Pessoas vinculadas à unidade (inclusive inativas)',
+  })
+  listUnitPeople(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('unitId', ParseUUIDPipe) unitId: string,
+  ) {
+    return this.removalService.listUnitPeople(user, clientId, unitId);
+  }
+
+  @Delete('units/:unitId')
+  @ApiOperation({ summary: 'Excluir unidade inativa sem pessoas vinculadas' })
+  deleteUnit(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Param('unitId', ParseUUIDPipe) unitId: string,
+  ) {
+    return this.removalService.deleteUnit(user, clientId, unitId);
   }
 }

@@ -149,6 +149,28 @@ describe('ClientBlocksService', () => {
     expect(blocks.updateBlock).not.toHaveBeenCalled();
   });
 
+  it('marca o bloco como administrativo', async () => {
+    blocks.getBlock.mockResolvedValue({
+      id: blockId,
+      name: 'Adm',
+      isActive: true,
+    });
+    blocks.updateBlock.mockResolvedValue({
+      id: blockId,
+      name: 'Adm',
+      isActive: true,
+      isAdministrative: true,
+    });
+    await service.updateBlock(user, clientId, blockId, {
+      isAdministrative: true,
+    });
+    expect(blocks.updateBlock).toHaveBeenCalledWith(clientId, blockId, {
+      name: undefined,
+      isActive: undefined,
+      isAdministrative: true,
+    });
+  });
+
   it('não desativa unidade com pessoas vinculadas', async () => {
     blocks.getUnitWithBlock.mockResolvedValue({
       unit: { id: 'unit-1', name: '101', isActive: true },

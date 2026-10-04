@@ -1,54 +1,29 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import type {
   BindLocationGroupInput,
   EnsureLocationUnitInput,
+  MoveLocationGroupInput,
 } from '../validation/client-blocks.schema';
 import { ClientBlocksRepository } from './client-blocks.repository';
 import { ClientBlocksService } from './client-blocks.service';
 import { CondominiumAccessService } from './condominium-access.service';
-import { collapseText, suggestUnit, textKey } from './location-match';
+import { collapseText, createUnitSuggester, textKey } from './location-match';
 import {
-  LocationReviewRepository,
-  type LocationPersonRow,
-} from './location-review.repository';
-
-const MAX_PEOPLE_PER_GROUP = 100;
-
-type ReviewPerson = Pick<LocationPersonRow, 'kind' | 'id' | 'name' | 'faceId'>;
-
-type ReviewBucket = {
-  registrations: number;
-  members: number;
-  people: ReviewPerson[];
-};
-
-function emptyBucket(): ReviewBucket {
-  return { registrations: 0, members: 0, people: [] };
-}
-
-function addPerson(bucket: ReviewBucket, row: LocationPersonRow) {
-  if (row.kind === 'registration') bucket.registrations += 1;
-  else bucket.members += 1;
-  if (bucket.people.length < MAX_PEOPLE_PER_GROUP) {
-    bucket.people.push({
-      kind: row.kind,
-      id: row.id,
-      name: row.name,
-      faceId: row.faceId,
-    });
-  }
-}
-
-function compareText(a: string, b: string) {
-  return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' });
-}
+  activeCatalog,
+  addPerson,
+  buildLinkedGroups,
+  compareText,
+  emptyBucket,
+  type ReviewBucket,
+} from './location-review-groups';
+import { LocationReviewRepository } from './location-review.repository';
 
 @Injectable()
 export class LocationReviewService {
@@ -59,40 +34,16 @@ export class LocationReviewService {
     private readonly review: LocationReviewRepository,
   ) {}
 
-  async listCondominiums(user: JwtPayload) {
-    const companyId = user.companyId;
-    if (user.role !== 'company_admin' || !companyId) {
-      throw new ForbiddenException('Sem permissão.');
-    }
-    const condominiums = await this.review.listCondominiums(companyId);
-    const [counts, units] = await Promise.all([
-      this.review.countLocationsByCompany(companyId),
-      this.review.countActiveUnitsByClient(condominiums.map((c) => c.id)),
-    ]);
-    const countsByClient = new Map(counts.map((row) => [row.clientId, row]));
-    return condominiums.map((client) => {
-      const row = countsByClient.get(client.id);
-      return {
-        clientId: client.id,
-        name: client.name,
-        isActive: client.isActive,
-        activeUnits: units.get(client.id) ?? 0,
-        linked: row?.linked ?? 0,
-        textOnly: row?.textOnly ?? 0,
-        noLocation: row?.noLocation ?? 0,
-        groups: row?.groups ?? 0,
-      };
-    });
-  }
-
   async getClientReview(user: JwtPayload, clientId: string) {
     const client = await this.access.assertRead(user, clientId);
-    const [catalog, people] = await Promise.all([
-      this.blocks.listActiveCatalog(clientId),
-      this.review.listPeople(clientId),
+    const [fullCatalog, people, linkedPeople] = await Promise.all([
+      this.blocks.listCatalog(clientId),
+      this.review.listUnlinkedPeople(clientId),
+      this.review.listLinkedPeople(clientId),
     ]);
+    const catalog = activeCatalog(fullCatalog);
+    const suggest = createUnitSuggester(catalog);
 
-    let linked = 0;
     const noLocation = emptyBucket();
     const groups = new Map<
       string,
@@ -100,10 +51,6 @@ export class LocationReviewService {
     >();
 
     for (const row of people) {
-      if (row.unitId) {
-        linked += 1;
-        continue;
-      }
       const blockKey = textKey(row.block);
       const unitKey = textKey(row.unit);
       if (!blockKey && !unitKey) {
@@ -127,19 +74,21 @@ export class LocationReviewService {
       .map(([key, group]) => ({
         key,
         ...group,
-        suggestion: suggestUnit(catalog, group.blockText, group.unitText),
+        suggestion: suggest(group.blockText, group.unitText),
       }))
       .sort(
         (a, b) =>
           compareText(a.blockText, b.blockText) ||
           compareText(a.unitText, b.unitText),
       );
+    const linkedGroups = buildLinkedGroups(fullCatalog, suggest, linkedPeople);
 
     return {
       client: { id: client.id, name: client.name },
       catalog,
       summary: {
-        linked,
+        linked: linkedPeople.filter((person) => person.active).length,
+        linkedGroups: linkedGroups.length,
         textOnly: groupList.reduce(
           (total, group) => total + group.registrations + group.members,
           0,
@@ -148,7 +97,58 @@ export class LocationReviewService {
       },
       groups: groupList,
       noLocation,
+      linkedGroups,
     };
+  }
+
+  async moveGroups(
+    user: JwtPayload,
+    clientId: string,
+    items: MoveLocationGroupInput[],
+  ) {
+    await this.access.assertManage(user, clientId);
+    const resolved = await Promise.all(
+      items.map(async (item) => {
+        const source = await this.blocks.getUnitWithBlock(
+          clientId,
+          item.sourceUnitId,
+        );
+        if (!source) throw new NotFoundException('Unidade não encontrada.');
+        if (!item.targetUnitId) return { item, target: null };
+        if (item.targetUnitId === item.sourceUnitId) {
+          throw new BadRequestException(
+            'Escolha uma unidade diferente da atual.',
+          );
+        }
+        const target = await this.blocks.getActiveUnitLocation(
+          clientId,
+          item.targetUnitId,
+        );
+        if (!target) {
+          throw new BadRequestException(
+            'Unidade de destino inválida ou inativa.',
+          );
+        }
+        return { item, target };
+      }),
+    );
+
+    const totals = { moved: 0, unlinked: 0 };
+    for (const { item, target } of resolved) {
+      if (target) {
+        await this.blocks.mergeUnits({
+          sourceUnitId: item.sourceUnitId,
+          targetUnitId: target.unitId,
+          blockName: target.blockName,
+          unitName: target.unitName,
+        });
+        totals.moved += 1;
+      } else {
+        await this.review.unlinkUnit(clientId, item.sourceUnitId);
+        totals.unlinked += 1;
+      }
+    }
+    return totals;
   }
 
   async ensureUnit(

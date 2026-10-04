@@ -14,6 +14,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import {
   BindLocationGroupsDto,
   EnsureLocationUnitDto,
+  MoveLocationGroupsDto,
 } from '../validation/dto/client-blocks.dto';
 import { LocationReviewService } from './location-review.service';
 
@@ -24,17 +25,9 @@ import { LocationReviewService } from './location-review.service';
 export class LocationReviewController {
   constructor(private readonly locationReview: LocationReviewService) {}
 
-  @Get()
-  @ApiOperation({
-    summary: 'Resumo de bloco/unidade por condomínio da empresa',
-  })
-  list(@CurrentUser() user: JwtPayload) {
-    return this.locationReview.listCondominiums(user);
-  }
-
   @Get('clients/:clientId')
   @ApiOperation({
-    summary: 'Grupos de texto bloco/unidade sem vínculo no catálogo',
+    summary: 'Pessoas agrupadas por texto (sem vínculo) e por unidade atual',
   })
   getClientReview(
     @CurrentUser() user: JwtPayload,
@@ -63,5 +56,17 @@ export class LocationReviewController {
     @Body() dto: BindLocationGroupsDto,
   ) {
     return this.locationReview.bindGroups(user, clientId, dto.items);
+  }
+
+  @Post('clients/:clientId/move')
+  @ApiOperation({
+    summary: 'Mover as pessoas de uma unidade para outra ou desvinculá-las',
+  })
+  move(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Body() dto: MoveLocationGroupsDto,
+  ) {
+    return this.locationReview.moveGroups(user, clientId, dto.items);
   }
 }

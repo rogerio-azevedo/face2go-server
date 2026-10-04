@@ -1661,6 +1661,41 @@
         "tags": [
           "client-blocks"
         ]
+      },
+      "delete": {
+        "operationId": "ClientBlocksController_deleteBlock",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blockId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Excluir bloco inativo (e suas unidades) sem pessoas vinculadas",
+        "tags": [
+          "client-blocks"
+        ]
       }
     },
     "/clients/{clientId}/blocks/{blockId}/units": {
@@ -1802,12 +1837,27 @@
         "tags": [
           "client-blocks"
         ]
-      }
-    },
-    "/condominiums/location-review": {
-      "get": {
-        "operationId": "LocationReviewController_list",
-        "parameters": [],
+      },
+      "delete": {
+        "operationId": "ClientBlocksController_deleteUnit",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -1818,7 +1868,44 @@
             "bearer": []
           }
         ],
-        "summary": "Resumo de bloco/unidade por condomínio da empresa",
+        "summary": "Excluir unidade inativa sem pessoas vinculadas",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/clients/{clientId}/units/{unitId}/people": {
+      "get": {
+        "operationId": "ClientBlocksController_listUnitPeople",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "unitId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Pessoas vinculadas à unidade (inclusive inativas)",
         "tags": [
           "client-blocks"
         ]
@@ -1847,7 +1934,7 @@
             "bearer": []
           }
         ],
-        "summary": "Grupos de texto bloco/unidade sem vínculo no catálogo",
+        "summary": "Pessoas agrupadas por texto (sem vínculo) e por unidade atual",
         "tags": [
           "client-blocks"
         ]
@@ -1926,6 +2013,45 @@
           }
         ],
         "summary": "Vincular grupos de texto a unidades do catálogo",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/condominiums/location-review/clients/{clientId}/move": {
+      "post": {
+        "operationId": "LocationReviewController_move",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveLocationGroupsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mover as pessoas de uma unidade para outra ou desvinculá-las",
         "tags": [
           "client-blocks"
         ]
@@ -13166,6 +13292,9 @@
           },
           "isActive": {
             "type": "boolean"
+          },
+          "isAdministrative": {
+            "type": "boolean"
           }
         }
       },
@@ -13267,6 +13396,39 @@
                 "blockText",
                 "unitText",
                 "unitId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "MoveLocationGroupsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 200,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sourceUnitId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "targetUnitId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "sourceUnitId",
+                "targetUnitId"
               ]
             }
           }
@@ -14061,6 +14223,10 @@
                     "denied"
                   ]
                 },
+                "eventDate": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "createdAt": {
                   "type": "string"
                 },
@@ -14079,6 +14245,7 @@
                 "personName",
                 "readerName",
                 "status",
+                "eventDate",
                 "createdAt",
                 "readerDirection"
               ]

@@ -596,6 +596,13 @@
       "when": 1779530000000,
       "tag": "0084_client_blocks_units",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1779540000000,
+      "tag": "0085_client_blocks_administrative",
+      "breakpoints": true
     }
   ]
 }

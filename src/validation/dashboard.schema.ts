@@ -13,6 +13,7 @@ export const clientDashboardRecentAccessSchema = z.object({
   personName: z.string().nullable(),
   readerName: z.string(),
   status: z.enum(['granted', 'denied']),
+  eventDate: z.string().nullable(),
   createdAt: z.string(),
   readerDirection: z.enum(['in', 'out']).nullable(),
 });

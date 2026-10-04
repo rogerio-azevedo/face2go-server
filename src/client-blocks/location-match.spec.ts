@@ -6,6 +6,7 @@ const catalog: CatalogBlock[] = [
     id: 'b-a',
     name: 'A',
     isActive: true,
+    isAdministrative: false,
     units: [
       { id: 'u-a101', name: '101', isActive: true },
       { id: 'u-a102', name: '102', isActive: false },
@@ -15,12 +16,14 @@ const catalog: CatalogBlock[] = [
     id: 'b-b',
     name: 'B',
     isActive: true,
+    isAdministrative: false,
     units: [{ id: 'u-b101', name: '101', isActive: true }],
   },
   {
     id: 'b-old',
     name: 'Velho',
     isActive: false,
+    isAdministrative: false,
     units: [{ id: 'u-old', name: '1', isActive: true }],
   },
 ];

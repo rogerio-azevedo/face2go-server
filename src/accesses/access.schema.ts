@@ -85,6 +85,8 @@ export const FacialAccessSchema = SchemaFactory.createForClass(FacialAccess);
 
 FacialAccessSchema.index({ companyId: 1, createdAt: -1 });
 FacialAccessSchema.index({ companyId: 1, clientId: 1, createdAt: -1 });
+FacialAccessSchema.index({ companyId: 1, eventDate: -1 });
+FacialAccessSchema.index({ companyId: 1, clientId: 1, eventDate: -1 });
 FacialAccessSchema.index(
   { readerId: 1, correlationId: 1 },
   { unique: true, sparse: true },

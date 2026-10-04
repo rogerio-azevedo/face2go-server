@@ -219,6 +219,18 @@ describe('resolveHikvisionEventUnixSeconds', () => {
     );
   });
 
+  it('aceita evento retransmitido de dias atrás', () => {
+    expect(resolveHikvisionEventUnixSeconds('2026-09-13T08:00:00Z', now)).toBe(
+      Math.floor(Date.parse('2026-09-13T08:00:00Z') / 1000),
+    );
+  });
+
+  it('descarta evento muito no futuro', () => {
+    expect(resolveHikvisionEventUnixSeconds('2026-09-18T00:40:00Z', now)).toBe(
+      Math.floor(now / 1000),
+    );
+  });
+
   it('descarta relógio de fábrica 2015', () => {
     expect(
       resolveHikvisionEventUnixSeconds('2015-01-01T00:38:17+08:00', now),

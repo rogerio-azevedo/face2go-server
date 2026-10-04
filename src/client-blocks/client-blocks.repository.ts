@@ -22,14 +22,18 @@ export type ActiveUnitLocation = {
   blockId: string;
   blockName: string;
   unitName: string;
+  isAdministrative: boolean;
 };
 
 export type CatalogBlock = {
   id: string;
   name: string;
   isActive: boolean;
+  isAdministrative: boolean;
   units: { id: string; name: string; isActive: boolean }[];
 };
+
+export type CatalogScope = { includeAdministrative?: boolean };
 
 export const ACTIVE_REGISTRATION_STATUSES = [
   'draft',
@@ -66,11 +70,16 @@ export class ClientBlocksRepository {
         .where(eq(clientUnits.clientId, clientId)),
     ]);
     return blocks
-      .sort((a, b) => compareName(a.name, b.name))
+      .sort(
+        (a, b) =>
+          Number(a.isAdministrative) - Number(b.isAdministrative) ||
+          compareName(a.name, b.name),
+      )
       .map((block) => ({
         id: block.id,
         name: block.name,
         isActive: block.isActive,
+        isAdministrative: block.isAdministrative,
         units: units
           .filter((unit) => unit.blockId === block.id)
           .sort((a, b) => compareName(a.name, b.name))
@@ -82,17 +91,26 @@ export class ClientBlocksRepository {
       }));
   }
 
-  async listActiveCatalog(clientId: string): Promise<CatalogBlock[]> {
+  async listActiveCatalog(
+    clientId: string,
+    { includeAdministrative = true }: CatalogScope = {},
+  ): Promise<CatalogBlock[]> {
     const catalog = await this.listCatalog(clientId);
     return catalog
-      .filter((block) => block.isActive)
+      .filter(
+        (block) =>
+          block.isActive && (includeAdministrative || !block.isAdministrative),
+      )
       .map((block) => ({
         ...block,
         units: block.units.filter((unit) => unit.isActive),
       }));
   }
 
-  async countActiveUnits(clientId: string): Promise<number> {
+  async countActiveUnits(
+    clientId: string,
+    { includeAdministrative = true }: CatalogScope = {},
+  ): Promise<number> {
     const [row] = await this.database.db
       .select({ total: count() })
       .from(clientUnits)
@@ -102,6 +120,9 @@ export class ClientBlocksRepository {
           eq(clientUnits.clientId, clientId),
           eq(clientUnits.isActive, true),
           eq(clientBlocks.isActive, true),
+          includeAdministrative
+            ? undefined
+            : eq(clientBlocks.isAdministrative, false),
         ),
       );
     return Number(row?.total ?? 0);
@@ -143,7 +164,7 @@ export class ClientBlocksRepository {
   async updateBlock(
     clientId: string,
     blockId: string,
-    patch: { name?: string; isActive?: boolean },
+    patch: { name?: string; isActive?: boolean; isAdministrative?: boolean },
   ) {
     const [row] = await this.database.db
       .update(clientBlocks)
@@ -202,6 +223,7 @@ export class ClientBlocksRepository {
       blockId: row.block.id,
       blockName: row.block.name,
       unitName: row.unit.name,
+      isAdministrative: row.block.isAdministrative,
     };
   }
 

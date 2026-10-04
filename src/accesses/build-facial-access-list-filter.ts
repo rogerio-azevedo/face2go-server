@@ -38,13 +38,13 @@ export function buildFacialAccessMongoFilter(
     filter.status = 'denied';
   }
 
-  const createdAt = createdAtRangeFilter(
+  const eventDate = createdAtRangeFilter(
     query.startDate,
     query.endDate,
     query.timezoneOffsetMinutes ?? 0,
   );
-  if (createdAt) {
-    filter.createdAt = createdAt;
+  if (eventDate) {
+    filter.eventDate = eventDate;
   }
 
   const name = query.name?.trim();

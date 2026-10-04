@@ -81,6 +81,7 @@ export type ClientDashboardAccessSummary = {
     personName: string | null;
     readerName: string;
     status: 'granted' | 'denied';
+    eventDate: string | null;
     createdAt: string;
     readerDirection: 'in' | 'out' | null;
   }[];
@@ -107,6 +108,8 @@ export class AccessesService {
   private readonly persistChains = new Map<string, Promise<void>>();
 
   private static readonly DEFAULT_PAGE_SIZE = 20;
+  /** Retransmissão offline do leitor: grava, mas não dispara chegada/presença/push. */
+  private static readonly STALE_EVENT_MS = 5 * 60 * 1000;
 
   constructor(
     @InjectModel(FacialAccess.name)
@@ -266,7 +269,7 @@ export class AccessesService {
       eventCode: event.code,
       eventAction: String(event.action),
       similarity: Number.isFinite(similarityNum) ? similarityNum : null,
-      eventDate: eventDate ?? null,
+      eventDate: eventDate ?? new Date(),
       snapPath,
       snapR2Key,
       readerDirection: ctx.direction ?? null,
@@ -308,6 +311,16 @@ export class AccessesService {
 
       if (dedupKey) {
         this.persistedEventKeys.set(dedupKey, Date.now());
+      }
+
+      if (
+        eventDate &&
+        Date.now() - eventDate.getTime() > AccessesService.STALE_EVENT_MS
+      ) {
+        this.logger.debug(
+          `[AccessesService] Evento antigo (${eventDate.toISOString()}) gravado sem notificar: reader=${ctx.id} faceId=${faceIdNum}`,
+        );
+        return;
       }
 
       if (denied) {
@@ -448,7 +461,7 @@ export class AccessesService {
 
     const docs = await this.accessModel
       .find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ eventDate: -1, createdAt: -1 })
       .skip(skip)
       .limit(pageSize)
       .lean()
@@ -523,11 +536,11 @@ export class AccessesService {
     timezoneOffsetMinutes: number,
   ): Promise<ClientDashboardAccessSummary> {
     const today = calendarDateInOffset(timezoneOffsetMinutes);
-    const createdAt = createdAtRangeFilter(today, today, timezoneOffsetMinutes);
+    const eventDate = createdAtRangeFilter(today, today, timezoneOffsetMinutes);
     const todayFilter = {
       companyId,
       clientId,
-      ...(createdAt ? { createdAt } : {}),
+      ...(eventDate ? { eventDate } : {}),
     };
 
     const [grouped, docs] = await Promise.all([
@@ -546,7 +559,7 @@ export class AccessesService {
         .exec(),
       this.accessModel
         .find({ companyId, clientId })
-        .sort({ createdAt: -1 })
+        .sort({ eventDate: -1, createdAt: -1 })
         .limit(5)
         .lean()
         .exec(),
@@ -563,6 +576,7 @@ export class AccessesService {
       const row = doc as FacialAccessDocument & {
         _id: { toString(): string };
         createdAt?: Date;
+        eventDate?: Date | null;
         readerDirection?: 'in' | 'out' | null;
       };
       return {
@@ -571,6 +585,7 @@ export class AccessesService {
         readerName: row.readerName,
         status:
           row.status === 'denied' ? ('denied' as const) : ('granted' as const),
+        eventDate: row.eventDate ? row.eventDate.toISOString() : null,
         createdAt: row.createdAt
           ? row.createdAt.toISOString()
           : new Date().toISOString(),

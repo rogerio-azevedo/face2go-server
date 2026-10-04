@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { ClientBlocksRemovalRepository } from './client-blocks-removal.repository';
+import { ClientBlocksRemovalService } from './client-blocks-removal.service';
 import { ClientBlocksController } from './client-blocks.controller';
 import { ClientBlocksRepository } from './client-blocks.repository';
 import { ClientBlocksService } from './client-blocks.service';
@@ -14,6 +16,8 @@ import { LocationReviewService } from './location-review.service';
   imports: [DatabaseModule, PermissionsModule],
   controllers: [ClientBlocksController, LocationReviewController],
   providers: [
+    ClientBlocksRemovalRepository,
+    ClientBlocksRemovalService,
     ClientBlocksRepository,
     ClientBlocksService,
     CondominiumAccessService,
