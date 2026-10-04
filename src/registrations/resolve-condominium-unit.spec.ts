@@ -73,6 +73,41 @@ describe('resolveCondominiumUnit', () => {
     });
   });
 
+  it('na edição sem unitId mantém a unidade e o texto antigos', async () => {
+    const result = await resolveCondominiumUnit({
+      clientType: 'condominium',
+      config,
+      requestedUnitId: undefined,
+      additionalData: { room: 'x' },
+      existingUnitId: null,
+      existingAdditionalData: { block: 'Bloco 1', unit: 'apto 12' },
+      catalog: {
+        loadActiveUnit: () => Promise.resolve(null),
+        countActiveUnits: () => Promise.resolve(3),
+      },
+    });
+    expect(result).toEqual({
+      unitId: null,
+      additionalData: { room: 'x', block: 'Bloco 1', unit: 'apto 12' },
+    });
+  });
+
+  it('na edição com unitId null limpa a localização', async () => {
+    const result = await resolveCondominiumUnit({
+      clientType: 'condominium',
+      config: { ...config, block: 'optional', unit: 'optional' },
+      requestedUnitId: null,
+      additionalData: null,
+      existingUnitId: 'unit-1',
+      existingAdditionalData: { block: 'A', unit: '101' },
+      catalog: {
+        loadActiveUnit: () => Promise.resolve(null),
+        countActiveUnits: () => Promise.resolve(3),
+      },
+    });
+    expect(result).toEqual({ unitId: null, additionalData: null });
+  });
+
   it('não mexe em cliente que não é condomínio', async () => {
     const result = await resolveCondominiumUnit({
       clientType: 'office',

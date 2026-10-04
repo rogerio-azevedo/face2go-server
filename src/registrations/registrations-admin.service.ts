@@ -889,6 +889,7 @@ export class RegistrationsAdminService {
       requestedUnitId: parsed.data.unitId,
       additionalData: merged.additionalData,
       existingUnitId: row.unitId,
+      existingAdditionalData: row.additionalData,
       catalog: {
         loadActiveUnit: (id) => this.blocks.getActiveUnitLocation(clientId, id),
         countActiveUnits: () => this.blocks.countActiveUnits(clientId),

@@ -15,6 +15,8 @@ export async function resolveCondominiumUnit(input: {
   requestedUnitId: string | null | undefined;
   additionalData: AdditionalData;
   existingUnitId?: string | null;
+  /** Na edição: com `requestedUnitId` omitido, mantém unidade e texto atuais. */
+  existingAdditionalData?: AdditionalData;
   catalog: {
     loadActiveUnit: (
       unitId: string,
@@ -40,6 +42,20 @@ export async function resolveCondominiumUnit(input: {
   };
   delete base.block;
   delete base.unit;
+
+  if (
+    input.requestedUnitId === undefined &&
+    input.existingAdditionalData !== undefined
+  ) {
+    const block = input.existingAdditionalData?.block;
+    const unit = input.existingAdditionalData?.unit;
+    if (block) base.block = block;
+    if (unit) base.unit = unit;
+    return {
+      unitId: input.existingUnitId ?? null,
+      additionalData: Object.keys(base).length > 0 ? base : null,
+    };
+  }
 
   const requested = input.requestedUnitId?.trim() || null;
   if (!requested) {

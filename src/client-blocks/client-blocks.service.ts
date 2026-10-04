@@ -8,9 +8,12 @@ import {
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import {
   MAX_GENERATED_UNITS,
+  MAX_STRUCTURE_BLOCKS,
+  MAX_STRUCTURE_UNITS,
   type CreateClientBlockInput,
   type CreateClientUnitInput,
   type GenerateClientUnitsInput,
+  type GenerateStructureInput,
   type UpdateClientBlockInput,
   type UpdateClientUnitInput,
 } from '../validation/client-blocks.schema';
@@ -26,12 +29,29 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-function namesToCreate(start: number, end: number, existing: string[]) {
-  const taken = new Set(existing.map((name) => name.toLowerCase()));
+/** Unidade = andar * 100 + posição (andares 1-4, 4 por andar: 101-104 ... 401-404). */
+export function floorUnitNames(input: {
+  floorStart: number;
+  floorEnd: number;
+  unitsPerFloor: number;
+}) {
   const names: string[] = [];
-  for (let n = start; n <= end; n += 1) {
-    const name = String(n);
-    if (!taken.has(name.toLowerCase())) names.push(name);
+  for (let floor = input.floorStart; floor <= input.floorEnd; floor += 1) {
+    for (let n = 1; n <= input.unitsPerFloor; n += 1) {
+      names.push(String(floor * 100 + n));
+    }
+  }
+  return names;
+}
+
+export function structureBlockNames(input: {
+  blockStart: number;
+  blockEnd: number;
+  blockDigits: number;
+}) {
+  const names: string[] = [];
+  for (let n = input.blockStart; n <= input.blockEnd; n += 1) {
+    names.push(String(n).padStart(input.blockDigits, '0'));
   }
   return names;
 }
@@ -135,14 +155,18 @@ export class ClientBlocksService {
   ) {
     await this.access.assertManage(user, clientId);
     const block = await this.requireActiveBlock(clientId, blockId);
-    const span = input.end - input.start + 1;
-    if (span > MAX_GENERATED_UNITS) {
+    const wanted = floorUnitNames(input);
+    if (wanted.length > MAX_GENERATED_UNITS) {
       throw new BadRequestException(
         `Gere no máximo ${MAX_GENERATED_UNITS} unidades por vez.`,
       );
     }
-    const existing = await this.blocks.listUnitNames(block.id);
-    const names = namesToCreate(input.start, input.end, existing);
+    const taken = new Set(
+      (await this.blocks.listUnitNames(block.id)).map((name) =>
+        name.toLowerCase(),
+      ),
+    );
+    const names = wanted.filter((name) => !taken.has(name.toLowerCase()));
     if (names.length > 0) {
       try {
         await this.blocks.insertUnits(clientId, block.id, names);
@@ -153,7 +177,41 @@ export class ClientBlocksService {
         throw err;
       }
     }
-    return { created: names.length, skipped: span - names.length };
+    return { created: names.length, skipped: wanted.length - names.length };
+  }
+
+  async generateStructure(
+    user: JwtPayload,
+    clientId: string,
+    input: GenerateStructureInput,
+  ) {
+    await this.access.assertManage(user, clientId);
+    const blockNames = structureBlockNames(input);
+    const unitNames = floorUnitNames(input);
+    if (blockNames.length > MAX_STRUCTURE_BLOCKS) {
+      throw new BadRequestException(
+        `Gere no máximo ${MAX_STRUCTURE_BLOCKS} blocos por vez.`,
+      );
+    }
+    if (blockNames.length * unitNames.length > MAX_STRUCTURE_UNITS) {
+      throw new BadRequestException(
+        `Gere no máximo ${MAX_STRUCTURE_UNITS} unidades por vez.`,
+      );
+    }
+    try {
+      return await this.blocks.generateStructure(
+        clientId,
+        blockNames,
+        unitNames,
+      );
+    } catch (err: unknown) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictException(
+          'Outra alteração no catálogo aconteceu ao mesmo tempo. Tente de novo.',
+        );
+      }
+      throw err;
+    }
   }
 
   async updateUnit(
@@ -195,40 +253,9 @@ export class ClientBlocksService {
     }
     if (!updated) throw new NotFoundException('Unidade não encontrada.');
     if (input.name && input.name !== current.unit.name) {
-      await this.blocks.syncUnitLabel(
-        unitId,
-        current.block.name,
-        updated.name,
-      );
+      await this.blocks.syncUnitLabel(unitId, current.block.name, updated.name);
     }
     return updated;
-  }
-
-  async mergeUnit(
-    user: JwtPayload,
-    clientId: string,
-    sourceUnitId: string,
-    targetUnitId: string,
-  ) {
-    await this.access.assertManage(user, clientId);
-    if (sourceUnitId === targetUnitId) {
-      throw new BadRequestException('Escolha outra unidade para unir.');
-    }
-    const source = await this.blocks.getUnitWithBlock(clientId, sourceUnitId);
-    const target = await this.blocks.getUnitWithBlock(clientId, targetUnitId);
-    if (!source || !target) {
-      throw new NotFoundException('Unidade não encontrada.');
-    }
-    if (!target.unit.isActive || !target.block.isActive) {
-      throw new BadRequestException('A unidade de destino está inativa.');
-    }
-    await this.blocks.mergeUnits({
-      sourceUnitId,
-      targetUnitId,
-      blockName: target.block.name,
-      unitName: target.unit.name,
-    });
-    return { success: true as const };
   }
 
   private async requireActiveBlock(clientId: string, blockId: string) {

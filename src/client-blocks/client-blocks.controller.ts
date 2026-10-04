@@ -16,7 +16,7 @@ import {
   CreateClientBlockDto,
   CreateClientUnitDto,
   GenerateClientUnitsDto,
-  MergeClientUnitDto,
+  GenerateStructureDto,
   UpdateClientBlockDto,
   UpdateClientUnitDto,
 } from '../validation/dto/client-blocks.dto';
@@ -48,6 +48,18 @@ export class ClientBlocksController {
     return this.clientBlocksService.createBlock(user, clientId, dto);
   }
 
+  @Post('blocks/generate-structure')
+  @ApiOperation({
+    summary: 'Gerar blocos e unidades por andar (cria só o que falta)',
+  })
+  generateStructure(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Body() dto: GenerateStructureDto,
+  ) {
+    return this.clientBlocksService.generateStructure(user, clientId, dto);
+  }
+
   @Patch('blocks/:blockId')
   @ApiOperation({ summary: 'Atualizar bloco' })
   updateBlock(
@@ -71,19 +83,14 @@ export class ClientBlocksController {
   }
 
   @Post('blocks/:blockId/units/generate')
-  @ApiOperation({ summary: 'Gerar unidades em intervalo numérico' })
+  @ApiOperation({ summary: 'Gerar unidades por andar no bloco' })
   generateUnits(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @Param('blockId', ParseUUIDPipe) blockId: string,
     @Body() dto: GenerateClientUnitsDto,
   ) {
-    return this.clientBlocksService.generateUnits(
-      user,
-      clientId,
-      blockId,
-      dto,
-    );
+    return this.clientBlocksService.generateUnits(user, clientId, blockId, dto);
   }
 
   @Patch('units/:unitId')
@@ -95,23 +102,5 @@ export class ClientBlocksController {
     @Body() dto: UpdateClientUnitDto,
   ) {
     return this.clientBlocksService.updateUnit(user, clientId, unitId, dto);
-  }
-
-  @Post('units/:unitId/merge')
-  @ApiOperation({
-    summary: 'Unir unidade na de destino e desativar a origem',
-  })
-  mergeUnit(
-    @CurrentUser() user: JwtPayload,
-    @Param('clientId', ParseUUIDPipe) clientId: string,
-    @Param('unitId', ParseUUIDPipe) unitId: string,
-    @Body() dto: MergeClientUnitDto,
-  ) {
-    return this.clientBlocksService.mergeUnit(
-      user,
-      clientId,
-      unitId,
-      dto.targetUnitId,
-    );
   }
 }

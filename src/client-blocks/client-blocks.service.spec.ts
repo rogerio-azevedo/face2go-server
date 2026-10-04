@@ -2,7 +2,11 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import { ClientBlocksRepository } from './client-blocks.repository';
-import { ClientBlocksService } from './client-blocks.service';
+import {
+  ClientBlocksService,
+  floorUnitNames,
+  structureBlockNames,
+} from './client-blocks.service';
 import { CondominiumAccessService } from './condominium-access.service';
 
 const user = { role: 'client_admin', clientId: 'client-1' } as never;
@@ -25,8 +29,8 @@ describe('ClientBlocksService', () => {
     countActiveOccupants: jest.fn(),
     getUnitWithBlock: jest.fn(),
     updateUnit: jest.fn(),
-    mergeUnits: jest.fn(),
     findUnitByName: jest.fn(),
+    generateStructure: jest.fn(),
   };
 
   let service: ClientBlocksService;
@@ -56,7 +60,7 @@ describe('ClientBlocksService', () => {
     expect(blocks.insertBlock).not.toHaveBeenCalled();
   });
 
-  it('gera o intervalo e pula unidades que já existem', async () => {
+  it('gera as unidades por andar e pula as que já existem', async () => {
     blocks.getBlock.mockResolvedValue({
       id: blockId,
       name: 'A',
@@ -66,15 +70,70 @@ describe('ClientBlocksService', () => {
     blocks.insertUnits.mockResolvedValue([]);
 
     const result = await service.generateUnits(user, clientId, blockId, {
-      start: 101,
-      end: 104,
+      floorStart: 1,
+      floorEnd: 2,
+      unitsPerFloor: 2,
     });
 
-    expect(result).toEqual({ created: 2, skipped: 2 });
+    expect(result).toEqual({ created: 3, skipped: 1 });
     expect(blocks.insertUnits).toHaveBeenCalledWith(clientId, blockId, [
       '102',
-      '104',
+      '201',
+      '202',
     ]);
+  });
+
+  it('monta nomes de blocos com zeros e unidades por andar', () => {
+    expect(
+      structureBlockNames({ blockStart: 1, blockEnd: 3, blockDigits: 2 }),
+    ).toEqual(['01', '02', '03']);
+    const units = floorUnitNames({
+      floorStart: 1,
+      floorEnd: 4,
+      unitsPerFloor: 4,
+    });
+    expect(units).toHaveLength(16);
+    expect(units.slice(0, 5)).toEqual(['101', '102', '103', '104', '201']);
+    expect(units.at(-1)).toBe('404');
+  });
+
+  it('gera a estrutura do condomínio inteiro', async () => {
+    blocks.generateStructure.mockResolvedValue({
+      blocksCreated: 0,
+      unitsCreated: 433,
+      unitsSkipped: 255,
+      inactiveBlocksSkipped: [],
+    });
+
+    await service.generateStructure(user, clientId, {
+      blockStart: 1,
+      blockEnd: 43,
+      blockDigits: 2,
+      floorStart: 1,
+      floorEnd: 4,
+      unitsPerFloor: 4,
+    });
+
+    const [, blockNames, unitNames] = blocks.generateStructure.mock
+      .calls[0] as [string, string[], string[]];
+    expect(blockNames).toHaveLength(43);
+    expect(blockNames[0]).toBe('01');
+    expect(blockNames[42]).toBe('43');
+    expect(unitNames).toHaveLength(16);
+  });
+
+  it('recusa estrutura acima do limite de unidades', async () => {
+    await expect(
+      service.generateStructure(user, clientId, {
+        blockStart: 1,
+        blockEnd: 200,
+        blockDigits: 3,
+        floorStart: 1,
+        floorEnd: 30,
+        unitsPerFloor: 10,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(blocks.generateStructure).not.toHaveBeenCalled();
   });
 
   it('não desativa bloco que ainda tem unidades ativas', async () => {
@@ -100,32 +159,5 @@ describe('ClientBlocksService', () => {
       service.updateUnit(user, clientId, 'unit-1', { isActive: false }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(blocks.updateUnit).not.toHaveBeenCalled();
-  });
-
-  it('une a origem no destino e desativa a origem', async () => {
-    blocks.getUnitWithBlock.mockImplementation(
-      async (_client: string, unitId: string) => {
-        if (unitId === 'source') {
-          return {
-            unit: { id: 'source', name: '101-A', isActive: true },
-            block: { id: blockId, name: 'A', isActive: true },
-          };
-        }
-        return {
-          unit: { id: 'target', name: '101', isActive: true },
-          block: { id: blockId, name: 'A', isActive: true },
-        };
-      },
-    );
-    blocks.mergeUnits.mockResolvedValue(undefined);
-
-    await service.mergeUnit(user, clientId, 'source', 'target');
-
-    expect(blocks.mergeUnits).toHaveBeenCalledWith({
-      sourceUnitId: 'source',
-      targetUnitId: 'target',
-      blockName: 'A',
-      unitName: '101',
-    });
   });
 });

@@ -1,10 +1,12 @@
 import { createZodDto } from 'nestjs-zod';
 
 import {
+  bindLocationGroupsSchema,
   createClientBlockSchema,
+  ensureLocationUnitSchema,
   createClientUnitSchema,
   generateClientUnitsSchema,
-  mergeClientUnitSchema,
+  generateStructureSchema,
   updateClientBlockSchema,
   updateClientUnitSchema,
 } from '../client-blocks.schema';
@@ -17,16 +19,22 @@ export class UpdateClientBlockDto extends createZodDto(
   updateClientBlockSchema,
 ) {}
 
-export class CreateClientUnitDto extends createZodDto(
-  createClientUnitSchema,
-) {}
+export class CreateClientUnitDto extends createZodDto(createClientUnitSchema) {}
 
 export class GenerateClientUnitsDto extends createZodDto(
   generateClientUnitsSchema,
 ) {}
 
-export class UpdateClientUnitDto extends createZodDto(
-  updateClientUnitSchema,
+export class UpdateClientUnitDto extends createZodDto(updateClientUnitSchema) {}
+
+export class GenerateStructureDto extends createZodDto(
+  generateStructureSchema,
 ) {}
 
-export class MergeClientUnitDto extends createZodDto(mergeClientUnitSchema) {}
+export class EnsureLocationUnitDto extends createZodDto(
+  ensureLocationUnitSchema,
+) {}
+
+export class BindLocationGroupsDto extends createZodDto(
+  bindLocationGroupsSchema,
+) {}

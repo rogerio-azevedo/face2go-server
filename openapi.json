@@ -1577,6 +1577,45 @@
         ]
       }
     },
+    "/clients/{clientId}/blocks/generate-structure": {
+      "post": {
+        "operationId": "ClientBlocksController_generateStructure",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateStructureDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gerar blocos e unidades por andar (cria só o que falta)",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
     "/clients/{clientId}/blocks/{blockId}": {
       "patch": {
         "operationId": "ClientBlocksController_updateBlock",
@@ -1712,7 +1751,7 @@
             "bearer": []
           }
         ],
-        "summary": "Gerar unidades em intervalo numérico",
+        "summary": "Gerar unidades por andar no bloco",
         "tags": [
           "client-blocks"
         ]
@@ -1765,9 +1804,29 @@
         ]
       }
     },
-    "/clients/{clientId}/units/{unitId}/merge": {
-      "post": {
-        "operationId": "ClientBlocksController_mergeUnit",
+    "/condominiums/location-review": {
+      "get": {
+        "operationId": "LocationReviewController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resumo de bloco/unidade por condomínio da empresa",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/condominiums/location-review/clients/{clientId}": {
+      "get": {
+        "operationId": "LocationReviewController_getClientReview",
         "parameters": [
           {
             "name": "clientId",
@@ -1776,9 +1835,30 @@
             "schema": {
               "type": "string"
             }
-          },
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
           {
-            "name": "unitId",
+            "bearer": []
+          }
+        ],
+        "summary": "Grupos de texto bloco/unidade sem vínculo no catálogo",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/condominiums/location-review/clients/{clientId}/ensure-unit": {
+      "post": {
+        "operationId": "LocationReviewController_ensureUnit",
+        "parameters": [
+          {
+            "name": "clientId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1791,7 +1871,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MergeClientUnitDto"
+                "$ref": "#/components/schemas/EnsureLocationUnitDto"
               }
             }
           }
@@ -1806,7 +1886,46 @@
             "bearer": []
           }
         ],
-        "summary": "Unir unidade na de destino e desativar a origem",
+        "summary": "Usar ou criar bloco e unidade pelo nome",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/condominiums/location-review/clients/{clientId}/bind": {
+      "post": {
+        "operationId": "LocationReviewController_bind",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindLocationGroupsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vincular grupos de texto a unidades do catálogo",
         "tags": [
           "client-blocks"
         ]
@@ -12994,6 +13113,49 @@
           "name"
         ]
       },
+      "GenerateStructureDto": {
+        "type": "object",
+        "properties": {
+          "blockStart": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999
+          },
+          "blockEnd": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9999
+          },
+          "blockDigits": {
+            "default": 2,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "floorStart": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "floorEnd": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          },
+          "unitsPerFloor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
+          }
+        },
+        "required": [
+          "blockStart",
+          "blockEnd",
+          "floorStart",
+          "floorEnd",
+          "unitsPerFloor"
+        ]
+      },
       "UpdateClientBlockDto": {
         "type": "object",
         "properties": {
@@ -13023,20 +13185,26 @@
       "GenerateClientUnitsDto": {
         "type": "object",
         "properties": {
-          "start": {
+          "floorStart": {
             "type": "integer",
-            "minimum": 0,
-            "maximum": 99999
+            "minimum": 1,
+            "maximum": 99
           },
-          "end": {
+          "floorEnd": {
             "type": "integer",
-            "minimum": 0,
-            "maximum": 99999
+            "minimum": 1,
+            "maximum": 99
+          },
+          "unitsPerFloor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99
           }
         },
         "required": [
-          "start",
-          "end"
+          "floorStart",
+          "floorEnd",
+          "unitsPerFloor"
         ]
       },
       "UpdateClientUnitDto": {
@@ -13052,17 +13220,59 @@
           }
         }
       },
-      "MergeClientUnitDto": {
+      "EnsureLocationUnitDto": {
         "type": "object",
         "properties": {
-          "targetUnitId": {
+          "blockName": {
             "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "unitName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
           }
         },
         "required": [
-          "targetUnitId"
+          "blockName",
+          "unitName"
+        ]
+      },
+      "BindLocationGroupsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "blockText": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "unitText": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "unitId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": [
+                "blockText",
+                "unitText",
+                "unitId"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "PatchClientUserProfileDto": {

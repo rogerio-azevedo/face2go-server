@@ -31,13 +31,17 @@ export type CatalogBlock = {
   units: { id: string; name: string; isActive: boolean }[];
 };
 
-const ACTIVE_REGISTRATION_STATUSES = ['draft', 'approved', 'blocked'] as const;
+export const ACTIVE_REGISTRATION_STATUSES = [
+  'draft',
+  'approved',
+  'blocked',
+] as const;
 
 function compareName(a: string, b: string) {
   return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' });
 }
 
-function locationJson(blockName: string, unitName: string) {
+export function locationJson(blockName: string, unitName: string) {
   return sql`jsonb_set(
     jsonb_set(coalesce(additional_data, '{}'::jsonb), '{block}', to_jsonb(${blockName}::text), true),
     '{unit}',
@@ -237,6 +241,78 @@ export class ClientBlocksRepository {
       .insert(clientUnits)
       .values(names.map((name) => ({ clientId, blockId, name })))
       .returning();
+  }
+
+  /** Cria blocos e unidades que faltam; blocos inativos com o mesmo nome são pulados. */
+  async generateStructure(
+    clientId: string,
+    blockNames: string[],
+    unitNames: string[],
+  ) {
+    return this.database.db.transaction(async (tx) => {
+      const existingBlocks = await tx
+        .select()
+        .from(clientBlocks)
+        .where(eq(clientBlocks.clientId, clientId));
+      const byName = new Map(
+        existingBlocks.map((block) => [block.name.toLowerCase(), block]),
+      );
+
+      const inactiveBlocksSkipped: string[] = [];
+      const missingBlockNames: string[] = [];
+      const activeBlocks: ClientBlockRow[] = [];
+      for (const name of blockNames) {
+        const existing = byName.get(name.toLowerCase());
+        if (!existing) missingBlockNames.push(name);
+        else if (existing.isActive) activeBlocks.push(existing);
+        else inactiveBlocksSkipped.push(existing.name);
+      }
+
+      const createdBlocks =
+        missingBlockNames.length > 0
+          ? await tx
+              .insert(clientBlocks)
+              .values(missingBlockNames.map((name) => ({ clientId, name })))
+              .returning()
+          : [];
+      const targetBlocks = [...activeBlocks, ...createdBlocks];
+      if (targetBlocks.length === 0) {
+        return {
+          blocksCreated: 0,
+          unitsCreated: 0,
+          unitsSkipped: 0,
+          inactiveBlocksSkipped,
+        };
+      }
+
+      const existingUnits = await tx
+        .select({ blockId: clientUnits.blockId, name: clientUnits.name })
+        .from(clientUnits)
+        .where(
+          inArray(
+            clientUnits.blockId,
+            targetBlocks.map((block) => block.id),
+          ),
+        );
+      const taken = new Set(
+        existingUnits.map(
+          (unit) => `${unit.blockId}|${unit.name.toLowerCase()}`,
+        ),
+      );
+      const toInsert = targetBlocks.flatMap((block) =>
+        unitNames
+          .filter((name) => !taken.has(`${block.id}|${name.toLowerCase()}`))
+          .map((name) => ({ clientId, blockId: block.id, name })),
+      );
+      if (toInsert.length > 0) await tx.insert(clientUnits).values(toInsert);
+
+      return {
+        blocksCreated: createdBlocks.length,
+        unitsCreated: toInsert.length,
+        unitsSkipped: targetBlocks.length * unitNames.length - toInsert.length,
+        inactiveBlocksSkipped,
+      };
+    });
   }
 
   async updateUnit(
