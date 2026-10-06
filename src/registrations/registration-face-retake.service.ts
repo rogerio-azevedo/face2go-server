@@ -101,10 +101,9 @@ export class RegistrationFaceRetakeService {
       );
     }
 
-    if (
-      consumed.registration.status === 'approved' &&
-      consumed.registration.faceId != null
-    ) {
+    let outcome: 'pending_review' | 'force_sync_queued' | 'force_sync_failed' =
+      'pending_review';
+    if (consumed.registration.status === 'approved') {
       try {
         await this.faceSync.enqueueApprovedRegistrationJob(
           consumed.registration.id,
@@ -112,7 +111,9 @@ export class RegistrationFaceRetakeService {
           undefined,
           { resetReaderProgress: true },
         );
+        outcome = 'force_sync_queued';
       } catch (err: unknown) {
+        outcome = 'force_sync_failed';
         this.logger.warn(
           `enqueue pós-recadastro reg=${consumed.registration.id}: ${
             err instanceof Error ? err.message : String(err)
@@ -121,7 +122,7 @@ export class RegistrationFaceRetakeService {
       }
     }
 
-    return { faceImageKey, success: true as const };
+    return { faceImageKey, success: true as const, outcome };
   }
 
   private async createShared(
@@ -135,7 +136,7 @@ export class RegistrationFaceRetakeService {
     );
     if (!registration || !registrationCanRetakeFace(registration)) {
       throw new BadRequestException(
-        'Só é possível gerar o link para cadastros ativos aguardando ou aprovados.',
+        'Só é possível gerar o link para cadastros ativos aguardando, rejeitados ou aprovados.',
       );
     }
 

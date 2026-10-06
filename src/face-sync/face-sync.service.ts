@@ -1101,33 +1101,66 @@ export class FaceSyncService {
       this.database.db,
       registrationId,
       clientId,
-      { deviceSyncStatus: 'pending_sync', deviceSyncedAt: null },
+      {
+        deviceSyncStatus: 'pending_sync',
+        deviceSyncedAt: null,
+        deviceSyncError: resetReaderProgress ? null : row.deviceSyncError,
+      },
     );
     const dedupeKey = allowSimilarFace
       ? `face.person:${clientId}:registration:${registrationId}:similar`
       : resetReaderProgress
         ? `face.person:${clientId}:registration:${registrationId}:force`
         : `face.person:${clientId}:registration:${registrationId}`;
-    const job = await this.queue.enqueue({
-      kind: 'face.person',
-      clientId,
-      targetId: registrationId,
-      createdBy,
-      force: resetReaderProgress,
-      dedupeKey,
-      total: 1,
-      payload: {
-        entityKind: 'registration',
-        faceId: row.faceId,
-        name: row.name ?? 'USUARIO',
-        photoKey: row.faceImageKey,
-        logContext: `reg=${registrationId}`,
-        previousDeviceSyncError: row.deviceSyncError,
-        resetReaderProgress,
-        allowSimilarFace,
-        blocked: options?.blocked === true || row.status === 'blocked',
-      } satisfies FacePersonJobPayload,
-    });
+    let job: Awaited<ReturnType<DeviceSyncQueueService['enqueue']>>;
+    try {
+      job = await this.queue.enqueue({
+        kind: 'face.person',
+        clientId,
+        targetId: registrationId,
+        createdBy,
+        force: resetReaderProgress,
+        dedupeKey,
+        total: 1,
+        payload: {
+          entityKind: 'registration',
+          faceId: row.faceId,
+          name: row.name ?? 'USUARIO',
+          photoKey: row.faceImageKey,
+          logContext: `reg=${registrationId}`,
+          previousDeviceSyncError: resetReaderProgress
+            ? null
+            : row.deviceSyncError,
+          resetReaderProgress,
+          allowSimilarFace,
+          blocked: options?.blocked === true || row.status === 'blocked',
+        } satisfies FacePersonJobPayload,
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Falha ao enfileirar sync.';
+      try {
+        await registrationsQueries.updateRegistrationDeviceSync(
+          this.database.db,
+          registrationId,
+          clientId,
+          {
+            deviceSyncStatus: 'sync_failed',
+            deviceSyncedAt: null,
+            deviceSyncError: message,
+          },
+        );
+      } catch (persistErr: unknown) {
+        this.log.warn(
+          `Falha ao persistir erro da fila reg=${registrationId}: ${
+            persistErr instanceof Error
+              ? persistErr.message
+              : String(persistErr)
+          }`,
+        );
+      }
+      throw err;
+    }
     return {
       ...this.queue.toDto(job),
       deviceSyncStatus: 'pending_sync' as const,

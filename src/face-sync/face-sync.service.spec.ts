@@ -345,9 +345,11 @@ describe('FaceSyncService', () => {
           status: 'approved',
           faceImageKey: 'photo',
           faceId: 10,
+          deviceSyncError:
+            'Sincronizado parcialmente (1 de 2 leitor(es)). (Portaria)',
         }),
       );
-    jest
+    const update = jest
       .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
       .mockResolvedValue(registration());
 
@@ -364,12 +366,49 @@ describe('FaceSyncService', () => {
       {
         force?: boolean;
         dedupeKey: string;
-        payload: { resetReaderProgress?: boolean };
+        payload: {
+          resetReaderProgress?: boolean;
+          previousDeviceSyncError?: string | null;
+        };
       },
     ];
     expect(arg.payload.resetReaderProgress).toBe(true);
+    expect(arg.payload.previousDeviceSyncError).toBeNull();
     expect(arg.force).toBe(true);
     expect(arg.dedupeKey).toBe('face.person:client-1:registration:reg-1:force');
+    expect(update).toHaveBeenCalledWith({}, 'reg-1', 'client-1', {
+      deviceSyncStatus: 'pending_sync',
+      deviceSyncedAt: null,
+      deviceSyncError: null,
+    });
+  });
+
+  it('marca sync_failed quando a fila recusa o job', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(
+        registration({
+          status: 'approved',
+          faceImageKey: 'photo',
+          faceId: 10,
+        }),
+      );
+    const update = jest
+      .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
+      .mockResolvedValue(registration());
+    queue.enqueue.mockRejectedValueOnce(new Error('Fila indisponível'));
+
+    await expect(
+      service.enqueueApprovedRegistrationJob('reg-1', 'client-1', 'user-1', {
+        resetReaderProgress: true,
+      }),
+    ).rejects.toThrow('Fila indisponível');
+
+    expect(update).toHaveBeenNthCalledWith(2, {}, 'reg-1', 'client-1', {
+      deviceSyncStatus: 'sync_failed',
+      deviceSyncedAt: null,
+      deviceSyncError: 'Fila indisponível',
+    });
   });
 
   it('enqueueMinorRestrictionCleanup usa job incremental sem checar fila ativa', async () => {

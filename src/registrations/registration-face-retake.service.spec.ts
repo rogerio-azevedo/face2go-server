@@ -70,11 +70,27 @@ describe('RegistrationFaceRetakeService', () => {
       .mockResolvedValue(undefined);
   });
 
-  it('recusa gerar link para cadastro rejeitado', async () => {
+  it('gera link para cadastro rejeitado', async () => {
     retakes.findRegistration.mockResolvedValue({
       isActive: true,
       submittedAt: new Date(),
       status: 'rejected',
+    });
+    retakes.insertReplacingOpen.mockImplementation(
+      (input: { code: string; expiresAt: Date }) => input,
+    );
+
+    const result = await service.createForClientTenant(user, registrationId);
+
+    expect(result.url).toContain('/cadastro/refazer/');
+    expect(retakes.insertReplacingOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('recusa gerar link para cadastro bloqueado', async () => {
+    retakes.findRegistration.mockResolvedValue({
+      isActive: true,
+      submittedAt: new Date(),
+      status: 'blocked',
     });
     await expect(
       service.createForClientTenant(user, registrationId),
@@ -132,6 +148,7 @@ describe('RegistrationFaceRetakeService', () => {
     const result = await service.uploadPhoto('ABC123', file);
 
     expect(result.faceImageKey).toBe('co/client-1/reg/face.jpg');
+    expect(result.outcome).toBe('force_sync_queued');
     expect(faceSync.enqueueApprovedRegistrationJob).toHaveBeenCalledWith(
       registrationId,
       'client-1',
@@ -170,7 +187,86 @@ describe('RegistrationFaceRetakeService', () => {
       buffer: Buffer.alloc(2048, 1),
       mimetype: 'image/jpeg',
     } as Express.Multer.File;
-    await service.uploadPhoto('ABC123', file);
+    const result = await service.uploadPhoto('ABC123', file);
+    expect(result.outcome).toBe('pending_review');
     expect(faceSync.enqueueApprovedRegistrationJob).not.toHaveBeenCalled();
+  });
+
+  it('não sincroniza cadastro rejeitado que voltou para análise', async () => {
+    retakes.findBundleByCode.mockResolvedValue({
+      companyId: 'company-1',
+      clientIsActive: true,
+      clientName: 'Portaria',
+      clientLogoUrl: null,
+      link: { usedAt: null, expiresAt: new Date(Date.now() + 60_000) },
+      registration: {
+        id: registrationId,
+        clientId: 'client-1',
+        name: 'Maria Souza',
+        isActive: true,
+        submittedAt: new Date(),
+        status: 'rejected',
+      },
+    });
+    retakes.consumeAndSetFace.mockResolvedValue({
+      ok: true,
+      registration: {
+        id: registrationId,
+        clientId: 'client-1',
+        status: 'draft',
+        faceId: null,
+      },
+    });
+
+    const file = {
+      buffer: Buffer.alloc(2048, 1),
+      mimetype: 'image/jpeg',
+    } as Express.Multer.File;
+    const result = await service.uploadPhoto('ABC123', file);
+
+    expect(result.outcome).toBe('pending_review');
+    expect(faceSync.enqueueApprovedRegistrationJob).not.toHaveBeenCalled();
+  });
+
+  it('recebe a foto mesmo quando o force sync não entra na fila', async () => {
+    retakes.findBundleByCode.mockResolvedValue({
+      companyId: 'company-1',
+      clientIsActive: true,
+      clientName: 'Portaria',
+      clientLogoUrl: null,
+      link: { usedAt: null, expiresAt: new Date(Date.now() + 60_000) },
+      registration: {
+        id: registrationId,
+        clientId: 'client-1',
+        name: 'Maria Souza',
+        isActive: true,
+        submittedAt: new Date(),
+        status: 'approved',
+      },
+    });
+    retakes.consumeAndSetFace.mockResolvedValue({
+      ok: true,
+      registration: {
+        id: registrationId,
+        clientId: 'client-1',
+        status: 'approved',
+        faceId: 12,
+      },
+    });
+    faceSync.enqueueApprovedRegistrationJob.mockRejectedValueOnce(
+      new Error('Fila indisponível'),
+    );
+
+    const file = {
+      buffer: Buffer.alloc(2048, 1),
+      mimetype: 'image/jpeg',
+    } as Express.Multer.File;
+
+    await expect(service.uploadPhoto('ABC123', file)).resolves.toEqual(
+      expect.objectContaining({
+        success: true,
+        outcome: 'force_sync_failed',
+      }),
+    );
   });
 });

@@ -1,7 +1,12 @@
 import { and, eq, gt, isNull } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
-import { clients, registrationFaceRetakeLinks, registrations } from '../schema';
+import {
+  clients,
+  registrationEvents,
+  registrationFaceRetakeLinks,
+  registrations,
+} from '../schema';
 import type { RegistrationRow } from './registrations.queries';
 
 export type RegistrationFaceRetakeLinkRow =
@@ -80,6 +85,13 @@ export async function insertFaceRetakeLinkReplacingOpen(
     if (!row) {
       throw new Error('Falha ao gravar o link de recadastro.');
     }
+    await tx.insert(registrationEvents).values({
+      registrationId: input.registrationId,
+      clientId: input.clientId,
+      type: 'note',
+      body: 'Solicitação para refazer a foto gerada.',
+      authorUserId: input.createdByUserId,
+    });
     return row;
   });
 }
@@ -123,7 +135,9 @@ export async function consumeFaceRetakeAndSetPhoto(
       clientIsActive &&
       registration.isActive &&
       registration.submittedAt != null &&
-      (registration.status === 'draft' || registration.status === 'approved');
+      (registration.status === 'draft' ||
+        registration.status === 'rejected' ||
+        registration.status === 'approved');
     if (!canRetake) {
       return { ok: false, reason: 'ineligible' };
     }
@@ -143,9 +157,24 @@ export async function consumeFaceRetakeAndSetPhoto(
       return { ok: false, reason: 'invalid' };
     }
 
+    const reopenForReview = registration.status === 'rejected';
     const [updated] = await tx
       .update(registrations)
-      .set({ faceImageKey, updatedAt: now })
+      .set(
+        reopenForReview
+          ? {
+              faceImageKey,
+              status: 'draft',
+              approvedByUserId: null,
+              approvedAt: null,
+              rejectionNotes: null,
+              deviceSyncStatus: null,
+              deviceSyncedAt: null,
+              deviceSyncError: null,
+              updatedAt: now,
+            }
+          : { faceImageKey, updatedAt: now },
+      )
       .where(
         and(
           eq(registrations.id, joined.registration.id),
@@ -156,6 +185,17 @@ export async function consumeFaceRetakeAndSetPhoto(
     if (!updated) {
       return { ok: false, reason: 'ineligible' };
     }
+    await tx.insert(registrationEvents).values({
+      registrationId: updated.id,
+      clientId: link.clientId,
+      type: 'note',
+      body: reopenForReview
+        ? 'Nova foto recebida; cadastro enviado para nova análise.'
+        : updated.status === 'approved'
+          ? 'Nova foto recebida; reenvio forçado aos leitores solicitado.'
+          : 'Nova foto recebida; cadastro permanece aguardando aprovação.',
+      authorUserId: null,
+    });
     return { ok: true, registration: updated };
   });
 }
