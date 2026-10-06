@@ -79,6 +79,8 @@ export class PublicRegistrationService {
       clientName: bundle.client.name,
       clientType: bundle.client.type,
       logoUrl: bundle.client.logoUrl,
+      supportPhone: bundle.client.supportPhone?.trim() || null,
+      supportWhatsapp: bundle.client.supportWhatsapp?.trim() || null,
       appBrand: resolveClientAppBrand(bundle.client.ienhFilialCode),
       fields: (
         await resolveFieldsConsideringRestrictMinors(

@@ -23,8 +23,13 @@ const condominiumBundle = {
   client: {
     id: 'client-1',
     companyId: 'company-1',
+    name: 'Condomínio Teste',
     type: 'condominium',
     isActive: true,
+    logoUrl: null,
+    ienhFilialCode: null,
+    supportPhone: ' (65) 3333-4444 ',
+    supportWhatsapp: ' (65) 99999-8888 ',
     registrationConfig: null,
   },
 } as never;
@@ -122,11 +127,17 @@ describe('PublicRegistrationService', () => {
       .spyOn(readersQueries, 'hasRestrictMinorsReaderByClient')
       .mockResolvedValue(false);
 
-    await service.getPreview('569SQ7AF');
+    const preview = await service.getPreview('569SQ7AF');
 
     expect(blocks.listActiveCatalog).toHaveBeenCalledWith('client-1', {
       includeAdministrative: false,
     });
+    expect(preview).toEqual(
+      expect.objectContaining({
+        supportPhone: '(65) 3333-4444',
+        supportWhatsapp: '(65) 99999-8888',
+      }),
+    );
   });
 
   it('checkDocument normaliza pontuação e bloqueia no Continuar', async () => {
