@@ -15,6 +15,13 @@ import {
   ACTIVE_REGISTRATION_STATUSES,
   locationJson,
 } from './client-blocks.repository';
+import {
+  buildLogicalLinkedPeople,
+  registrationsWithoutMembers,
+  type LinkedPersonRow,
+} from './location-review-people';
+
+export type { LinkedPersonRow } from './location-review-people';
 
 export type LocationPersonKind = 'registration' | 'member';
 
@@ -26,15 +33,6 @@ export type LocationPersonRow = {
   unitId: string | null;
   block: string | null;
   unit: string | null;
-};
-
-export type LinkedPersonRow = {
-  kind: LocationPersonKind;
-  id: string;
-  name: string | null;
-  faceId: number | null;
-  unitId: string;
-  active: boolean;
 };
 
 /** Texto do JSON normalizado: trim, espaços colapsados e minúsculas. */
@@ -58,49 +56,77 @@ export class LocationReviewRepository {
 
   /** Pessoas ativas sem `unit_id`, com o texto de bloco/unidade. */
   async listUnlinkedPeople(clientId: string): Promise<LocationPersonRow[]> {
-    const [registrationRows, memberRows] = await Promise.all([
-      this.database.db
-        .select({
-          id: registrations.id,
-          name: registrations.name,
-          faceId: registrations.faceId,
-          unitId: registrations.unitId,
-          block: sql<string | null>`${registrations.additionalData}->>'block'`,
-          unit: sql<string | null>`${registrations.additionalData}->>'unit'`,
-        })
-        .from(registrations)
-        .where(
-          and(
-            eq(registrations.clientId, clientId),
-            isNull(registrations.unitId),
-            eq(registrations.isActive, true),
-            inArray(registrations.status, [...ACTIVE_REGISTRATION_STATUSES]),
+    const [registrationRows, memberRows, activeMemberRegistrationRows] =
+      await Promise.all([
+        this.database.db
+          .select({
+            id: registrations.id,
+            name: registrations.name,
+            faceId: registrations.faceId,
+            unitId: registrations.unitId,
+            block: sql<
+              string | null
+            >`${registrations.additionalData}->>'block'`,
+            unit: sql<string | null>`${registrations.additionalData}->>'unit'`,
+          })
+          .from(registrations)
+          .where(
+            and(
+              eq(registrations.clientId, clientId),
+              isNull(registrations.unitId),
+              eq(registrations.isActive, true),
+              inArray(registrations.status, [...ACTIVE_REGISTRATION_STATUSES]),
+            ),
           ),
-        ),
-      this.database.db
-        .select({
-          id: clientMembers.id,
-          name: clientMembers.name,
-          faceId: clientMembers.faceId,
-          unitId: clientMembers.unitId,
-          block: sql<string | null>`${clientMembers.additionalData}->>'block'`,
-          unit: sql<string | null>`${clientMembers.additionalData}->>'unit'`,
-        })
-        .from(clientMembers)
-        .where(
-          and(
-            eq(clientMembers.clientId, clientId),
-            isNull(clientMembers.unitId),
-            eq(clientMembers.isActive, true),
+        this.database.db
+          .select({
+            id: clientMembers.id,
+            registrationId: clientMembers.registrationId,
+            name: clientMembers.name,
+            faceId: clientMembers.faceId,
+            unitId: clientMembers.unitId,
+            block: sql<
+              string | null
+            >`${clientMembers.additionalData}->>'block'`,
+            unit: sql<string | null>`${clientMembers.additionalData}->>'unit'`,
+          })
+          .from(clientMembers)
+          .where(
+            and(
+              eq(clientMembers.clientId, clientId),
+              isNull(clientMembers.unitId),
+              eq(clientMembers.isActive, true),
+            ),
           ),
-        ),
-    ]);
+        this.database.db
+          .select({ registrationId: clientMembers.registrationId })
+          .from(clientMembers)
+          .where(
+            and(
+              eq(clientMembers.clientId, clientId),
+              eq(clientMembers.isActive, true),
+              isNotNull(clientMembers.registrationId),
+            ),
+          ),
+      ]);
+    const standaloneRegistrations = registrationsWithoutMembers(
+      registrationRows,
+      activeMemberRegistrationRows.map((row) => row.registrationId),
+    );
     return [
-      ...registrationRows.map((row) => ({
+      ...standaloneRegistrations.map((row) => ({
         ...row,
         kind: 'registration' as const,
       })),
-      ...memberRows.map((row) => ({ ...row, kind: 'member' as const })),
+      ...memberRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        faceId: row.faceId,
+        unitId: row.unitId,
+        block: row.block,
+        unit: row.unit,
+        kind: 'member' as const,
+      })),
     ];
   }
 
@@ -130,6 +156,7 @@ export class LocationReviewRepository {
       this.database.db
         .select({
           id: clientMembers.id,
+          registrationId: clientMembers.registrationId,
           name: clientMembers.name,
           faceId: clientMembers.faceId,
           unitId: clientMembers.unitId,
@@ -145,18 +172,10 @@ export class LocationReviewRepository {
           ),
         ),
     ]);
-    return [
-      ...registrationRows.map((row) => ({
-        ...row,
-        unitId: row.unitId!,
-        kind: 'registration' as const,
-      })),
-      ...memberRows.map((row) => ({
-        ...row,
-        unitId: row.unitId!,
-        kind: 'member' as const,
-      })),
-    ];
+    return buildLogicalLinkedPeople(
+      registrationRows.map((row) => ({ ...row, unitId: row.unitId! })),
+      memberRows.map((row) => ({ ...row, unitId: row.unitId! })),
+    );
   }
 
   /** Tira a unidade das pessoas (mantém o texto) e desativa a unidade. */
