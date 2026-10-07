@@ -9,8 +9,28 @@ export function parseIsoDateParts(
   if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d)) {
     return null;
   }
-  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  if (y < 1 || m < 1 || m > 12 || d < 1) return null;
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const daysInMonth = [
+    31,
+    leap ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  if (d > (daysInMonth[m - 1] ?? 0)) return null;
   return { y, m, d };
+}
+
+export function isValidIsoBirthDate(value: unknown): value is string {
+  return typeof value === 'string' && parseIsoDateParts(value) != null;
 }
 
 /** Normaliza Date ou string YYYY-MM-DD para YYYY-MM-DD. */
@@ -41,6 +61,24 @@ export function calculateAge(
   const td = today.getDate();
   let age = ty - parts.y;
   if (tm < parts.m || (tm === parts.m && td < parts.d)) {
+    age -= 1;
+  }
+  return age;
+}
+
+/** Idade civil usando outra data civil YYYY-MM-DD como referência. */
+export function calculateAgeOnDate(
+  birthDate: string,
+  referenceDate: string,
+): number {
+  const birth = parseIsoDateParts(birthDate);
+  const reference = parseIsoDateParts(referenceDate);
+  if (!birth || !reference) return Number.NaN;
+  let age = reference.y - birth.y;
+  if (
+    reference.m < birth.m ||
+    (reference.m === birth.m && reference.d < birth.d)
+  ) {
     age -= 1;
   }
   return age;

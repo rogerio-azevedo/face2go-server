@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isValidCpfOrCnpj, onlyDigits } from '../common/utils/document';
+import { parseIsoDateParts } from '../common/utils/birth-date';
 
 export const registrationStatusSchema = z.enum([
   'draft',
@@ -117,6 +118,9 @@ const optionalBirthDate = z
   })
   .refine((value) => value == null || /^\d{4}-\d{2}-\d{2}$/.test(value), {
     message: 'Data inválida (YYYY-MM-DD).',
+  })
+  .refine((value) => value == null || parseIsoDateParts(value) != null, {
+    message: 'Data de nascimento inválida.',
   });
 
 const optionalDocument = z

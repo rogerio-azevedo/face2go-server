@@ -41,6 +41,16 @@ export const facialReaders = pgTable('facial_readers', {
   passwordEncrypted: text('password_encrypted'),
   token: uuid('device_token').notNull().defaultRandom().unique(),
   isActive: boolean('is_active').default(true).notNull(),
+  /** Nulo = sem restrição; 1..18 = idade civil mínima para receber a face. */
+  minimumAccessAge: integer('minimum_access_age'),
+  agePolicyVersion: integer('age_policy_version').default(0).notNull(),
+  agePolicyStatus: varchar('age_policy_status', { length: 20 })
+    .$type<'applied' | 'pending' | 'failed'>()
+    .default('applied')
+    .notNull(),
+  agePolicyError: text('age_policy_error'),
+  agePolicyAppliedAt: timestamp('age_policy_applied_at'),
+  /** Compatibilidade de rollout; remover após todos os workers usarem minimumAccessAge. */
   restrictMinors: boolean('restrict_minors').default(false).notNull(),
   connectionMode: readerConnectionModeEnum('connection_mode')
     .notNull()

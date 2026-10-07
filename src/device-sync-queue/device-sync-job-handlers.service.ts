@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
+import * as readersQueries from '../database/queries/readers.queries';
 import * as vehicleCameraSyncQueries from '../database/queries/vehicle-camera-sync.queries';
 import type { DeviceSyncJobRow } from '../database/schema/device-sync-jobs';
 import { FaceReaderRebuildService } from '../face-sync/face-reader-rebuild.service';
@@ -135,55 +136,82 @@ export class DeviceSyncJobHandlersService {
     const payload = job.payload as FaceReaderJobPayload;
     const force = job.force || payload.force === true;
     const already = job.processed ?? 0;
-    await this.faceSync.purgeIneligibleFacesFromReader(
-      job.clientId,
-      job.targetId,
-    );
-    if (force && already === 0) {
-      await personReaderSyncQueries.deletePersonReaderSyncByReader(
-        this.database.db,
+    try {
+      await this.faceSync.purgeIneligibleFacesFromReader(
         job.clientId,
         job.targetId,
       );
-    }
-    const people = await this.rebuild.listPeopleToSync(
-      job.clientId,
-      job.targetId,
-      { skipSynced: true },
-    );
-    const total = already + people.length;
-    await this.queue.update(job.id, { total, processed: already });
-    let processed = already;
-    for (const person of people) {
-      await ctx.checkpoint();
-      const { buffer } = await this.r2.getObjectBytes(person.photoKey);
-      const outcome = await this.faceSync.syncPersonOnReaders({
-        clientId: job.clientId,
-        faceId: person.faceId,
-        name: person.name,
-        imageBuffer: buffer,
-        photoKey: person.photoKey,
-        timeSectionIds: person.timeSectionIds,
-        validFrom: person.validFrom,
-        validUntil: person.validUntil,
-        blocked: person.blocked,
-        logContext: `reader-rebuild=${job.targetId}:${person.id}`,
-        readerIds: [job.targetId],
-        resetReaderProgress: false,
-      });
-      await this.persist.persistFacePerson(
+      if (force && already === 0) {
+        await personReaderSyncQueries.deletePersonReaderSyncByReader(
+          this.database.db,
+          job.clientId,
+          job.targetId,
+        );
+      }
+      const people = await this.rebuild.listPeopleToSync(
         job.clientId,
-        person.id,
-        {
-          entityKind: person.entityKind,
+        job.targetId,
+        { skipSynced: true },
+      );
+      const total = already + people.length;
+      await this.queue.update(job.id, { total, processed: already });
+      let processed = already;
+      for (const person of people) {
+        await ctx.checkpoint();
+        const { buffer } = await this.r2.getObjectBytes(person.photoKey);
+        const outcome = await this.faceSync.syncPersonOnReaders({
+          clientId: job.clientId,
           faceId: person.faceId,
           name: person.name,
+          imageBuffer: buffer,
           photoKey: person.photoKey,
-        },
-        outcome,
-      );
-      processed += 1;
-      await this.queue.update(job.id, { processed, total });
+          timeSectionIds: person.timeSectionIds,
+          validFrom: person.validFrom,
+          validUntil: person.validUntil,
+          blocked: person.blocked,
+          logContext: `reader-rebuild=${job.targetId}:${person.id}`,
+          readerIds: [job.targetId],
+          resetReaderProgress: false,
+        });
+        if (outcome.deviceSyncStatus === 'sync_failed') {
+          throw new Error(
+            outcome.deviceSyncError ??
+              `Falha ao reconciliar a face ${person.faceId}.`,
+          );
+        }
+        await this.persist.persistFacePerson(
+          job.clientId,
+          person.id,
+          {
+            entityKind: person.entityKind,
+            faceId: person.faceId,
+            name: person.name,
+            photoKey: person.photoKey,
+          },
+          outcome,
+        );
+        processed += 1;
+        await this.queue.update(job.id, { processed, total });
+      }
+      if (payload.agePolicyVersion != null) {
+        await readersQueries.updateReaderAgePolicyStatus(this.database.db, {
+          clientId: job.clientId,
+          readerId: job.targetId,
+          version: payload.agePolicyVersion,
+          status: 'applied',
+        });
+      }
+    } catch (error) {
+      if (payload.agePolicyVersion != null) {
+        await readersQueries.updateReaderAgePolicyStatus(this.database.db, {
+          clientId: job.clientId,
+          readerId: job.targetId,
+          version: payload.agePolicyVersion,
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      throw error;
     }
   }
 

@@ -82,7 +82,15 @@ export const readerSchema = z.object({
       message: 'Senha deve ter entre 4 e 256 caracteres',
     }),
   isActive: z.boolean(),
-  restrictMinors: z.boolean(),
+  /** Compatibilidade com clientes antigos; minimumAccessAge é a fonte nova. */
+  restrictMinors: z.boolean().optional(),
+  minimumAccessAge: z
+    .number({ message: 'Idade mínima inválida.' })
+    .int('Idade mínima deve ser um número inteiro.')
+    .min(1, 'Idade mínima deve ser pelo menos 1 ano.')
+    .max(18, 'Idade mínima deve ser no máximo 18 anos.')
+    .nullable()
+    .optional(),
   connectionMode: z.enum(READER_CONNECTION_MODES).optional(),
   autoRegisterDeviceId: optionalTrimmed,
 });

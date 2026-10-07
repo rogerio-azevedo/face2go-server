@@ -603,6 +603,13 @@
       "when": 1779540000000,
       "tag": "0085_client_blocks_administrative",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1779550000000,
+      "tag": "0086_reader_minimum_access_age",
+      "breakpoints": true
     }
   ]
 }

@@ -108,6 +108,11 @@ describe('RegistrationsAdminService lifecycle', () => {
     jest
       .spyOn(registrationsQueries, 'getRegistrationLinkByIdForClient')
       .mockResolvedValue(undefined);
+    jest.spyOn(clientsQueries, 'getClientByIdOnly').mockResolvedValue({
+      id: 'client-1',
+      timezoneOffsetMinutes: -240,
+      type: 'condominium',
+    } as never);
   });
 
   afterEach(() => {

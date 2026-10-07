@@ -22,6 +22,7 @@ import {
   parseListPaginationParams,
   type ListPaginationParams,
 } from '../common/pagination';
+import { toIsoDateString } from '../common/utils/birth-date';
 import { blockPersonSchema } from '../validation/block-person.schema';
 import {
   createStudentSchema,
@@ -304,6 +305,18 @@ export class StudentsService {
     if (Object.keys(d).length === 0) {
       throw new BadRequestException('Nada para atualizar.');
     }
+    const existing = await studentsQueries.getStudentById(
+      this.database.db,
+      studentId,
+      clientId,
+    );
+    if (!existing) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+    const birthDateChanged =
+      d.birthDate !== undefined &&
+      toIsoDateString(d.birthDate) !== toIsoDateString(existing.birthDate);
+
     const updated = await studentsQueries.updateStudent(
       this.database.db,
       studentId,
@@ -323,7 +336,21 @@ export class StudentsService {
     if (!updated) {
       throw new NotFoundException('Aluno não encontrado.');
     }
-    const [withClasses] = await this.attachClassesToStudents([updated]);
+    if (birthDateChanged && updated.photoKey && updated.faceId != null) {
+      await this.syncFaceByCompany(user, clientId, studentId);
+    }
+
+    const current = birthDateChanged
+      ? await studentsQueries.getStudentById(
+          this.database.db,
+          studentId,
+          clientId,
+        )
+      : updated;
+    if (!current) {
+      throw new NotFoundException('Aluno não encontrado.');
+    }
+    const [withClasses] = await this.attachClassesToStudents([current]);
     return withClasses;
   }
 

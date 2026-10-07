@@ -33,7 +33,11 @@ import {
   updateRegistrationSchema,
 } from '../validation/registrations.schema';
 import { RegistrationEventsService } from './registration-events.service';
-import { isMinor, toIsoDateString } from '../common/utils/birth-date';
+import {
+  calculateAgeOnDate,
+  toIsoDateString,
+} from '../common/utils/birth-date';
+import { calendarDateInOffset } from '../common/parse-access-list-datetime';
 import {
   normalizeRegistrationFields,
   mergeHiddenRegistrationFields,
@@ -145,9 +149,11 @@ export class RegistrationsAdminService {
       registrationLinkCode?: string | null;
     },
     progress: { total: number; syncedByFace: Map<number, number> },
+    ageAsOf: string,
   ) {
     const faceUrl = await this.optionalFaceUrl(row.faceImageKey);
     const birthDate = toIsoDateString(row.birthDate);
+    const age = birthDate ? calculateAgeOnDate(birthDate, ageAsOf) : null;
     const hasFacialReaders = progress.total > 0;
     const readerSyncSynced =
       row.faceId != null ? (progress.syncedByFace.get(row.faceId) ?? 0) : null;
@@ -161,7 +167,10 @@ export class RegistrationsAdminService {
       phone: row.phone,
       email: row.email,
       birthDate,
-      isMinor: birthDate ? isMinor(birthDate) : null,
+      age: age != null && Number.isFinite(age) && age >= 0 ? age : null,
+      ageAsOf,
+      isMinor:
+        age != null && Number.isFinite(age) && age >= 0 ? age < 18 : null,
       additionalData: row.additionalData,
       unitId: row.unitId ?? null,
       status: row.status,
@@ -194,10 +203,13 @@ export class RegistrationsAdminService {
     row: registrationsQueries.RegistrationRow,
     clientId: string,
   ) {
-    const progress = await this.faceSync.getReaderSyncCounts(
-      clientId,
-      row.faceId != null ? [row.faceId] : [],
-    );
+    const [progress, client] = await Promise.all([
+      this.faceSync.getReaderSyncCounts(
+        clientId,
+        row.faceId != null ? [row.faceId] : [],
+      ),
+      clientsQueries.getClientByIdOnly(this.database.db, clientId),
+    ]);
     const link = await registrationsQueries.getRegistrationLinkByIdForClient(
       this.database.db,
       row.registrationLinkId,
@@ -206,6 +218,7 @@ export class RegistrationsAdminService {
     return this.mapRow(
       { ...row, registrationLinkCode: link?.code ?? null },
       progress,
+      calendarDateInOffset(client?.timezoneOffsetMinutes ?? 0),
     );
   }
 
@@ -306,7 +319,10 @@ export class RegistrationsAdminService {
     ];
     const progress = await this.faceSync.getReaderSyncCounts(clientId, faceIds);
 
-    const data = await Promise.all(rows.map((r) => this.mapRow(r, progress)));
+    const ageAsOf = calendarDateInOffset(client?.timezoneOffsetMinutes ?? 0);
+    const data = await Promise.all(
+      rows.map((r) => this.mapRow(r, progress, ageAsOf)),
+    );
     return {
       ...buildPaginatedResult(data, total, page, pageSize),
       counts,
@@ -930,6 +946,22 @@ export class RegistrationsAdminService {
         `Falha ao sincronizar membro após edição reg=${registrationId}: ${
           err instanceof Error ? err.message : String(err)
         }`,
+      );
+    }
+
+    const birthDateChanged =
+      toIsoDateString(row.birthDate) !== toIsoDateString(updated.birthDate);
+    if (
+      birthDateChanged &&
+      updated.faceImageKey &&
+      updated.faceId != null &&
+      (updated.status === 'approved' || updated.status === 'blocked')
+    ) {
+      await this.faceSync.enqueueApprovedRegistrationJob(
+        registrationId,
+        clientId,
+        undefined,
+        { resetReaderProgress: true },
       );
     }
 

@@ -1,4 +1,5 @@
 import {
+  evaluatePersonAgeAccess,
   formatRestrictedReaderSyncError,
   isPersonAllowedOnReader,
   partitionReadersByMinorRestriction,
@@ -8,7 +9,7 @@ import {
 describe('minor-restriction', () => {
   const restricted = { restrictMinors: true };
   const open = { restrictMinors: false };
-  const today = new Date(2026, 8, 15);
+  const today = new Date('2026-09-15T12:00:00.000Z');
 
   it('leitor sem restrição aceita qualquer pessoa', () => {
     expect(isPersonAllowedOnReader(open, null)).toBe(true);
@@ -48,6 +49,30 @@ describe('minor-restriction', () => {
     jest.useRealTimers();
   });
 
+  it('aceita quem completa a idade configurada e recusa quem ainda não completou', () => {
+    const twelvePlus = { minimumAccessAge: 12, timezoneOffsetMinutes: -240 };
+    expect(
+      evaluatePersonAgeAccess(twelvePlus, '2014-09-15', today),
+    ).toMatchObject({ allowed: true, age: 12, reason: 'allowed' });
+    expect(
+      evaluatePersonAgeAccess(twelvePlus, '2014-09-16', today),
+    ).toMatchObject({
+      allowed: false,
+      age: 11,
+      reason: 'below_minimum_age',
+    });
+  });
+
+  it('nega data futura e data civil inválida', () => {
+    const twelvePlus = { minimumAccessAge: 12 };
+    expect(
+      evaluatePersonAgeAccess(twelvePlus, '2027-01-01', today).reason,
+    ).toBe('future_birth_date');
+    expect(
+      evaluatePersonAgeAccess(twelvePlus, '2020-02-31', today).reason,
+    ).toBe('invalid_birth_date');
+  });
+
   it('particiona leitores permitidos e restritos', () => {
     jest.useFakeTimers();
     jest.setSystemTime(today);
@@ -70,11 +95,20 @@ describe('minor-restriction', () => {
   });
 
   it('classifica skip sem data vs menor', () => {
-    expect(restrictedReaderSkipReason(null)).toBe('missing_birth_date');
-    expect(restrictedReaderSkipReason('ontem')).toBe('missing_birth_date');
-    expect(restrictedReaderSkipReason('2012-01-01')).toBe('minor');
+    jest.useFakeTimers();
+    jest.setSystemTime(today);
+    expect(restrictedReaderSkipReason(restricted, null)).toBe(
+      'missing_birth_date',
+    );
+    expect(restrictedReaderSkipReason(restricted, 'ontem')).toBe(
+      'invalid_birth_date',
+    );
+    expect(restrictedReaderSkipReason(restricted, '2012-01-01')).toBe(
+      'below_minimum_age',
+    );
     expect(
       formatRestrictedReaderSyncError('Porta Cervejeira', 'missing_birth_date'),
     ).toBe('Porta Cervejeira: sem data de nascimento.');
+    jest.useRealTimers();
   });
 });

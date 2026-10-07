@@ -29,6 +29,8 @@ export type FacePersonJobPayload = {
 
 export type FaceReaderJobPayload = {
   force?: boolean;
+  /** Versão da política de idade que este rebuild precisa confirmar. */
+  agePolicyVersion?: number;
 };
 
 export type FaceSchoolJobPayload = {

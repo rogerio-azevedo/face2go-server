@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, eq, ilike, isNotNull, isNull, ne, or } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import * as clientsQueries from './clients.queries';
@@ -9,6 +9,14 @@ export type ReaderBrand = 'intelbras' | 'hikvision';
 export type ReaderDirection = 'in' | 'out';
 
 export type ReaderConnectionMode = 'direct' | 'auto_register';
+export type ReaderAgePolicyStatus = 'applied' | 'pending' | 'failed';
+
+export function effectiveMinimumAccessAge(reader: {
+  minimumAccessAge?: number | null;
+  restrictMinors?: boolean | null;
+}): number | null {
+  return reader.minimumAccessAge ?? (reader.restrictMinors ? 18 : null);
+}
 
 export type ReaderListRow = {
   id: string;
@@ -27,6 +35,11 @@ export type ReaderListRow = {
   hasCredentials: boolean;
   isActive: boolean;
   restrictMinors: boolean;
+  minimumAccessAge: number | null;
+  agePolicyVersion: number;
+  agePolicyStatus: ReaderAgePolicyStatus;
+  agePolicyError: string | null;
+  agePolicyAppliedAt: Date | null;
   connectionMode: ReaderConnectionMode;
   autoRegisterDeviceId: string | null;
   lastSeenAt: Date | null;
@@ -65,6 +78,11 @@ export async function listReaders(
       passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
       restrictMinors: facialReaders.restrictMinors,
+      minimumAccessAge: facialReaders.minimumAccessAge,
+      agePolicyVersion: facialReaders.agePolicyVersion,
+      agePolicyStatus: facialReaders.agePolicyStatus,
+      agePolicyError: facialReaders.agePolicyError,
+      agePolicyAppliedAt: facialReaders.agePolicyAppliedAt,
       connectionMode: facialReaders.connectionMode,
       autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
       lastSeenAt: facialReaders.lastSeenAt,
@@ -77,6 +95,7 @@ export async function listReaders(
 
   return rows.map(({ passwordEncrypted, ...r }) => ({
     ...r,
+    minimumAccessAge: effectiveMinimumAccessAge(r),
     brand: r.brand ?? 'intelbras',
     direction: r.direction ?? null,
     hasCredentials: !!(
@@ -110,6 +129,11 @@ export async function getReaderById(
       passwordEncrypted: facialReaders.passwordEncrypted,
       isActive: facialReaders.isActive,
       restrictMinors: facialReaders.restrictMinors,
+      minimumAccessAge: facialReaders.minimumAccessAge,
+      agePolicyVersion: facialReaders.agePolicyVersion,
+      agePolicyStatus: facialReaders.agePolicyStatus,
+      agePolicyError: facialReaders.agePolicyError,
+      agePolicyAppliedAt: facialReaders.agePolicyAppliedAt,
       connectionMode: facialReaders.connectionMode,
       autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
       lastSeenAt: facialReaders.lastSeenAt,
@@ -127,6 +151,7 @@ export async function getReaderById(
   const { passwordEncrypted, ...rest } = row;
   return {
     ...rest,
+    minimumAccessAge: effectiveMinimumAccessAge(rest),
     brand: row.brand ?? 'intelbras',
     direction: row.direction ?? null,
     hasCredentials: !!(
@@ -155,6 +180,11 @@ export async function getReaderWithCredentialsById(
       direction: facialReaders.direction,
       isActive: facialReaders.isActive,
       restrictMinors: facialReaders.restrictMinors,
+      minimumAccessAge: facialReaders.minimumAccessAge,
+      agePolicyVersion: facialReaders.agePolicyVersion,
+      agePolicyStatus: facialReaders.agePolicyStatus,
+      agePolicyError: facialReaders.agePolicyError,
+      agePolicyAppliedAt: facialReaders.agePolicyAppliedAt,
       connectionMode: facialReaders.connectionMode,
       autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
     })
@@ -184,6 +214,10 @@ export type ReaderCreateInput = {
   passwordEncrypted?: string | null;
   isActive?: boolean;
   restrictMinors?: boolean;
+  minimumAccessAge?: number | null;
+  agePolicyVersion?: number;
+  agePolicyStatus?: ReaderAgePolicyStatus;
+  agePolicyAppliedAt?: Date | null;
   connectionMode?: ReaderConnectionMode;
   autoRegisterDeviceId?: string | null;
 };
@@ -214,7 +248,17 @@ export async function createReader(db: AppDb, input: ReaderCreateInput) {
       username: input.username?.trim() || null,
       passwordEncrypted: input.passwordEncrypted ?? null,
       isActive: input.isActive ?? true,
-      restrictMinors: input.restrictMinors ?? false,
+      minimumAccessAge: input.minimumAccessAge ?? null,
+      restrictMinors:
+        input.minimumAccessAge !== undefined
+          ? input.minimumAccessAge != null
+          : (input.restrictMinors ?? false),
+      agePolicyVersion: input.agePolicyVersion ?? 0,
+      agePolicyStatus: input.agePolicyStatus ?? 'applied',
+      agePolicyAppliedAt:
+        input.agePolicyAppliedAt === undefined
+          ? new Date()
+          : input.agePolicyAppliedAt,
       connectionMode: input.connectionMode ?? 'direct',
       autoRegisterDeviceId: input.autoRegisterDeviceId?.trim() || null,
     })
@@ -238,6 +282,11 @@ export type ReaderUpdateInput = Partial<{
   passwordEncrypted: string | null;
   isActive: boolean;
   restrictMinors: boolean;
+  minimumAccessAge: number | null;
+  agePolicyVersion: number;
+  agePolicyStatus: ReaderAgePolicyStatus;
+  agePolicyError: string | null;
+  agePolicyAppliedAt: Date | null;
   connectionMode: ReaderConnectionMode;
   autoRegisterDeviceId: string | null;
 }>;
@@ -307,6 +356,21 @@ export async function updateReader(
   if (input.restrictMinors !== undefined) {
     setPayload.restrictMinors = input.restrictMinors;
   }
+  if (input.minimumAccessAge !== undefined) {
+    setPayload.minimumAccessAge = input.minimumAccessAge;
+  }
+  if (input.agePolicyVersion !== undefined) {
+    setPayload.agePolicyVersion = input.agePolicyVersion;
+  }
+  if (input.agePolicyStatus !== undefined) {
+    setPayload.agePolicyStatus = input.agePolicyStatus;
+  }
+  if (input.agePolicyError !== undefined) {
+    setPayload.agePolicyError = input.agePolicyError;
+  }
+  if (input.agePolicyAppliedAt !== undefined) {
+    setPayload.agePolicyAppliedAt = input.agePolicyAppliedAt;
+  }
   if (input.connectionMode !== undefined) {
     setPayload.connectionMode = input.connectionMode;
   }
@@ -357,6 +421,7 @@ export function readerRowToPublic(row: typeof facialReaders.$inferSelect) {
   const { passwordEncrypted, ...rest } = row;
   return {
     ...rest,
+    minimumAccessAge: effectiveMinimumAccessAge(rest),
     brand: rest.brand ?? 'intelbras',
     direction: rest.direction ?? null,
     hasCredentials: !!(
@@ -592,6 +657,8 @@ export type ReaderFaceSyncRow = {
   username: string;
   passwordEncrypted: string;
   restrictMinors: boolean;
+  minimumAccessAge?: number | null;
+  timezoneOffsetMinutes?: number;
   connectionMode?: ReaderConnectionMode;
   autoRegisterDeviceId?: string | null;
 };
@@ -610,10 +677,13 @@ export async function listReadersForFaceSyncByClient(
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
       restrictMinors: facialReaders.restrictMinors,
+      minimumAccessAge: facialReaders.minimumAccessAge,
+      timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
       connectionMode: facialReaders.connectionMode,
       autoRegisterDeviceId: facialReaders.autoRegisterDeviceId,
     })
     .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
     .where(
       and(
         eq(facialReaders.clientId, clientId),
@@ -631,24 +701,112 @@ export async function listReadersForFaceSyncByClient(
       ...r,
       brand: r.brand ?? 'intelbras',
       restrictMinors: Boolean(r.restrictMinors),
+      minimumAccessAge: effectiveMinimumAccessAge(r),
       connectionMode: r.connectionMode ?? 'direct',
       autoRegisterDeviceId: r.autoRegisterDeviceId ?? null,
     })) as ReaderFaceSyncRow[];
 }
 
-export async function getReaderMinorRestriction(
+export async function getReaderAgePolicy(
   db: AppDb,
   clientId: string,
   readerId: string,
-): Promise<boolean> {
+): Promise<{ minimumAccessAge: number | null; timezoneOffsetMinutes: number }> {
   const [row] = await db
-    .select({ restrictMinors: facialReaders.restrictMinors })
+    .select({
+      restrictMinors: facialReaders.restrictMinors,
+      minimumAccessAge: facialReaders.minimumAccessAge,
+      timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
+    })
     .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
     .where(
       and(eq(facialReaders.id, readerId), eq(facialReaders.clientId, clientId)),
     )
     .limit(1);
-  return row?.restrictMinors === true;
+  return {
+    minimumAccessAge: row ? effectiveMinimumAccessAge(row) : null,
+    timezoneOffsetMinutes: row?.timezoneOffsetMinutes ?? 0,
+  };
+}
+
+export type ReaderAgePolicyReconciliationRow = {
+  id: string;
+  clientId: string;
+  agePolicyVersion: number;
+  agePolicyStatus: ReaderAgePolicyStatus;
+  agePolicyAppliedAt: Date | null;
+  timezoneOffsetMinutes: number;
+};
+
+export type ReaderAgePolicyRow = {
+  id: string;
+  name: string;
+  minimumAccessAge: number | null;
+  timezoneOffsetMinutes: number;
+};
+
+/** Inclui leitores sem credenciais para que uma remoção não seja dada como concluída. */
+export async function listActiveReaderAgePoliciesByClient(
+  db: AppDb,
+  clientId: string,
+): Promise<ReaderAgePolicyRow[]> {
+  const rows = await db
+    .select({
+      id: facialReaders.id,
+      name: facialReaders.name,
+      restrictMinors: facialReaders.restrictMinors,
+      minimumAccessAge: facialReaders.minimumAccessAge,
+      timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(
+      and(
+        eq(facialReaders.clientId, clientId),
+        eq(facialReaders.isActive, true),
+        or(
+          isNotNull(facialReaders.minimumAccessAge),
+          eq(facialReaders.restrictMinors, true),
+        ),
+      ),
+    );
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    minimumAccessAge: effectiveMinimumAccessAge(row),
+    timezoneOffsetMinutes: row.timezoneOffsetMinutes,
+  }));
+}
+
+/**
+ * Leitores cuja política depende da passagem do tempo ou precisa de retry.
+ * A decisão de enfileirar uma vez por data civil do cliente fica no listener.
+ */
+export async function listAgeRestrictedReadersForReconciliation(
+  db: AppDb,
+): Promise<ReaderAgePolicyReconciliationRow[]> {
+  return db
+    .select({
+      id: facialReaders.id,
+      clientId: facialReaders.clientId,
+      agePolicyVersion: facialReaders.agePolicyVersion,
+      agePolicyStatus: facialReaders.agePolicyStatus,
+      agePolicyAppliedAt: facialReaders.agePolicyAppliedAt,
+      timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
+    })
+    .from(facialReaders)
+    .innerJoin(clients, eq(facialReaders.clientId, clients.id))
+    .where(
+      and(
+        eq(facialReaders.isActive, true),
+        or(
+          isNotNull(facialReaders.minimumAccessAge),
+          eq(facialReaders.restrictMinors, true),
+          ne(facialReaders.agePolicyStatus, 'applied'),
+        ),
+      ),
+    );
 }
 
 export async function hasRestrictMinorsReaderByClient(
@@ -661,10 +819,41 @@ export async function hasRestrictMinorsReaderByClient(
     .where(
       and(
         eq(facialReaders.clientId, clientId),
-        eq(facialReaders.restrictMinors, true),
+        or(
+          isNotNull(facialReaders.minimumAccessAge),
+          eq(facialReaders.restrictMinors, true),
+        ),
       ),
     )
     .limit(1);
+  return row != null;
+}
+
+export async function updateReaderAgePolicyStatus(
+  db: AppDb,
+  input: {
+    clientId: string;
+    readerId: string;
+    version: number;
+    status: ReaderAgePolicyStatus;
+    error?: string | null;
+  },
+) {
+  const [row] = await db
+    .update(facialReaders)
+    .set({
+      agePolicyStatus: input.status,
+      agePolicyError: input.error ?? null,
+      agePolicyAppliedAt: input.status === 'applied' ? new Date() : null,
+    })
+    .where(
+      and(
+        eq(facialReaders.id, input.readerId),
+        eq(facialReaders.clientId, input.clientId),
+        eq(facialReaders.agePolicyVersion, input.version),
+      ),
+    )
+    .returning({ id: facialReaders.id });
   return row != null;
 }
 

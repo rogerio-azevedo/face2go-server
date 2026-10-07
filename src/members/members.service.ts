@@ -618,6 +618,10 @@ export class MembersService {
         .where(eq(users.id, existing.userId));
     }
 
+    const birthDateChanged =
+      d.birthDate !== undefined &&
+      toIsoDateString(d.birthDate) !== toIsoDateString(existing.birthDate);
+
     await membersQueries.updateMember(this.database.db, memberId, clientId, {
       ...(d.roleId !== undefined ? { roleId: d.roleId } : {}),
       ...(d.shiftId !== undefined ? { shiftId: d.shiftId } : {}),
@@ -636,6 +640,10 @@ export class MembersService {
         ? { canEnrollMemberFace: d.canEnrollMemberFace }
         : {}),
     });
+
+    if (birthDateChanged && existing.photoKey && existing.faceId != null) {
+      await this.syncFaceByCompany(user, clientId, memberId);
+    }
 
     return this.getById(user, clientId, memberId);
   }

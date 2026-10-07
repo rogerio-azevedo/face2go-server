@@ -64,10 +64,10 @@ import {
 import { AccessTimeZoneService } from './access-time-zone.service';
 import { FaceMatchService } from '../face-match/face-match.service';
 import {
+  evaluatePersonAgeAccess,
   formatRestrictedReaderSyncError,
   isPersonAllowedOnReader,
   partitionReadersByMinorRestriction,
-  restrictedReaderSkipReason,
 } from './minor-restriction';
 import {
   readerLabel,
@@ -75,16 +75,26 @@ import {
   syncLogError,
 } from './intelbras-sync-debug.util';
 
-async function persistMissingBirthDateRestrictions(
+async function persistInvalidAgeRestrictions(
   db: AppDb,
   clientId: string,
   faceId: number,
-  readers: { id: string; name: string }[],
+  readers: readersQueries.ReaderFaceSyncRow[],
+  birthDate: unknown,
 ): Promise<string[]> {
   if (readers.length === 0) return [];
-  const failures = readers.map((reader) =>
-    formatRestrictedReaderSyncError(reader.name, 'missing_birth_date'),
-  );
+  const failures = readers.map((reader) => {
+    const decision = evaluatePersonAgeAccess(reader, birthDate);
+    const reason =
+      decision.reason === 'allowed' || decision.reason === 'unrestricted'
+        ? 'missing_birth_date'
+        : decision.reason;
+    return formatRestrictedReaderSyncError(
+      reader.name,
+      reason,
+      decision.minimumAccessAge ?? 18,
+    );
+  });
   await Promise.all(
     readers.map((reader, index) =>
       personReaderSyncQueries.upsertPersonReaderSync(db, {
@@ -93,6 +103,30 @@ async function persistMissingBirthDateRestrictions(
         readerId: reader.id,
         status: 'sync_failed',
         error: failures[index] ?? null,
+      }),
+    ),
+  );
+  return failures;
+}
+
+async function persistUnavailableAgeRestrictions(
+  db: AppDb,
+  clientId: string,
+  faceId: number,
+  readers: readersQueries.ReaderAgePolicyRow[],
+): Promise<string[]> {
+  const failures = readers.map(
+    (reader) =>
+      `${reader.name}: leitor indisponível para confirmar a remoção exigida pela política ${reader.minimumAccessAge}+.`,
+  );
+  await Promise.all(
+    readers.map((reader, index) =>
+      personReaderSyncQueries.upsertPersonReaderSync(db, {
+        clientId,
+        faceId,
+        readerId: reader.id,
+        status: 'sync_failed',
+        error: failures[index],
       }),
     ),
   );
@@ -330,83 +364,136 @@ export class FaceSyncService {
     });
 
     try {
-      const allReaders = await readersQueries.listReadersForFaceSyncByClient(
-        this.database.db,
-        clientId,
-      );
+      const [allReaders, allAgePolicies, birthDate] = await Promise.all([
+        readersQueries.listReadersForFaceSyncByClient(
+          this.database.db,
+          clientId,
+        ),
+        readersQueries.listActiveReaderAgePoliciesByClient(
+          this.database.db,
+          clientId,
+        ),
+        personBirthDateQueries.getBirthDateByFaceId(
+          this.database.db,
+          clientId,
+          faceId,
+        ),
+      ]);
       const allowIds = params.readerIds?.filter((id) => id.trim());
       const scoped =
         allowIds && allowIds.length > 0
           ? allReaders.filter((r) => allowIds.includes(r.id))
           : allReaders;
-
-      if (scoped.length === 0) {
-        syncLog('syncPersonOnReaders:semLeitores', { clientId, faceId });
-        return {
-          deviceSyncStatus: 'sync_failed',
-          deviceSyncError:
-            'Nenhum leitor ativo com credenciais para este cliente.',
-        };
-      }
-
-      const birthDate = await personBirthDateQueries.getBirthDateByFaceId(
-        this.database.db,
-        clientId,
-        faceId,
+      const scopedAgePolicies =
+        allowIds && allowIds.length > 0
+          ? allAgePolicies.filter((r) => allowIds.includes(r.id))
+          : allAgePolicies;
+      const availableReaderIds = new Set(scoped.map((reader) => reader.id));
+      const unavailableRestricted = scopedAgePolicies.filter(
+        (reader) =>
+          !availableReaderIds.has(reader.id) &&
+          !evaluatePersonAgeAccess(reader, birthDate).allowed,
       );
       const { allowed: readers, restricted } =
         partitionReadersByMinorRestriction(scoped, birthDate);
-      const skipReason = restrictedReaderSkipReason(birthDate);
-      const blockedWithoutBirthDate =
-        skipReason === 'missing_birth_date' ? restricted : [];
+      const restrictionDecisions = restricted.map((reader) => ({
+        reader,
+        decision: evaluatePersonAgeAccess(reader, birthDate),
+      }));
+      const invalidDateRestricted = restrictionDecisions
+        .filter(({ decision }) => decision.reason !== 'below_minimum_age')
+        .map(({ reader }) => reader);
 
+      if (params.resetReaderProgress === true && readers.length > 0) {
+        await Promise.all(
+          readers.map((reader) =>
+            personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
+              this.database.db,
+              clientId,
+              faceId,
+              reader.id,
+            ),
+          ),
+        );
+      }
+
+      let restrictionRemovalFailures: string[] = [];
+      let failedRemovalReaderIds = new Set<string>();
       if (restricted.length > 0) {
-        await this.removePersonFromReaders({
+        const removal = await this.removePersonFromReaders({
           clientId,
           faceId,
           logContext: `${logPrefix}minor-restriction`,
           requireAll: false,
           readerIds: restricted.map((r) => r.id),
         });
+        restrictionRemovalFailures = removal.failures;
+        failedRemovalReaderIds = new Set(removal.failedReaderIds);
       }
+
+      const invalidDateFailures = await persistInvalidAgeRestrictions(
+        this.database.db,
+        clientId,
+        faceId,
+        invalidDateRestricted.filter(
+          (reader) => !failedRemovalReaderIds.has(reader.id),
+        ),
+        birthDate,
+      );
+      const unavailableRestrictionFailures =
+        await persistUnavailableAgeRestrictions(
+          this.database.db,
+          clientId,
+          faceId,
+          unavailableRestricted,
+        );
+      const policyFailures = [
+        ...restrictionRemovalFailures,
+        ...invalidDateFailures,
+        ...unavailableRestrictionFailures,
+      ];
+      const failedBelowMinimum = restrictionDecisions.filter(
+        ({ reader, decision }) =>
+          decision.reason === 'below_minimum_age' &&
+          failedRemovalReaderIds.has(reader.id),
+      ).length;
+      const policyIssueTotal =
+        invalidDateRestricted.length +
+        failedBelowMinimum +
+        unavailableRestricted.length;
 
       syncLog('syncPersonOnReaders:leitores', {
         clientId,
         faceId,
         total: readers.length,
         restricted: restricted.length,
-        skipReason,
+        restrictionReasons: restrictionDecisions.map(
+          ({ reader, decision }) => `${reader.id}:${decision.reason}`,
+        ),
+        unavailableRestricted: unavailableRestricted.map((r) => r.id),
         readers: readers.map((r) => readerLabel(r)),
       });
-
-      if (params.resetReaderProgress === true) {
-        await personReaderSyncQueries.deletePersonReaderSyncByFace(
-          this.database.db,
-          clientId,
-          faceId,
-        );
-      }
 
       if (readers.length === 0) {
         syncLog('syncPersonOnReaders:todosRestritos', {
           clientId,
           faceId,
           birthDate,
-          skipReason,
+          restrictionReasons: restrictionDecisions.map(
+            ({ decision }) => decision.reason,
+          ),
         });
-        if (blockedWithoutBirthDate.length === 0) {
+        if (policyFailures.length === 0) {
+          if (scoped.length === 0) {
+            return {
+              deviceSyncStatus: 'sync_failed',
+              deviceSyncError:
+                'Nenhum leitor ativo com credenciais para este cliente.',
+            };
+          }
           return { deviceSyncStatus: 'synced', deviceSyncError: null };
         }
-        const missingDateFailures = await persistMissingBirthDateRestrictions(
-          this.database.db,
-          clientId,
-          faceId,
-          blockedWithoutBirthDate,
-        );
-        return aggregateReaderSyncOutcome(
-          missingDateFailures,
-          blockedWithoutBirthDate.length,
-        );
+        return aggregateReaderSyncOutcome(policyFailures, policyIssueTotal);
       }
 
       const existingRows =
@@ -668,17 +755,11 @@ export class FaceSyncService {
         }),
       );
 
-      const missingDateFailures = await persistMissingBirthDateRestrictions(
-        this.database.db,
-        clientId,
-        faceId,
-        blockedWithoutBirthDate,
-      );
-      failures.push(...missingDateFailures);
+      failures.push(...policyFailures);
 
       const outcome = aggregateReaderSyncOutcome(
         failures,
-        readers.length + blockedWithoutBirthDate.length,
+        readers.length + policyIssueTotal,
       );
 
       if (outcome.deviceSyncStatus === 'sync_failed') {
@@ -693,10 +774,9 @@ export class FaceSyncService {
       syncLog('syncPersonOnReaders:concluido', {
         clientId,
         faceId,
-        synced:
-          readers.length + blockedWithoutBirthDate.length - failures.length,
+        synced: Math.max(0, readers.length - failures.length),
         skipped: plan.skipped.length,
-        total: readers.length + blockedWithoutBirthDate.length,
+        total: readers.length + policyIssueTotal,
         partial: failures.length > 0,
       });
 
@@ -716,7 +796,12 @@ export class FaceSyncService {
     requireAll?: boolean;
     /** Quando informado, remove só destes leitores. */
     readerIds?: string[];
-  }): Promise<{ removed: number; total: number; failures: string[] }> {
+  }): Promise<{
+    removed: number;
+    total: number;
+    failures: string[];
+    failedReaderIds: string[];
+  }> {
     const { clientId, faceId, logContext, requireAll = true } = params;
     const allReaders = await readersQueries.listReadersForFaceSyncByClient(
       this.database.db,
@@ -728,26 +813,7 @@ export class FaceSyncService {
         ? allReaders.filter((r) => allowIds.includes(r.id))
         : allReaders;
     if (readers.length === 0) {
-      return { removed: 0, total: 0, failures: [] };
-    }
-
-    if (allowIds && allowIds.length > 0) {
-      await Promise.all(
-        allowIds.map((readerId) =>
-          personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
-            this.database.db,
-            clientId,
-            faceId,
-            readerId,
-          ),
-        ),
-      );
-    } else {
-      await personReaderSyncQueries.deletePersonReaderSyncByFace(
-        this.database.db,
-        clientId,
-        faceId,
-      );
+      return { removed: 0, total: 0, failures: [], failedReaderIds: [] };
     }
 
     const cipher = createReaderCredentialsCipher(
@@ -755,6 +821,7 @@ export class FaceSyncService {
     );
     const logPrefix = logContext ? `${logContext} ` : '';
     const failures: string[] = [];
+    const failedReaderIds: string[] = [];
 
     await Promise.all(
       readers.map((r) =>
@@ -778,9 +845,27 @@ export class FaceSyncService {
             } else {
               await intelbrasRemoveUserFromReader(plain, faceId);
             }
+            await personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
+              this.database.db,
+              clientId,
+              faceId,
+              r.id,
+            );
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            failures.push(`${r.name}: ${msg}`);
+            const failure = `${r.name}: ${msg}`;
+            failures.push(failure);
+            failedReaderIds.push(r.id);
+            await personReaderSyncQueries.upsertPersonReaderSync(
+              this.database.db,
+              {
+                clientId,
+                faceId,
+                readerId: r.id,
+                status: 'sync_failed',
+                error: failure,
+              },
+            );
             this.log.warn(
               `${logPrefix}Falha ao remover face ${faceId} do leitor ${r.name}: ${msg}`,
             );
@@ -793,6 +878,7 @@ export class FaceSyncService {
       removed: readers.length - failures.length,
       total: readers.length,
       failures,
+      failedReaderIds,
     };
 
     if (failures.length > 0 && requireAll) {
@@ -805,7 +891,7 @@ export class FaceSyncService {
   }
 
   /**
-   * Remove do leitor as faces inelegíveis quando a restrição de menor está ligada.
+   * Remove do leitor as faces inelegíveis quando existe idade mínima configurada.
    * Usa o union de faces já sincronizadas neste leitor + faces conhecidas do cliente.
    */
   async purgeIneligibleFacesFromReader(
@@ -817,7 +903,12 @@ export class FaceSyncService {
       clientId,
     );
     const reader = readers.find((r) => r.id === readerId);
-    if (!reader?.restrictMinors) return 0;
+    if (!reader) {
+      throw new BadRequestException(
+        'Leitor ativo com credenciais não encontrado para reconciliar a política.',
+      );
+    }
+    if (reader.minimumAccessAge == null) return 0;
 
     const [synced, known] = await Promise.all([
       personReaderSyncQueries.listSyncedFaceIdsByReader(
@@ -841,42 +932,65 @@ export class FaceSyncService {
     );
     if (ineligible.length === 0) return 0;
 
-    const cipher = createReaderCredentialsCipher(
-      this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
-    );
-    const plain = toPlainReaderCredential(
-      reader,
-      cipher.decrypt(reader.passwordEncrypted),
-    );
-    let removed = 0;
-    for (const faceId of ineligible) {
-      try {
-        if (reader.brand === 'hikvision') {
-          const connection = toHikvisionConnection(plain);
-          const result = await hikvisionDeleteUser(connection, String(faceId));
-          if (!result.success) {
-            throw new Error(
-              result.error ?? 'Falha ao remover usuário Hikvision',
+    return withReaderSyncGate(reader.id, async () => {
+      const cipher = createReaderCredentialsCipher(
+        this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
+      );
+      const plain = toPlainReaderCredential(
+        reader,
+        cipher.decrypt(reader.passwordEncrypted),
+      );
+      let removed = 0;
+      const failures: string[] = [];
+      for (const faceId of ineligible) {
+        try {
+          if (reader.brand === 'hikvision') {
+            const connection = toHikvisionConnection(plain);
+            const result = await hikvisionDeleteUser(
+              connection,
+              String(faceId),
             );
+            if (!result.success) {
+              throw new Error(
+                result.error ?? 'Falha ao remover usuário Hikvision',
+              );
+            }
+          } else {
+            await intelbrasRemoveUserFromReader(plain, faceId);
           }
-        } else {
-          await intelbrasRemoveUserFromReader(plain, faceId);
+          removed += 1;
+          await personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
+            this.database.db,
+            clientId,
+            faceId,
+            readerId,
+          );
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          const failure = `${reader.name}: face ${faceId}: ${msg}`;
+          failures.push(failure);
+          await personReaderSyncQueries.upsertPersonReaderSync(
+            this.database.db,
+            {
+              clientId,
+              faceId,
+              readerId,
+              status: 'sync_failed',
+              error: failure,
+            },
+          );
+          this.log.warn(
+            `minor-purge reader=${reader.name} face=${faceId}: ${msg}`,
+          );
         }
-        removed += 1;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        this.log.warn(
-          `minor-purge reader=${reader.name} face=${faceId}: ${msg}`,
+      }
+      if (failures.length > 0) {
+        throw new BadRequestException(
+          `Não foi possível confirmar a remoção de ${failures.length} face(s). ${failures.join('; ')}`,
         );
       }
-      await personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
-        this.database.db,
-        clientId,
-        faceId,
-        readerId,
-      );
-    }
-    return removed;
+      return removed;
+    });
   }
 
   /** Sincroniza um cadastro aprovado (foto no R2) com todos os leitores ativos do cliente. */
@@ -1237,9 +1351,10 @@ export class FaceSyncService {
     return this.queue.toDto(job);
   }
 
-  async enqueueMinorRestrictionCleanup(
+  async enqueueAgePolicyReconciliation(
     clientId: string,
     readerId: string,
+    agePolicyVersion: number,
     createdBy?: string,
   ) {
     const job = await this.queue.enqueue({
@@ -1248,8 +1363,8 @@ export class FaceSyncService {
       targetId: readerId,
       force: false,
       createdBy,
-      dedupeKey: `face.reader:${clientId}:${readerId}:incremental`,
-      payload: { force: false },
+      dedupeKey: `face.reader:${clientId}:${readerId}:age-policy:${agePolicyVersion}`,
+      payload: { force: false, agePolicyVersion },
     });
     return this.queue.toDto(job);
   }

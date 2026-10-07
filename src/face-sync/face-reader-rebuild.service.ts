@@ -50,7 +50,7 @@ export class FaceReaderRebuildService {
     options?: { skipSynced?: boolean },
   ): Promise<RebuildPerson[]> {
     const skipSynced = options?.skipSynced !== false;
-    const restrictMinors = await readersQueries.getReaderMinorRestriction(
+    const agePolicy = await readersQueries.getReaderAgePolicy(
       this.database.db,
       clientId,
       readerId,
@@ -103,7 +103,7 @@ export class FaceReaderRebuildService {
       if (row.faceId == null || !row.photoKey) return;
       if (alreadySynced.has(row.faceId) || seen.has(row.faceId)) return;
       const birthDate = toIsoDateString(row.birthDate ?? null);
-      if (!isPersonAllowedOnReader({ restrictMinors }, birthDate)) {
+      if (!isPersonAllowedOnReader(agePolicy, birthDate)) {
         return;
       }
       seen.add(row.faceId);

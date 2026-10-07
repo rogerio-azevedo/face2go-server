@@ -1,4 +1,14 @@
 import { z } from 'zod';
+import { parseIsoDateParts } from '../common/utils/birth-date';
+
+const optionalBirthDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (YYYY-MM-DD).')
+  .refine((value) => parseIsoDateParts(value) != null, {
+    message: 'Data de nascimento inválida.',
+  })
+  .nullable()
+  .optional();
 
 export const createClientRoleSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome.').max(100),
@@ -38,11 +48,7 @@ export const createMemberSchema = z.object({
   name: z.string().trim().min(1, 'Informe o nome.').max(255),
   phone: z.string().trim().max(32).nullable().optional(),
   document: z.string().trim().max(32).nullable().optional(),
-  birthDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (YYYY-MM-DD).')
-    .nullable()
-    .optional(),
+  birthDate: optionalBirthDate,
   isActive: z.boolean().optional().default(true),
   shiftId: z.uuid().nullable().optional(),
 });
@@ -53,11 +59,7 @@ export const updateMemberSchema = z.object({
   email: z.email('E-mail inválido.').optional(),
   phone: z.string().trim().max(32).nullable().optional(),
   document: z.string().trim().max(32).nullable().optional(),
-  birthDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable()
-    .optional(),
+  birthDate: optionalBirthDate,
   password: z
     .union([
       z.literal(''),

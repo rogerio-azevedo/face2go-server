@@ -111,7 +111,7 @@ export function applyRestrictMinorsFieldRules(
 }
 
 export const BIRTH_DATE_REQUIRED_WITH_18_PLUS =
-  'Data de nascimento é obrigatória enquanto houver leitor 18+.';
+  'Data de nascimento é obrigatória enquanto houver leitor com idade mínima.';
 
 export function overrideFromResolved(
   clientType: string,

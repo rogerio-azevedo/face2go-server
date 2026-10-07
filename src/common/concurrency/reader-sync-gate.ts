@@ -37,10 +37,8 @@ export async function withReaderSyncGate<T>(
   const current = new Promise<void>((resolve) => {
     releaseReader = resolve;
   });
-  readerTail.set(
-    readerKey,
-    prev.then(() => current).catch(() => current),
-  );
+  const tail = prev.then(() => current).catch(() => current);
+  readerTail.set(readerKey, tail);
 
   await prev.catch(() => undefined);
   await acquireGlobalSlot();
@@ -49,7 +47,7 @@ export async function withReaderSyncGate<T>(
   } finally {
     releaseGlobalSlot();
     releaseReader();
-    if (readerTail.get(readerKey) === current) {
+    if (readerTail.get(readerKey) === tail) {
       readerTail.delete(readerKey);
     }
   }

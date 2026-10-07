@@ -189,6 +189,12 @@ export class ReadersService {
 
     const passwordEncrypted = d.password ? cipher.encrypt(d.password) : null;
     const username = d.username ?? null;
+    const minimumAccessAge =
+      d.minimumAccessAge !== undefined
+        ? d.minimumAccessAge
+        : d.restrictMinors
+          ? 18
+          : null;
 
     const row = await readersQueries.createReader(this.database.db, {
       companyId,
@@ -205,7 +211,11 @@ export class ReadersService {
       username,
       passwordEncrypted,
       isActive: d.isActive,
-      restrictMinors: d.restrictMinors,
+      restrictMinors: minimumAccessAge != null,
+      minimumAccessAge,
+      agePolicyVersion: minimumAccessAge != null ? 1 : 0,
+      agePolicyStatus: minimumAccessAge != null ? 'pending' : 'applied',
+      agePolicyAppliedAt: minimumAccessAge != null ? null : new Date(),
       connectionMode: d.connectionMode ?? 'direct',
       autoRegisterDeviceId: d.autoRegisterDeviceId ?? null,
     });
@@ -229,8 +239,30 @@ export class ReadersService {
       }
       saved = withDeviceId;
     }
-    if (d.restrictMinors === true) {
+    if (minimumAccessAge != null) {
       await this.ensureBirthDateRequired(d.clientId);
+      if (saved.isActive) {
+        try {
+          await this.faceSync.enqueueAgePolicyReconciliation(
+            d.clientId,
+            saved.id,
+            1,
+            user.sub,
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          await readersQueries.updateReaderAgePolicyStatus(this.database.db, {
+            clientId: d.clientId,
+            readerId: saved.id,
+            version: 1,
+            status: 'failed',
+            error: msg,
+          });
+          throw new BadRequestException(
+            `O leitor foi criado, mas a política de idade não pôde ser enfileirada: ${msg}`,
+          );
+        }
+      }
     }
     return readersQueries.readerRowToPublic(saved);
   }
@@ -257,6 +289,7 @@ export class ReadersService {
       d.location === undefined &&
       d.isActive === undefined &&
       d.restrictMinors === undefined &&
+      d.minimumAccessAge === undefined &&
       d.username === undefined &&
       d.password === undefined &&
       d.direction === undefined &&
@@ -274,6 +307,25 @@ export class ReadersService {
     if (!existing) {
       throw new NotFoundException('Leitor não encontrado.');
     }
+
+    const hasAgePolicyPatch =
+      d.minimumAccessAge !== undefined || d.restrictMinors !== undefined;
+    const requestedMinimumAccessAge = hasAgePolicyPatch
+      ? d.minimumAccessAge !== undefined
+        ? d.minimumAccessAge
+        : d.restrictMinors
+          ? 18
+          : null
+      : existing.minimumAccessAge;
+    const policyChanged =
+      hasAgePolicyPatch &&
+      requestedMinimumAccessAge !== existing.minimumAccessAge;
+    const activating = d.isActive === true && !existing.isActive;
+    const reconciliationNeeded = policyChanged || activating;
+    const finalIsActive = d.isActive ?? existing.isActive;
+    const policyVersion = reconciliationNeeded
+      ? existing.agePolicyVersion + 1
+      : existing.agePolicyVersion;
 
     const cipher = createReaderCredentialsCipher(
       this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
@@ -294,8 +346,19 @@ export class ReadersService {
       ...(d.model !== undefined ? { model: d.model ?? null } : {}),
       ...(d.location !== undefined ? { location: d.location ?? null } : {}),
       ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
-      ...(d.restrictMinors !== undefined
-        ? { restrictMinors: d.restrictMinors }
+      ...(hasAgePolicyPatch
+        ? {
+            restrictMinors: requestedMinimumAccessAge != null,
+            minimumAccessAge: requestedMinimumAccessAge,
+          }
+        : {}),
+      ...(reconciliationNeeded
+        ? {
+            agePolicyVersion: policyVersion,
+            agePolicyStatus: 'pending' as const,
+            agePolicyError: null,
+            agePolicyAppliedAt: null,
+          }
         : {}),
       ...(d.direction !== undefined ? { direction: d.direction } : {}),
       ...(d.connectionMode !== undefined
@@ -342,18 +405,32 @@ export class ReadersService {
     );
     if (!updated) throw new NotFoundException('Leitor não encontrado.');
 
-    if (existing.restrictMinors !== true && d.restrictMinors === true) {
-      await this.ensureBirthDateRequired(existing.clientId);
+    if (reconciliationNeeded && finalIsActive) {
+      const targetClientId = d.clientId ?? existing.clientId;
+      if (requestedMinimumAccessAge != null) {
+        await this.ensureBirthDateRequired(targetClientId);
+      }
       try {
-        await this.faceSync.enqueueMinorRestrictionCleanup(
-          existing.clientId,
+        await this.faceSync.enqueueAgePolicyReconciliation(
+          targetClientId,
           readerId,
+          policyVersion,
           user.sub,
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        await readersQueries.updateReaderAgePolicyStatus(this.database.db, {
+          clientId: targetClientId,
+          readerId,
+          version: policyVersion,
+          status: 'failed',
+          error: msg,
+        });
         this.log.warn(
-          `Falha ao enfileirar limpeza de menores no leitor ${readerId}: ${msg}`,
+          `Falha ao enfileirar política de idade no leitor ${readerId}: ${msg}`,
+        );
+        throw new BadRequestException(
+          `A idade mínima foi salva, mas a aplicação no leitor falhou: ${msg}`,
         );
       }
     }
