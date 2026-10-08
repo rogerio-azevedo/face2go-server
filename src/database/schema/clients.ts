@@ -1,4 +1,6 @@
+import { sql } from 'drizzle-orm';
 import {
+  check,
   pgTable,
   uuid,
   varchar,
@@ -37,6 +39,8 @@ export const clients = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     slug: varchar('slug', { length: 100 }),
     type: clientTypeEnum('type').notNull().default('other'),
+    /** Especialização comercial sem alterar as regras estruturais do tipo. */
+    segment: varchar('segment', { length: 32 }).$type<'condo_market'>(),
     cnpj: varchar('cnpj', { length: 18 }),
     phone: varchar('phone', { length: 20 }),
     email: varchar('email', { length: 255 }),
@@ -80,6 +84,10 @@ export const clients = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (t) => [
+    check(
+      'clients_segment_type_check',
+      sql`${t.segment} IS NULL OR (${t.segment} = 'condo_market' AND ${t.type} = 'condominium')`,
+    ),
     uniqueIndex('clients_company_slug_unique').on(t.companyId, t.slug),
     uniqueIndex('clients_display_token_unique').on(t.displayToken),
     uniqueIndex('clients_display_short_code_unique').on(t.displayShortCode),

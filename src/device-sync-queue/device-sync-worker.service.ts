@@ -147,14 +147,17 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
       });
     }, HEARTBEAT_MS);
     heartbeat.unref();
+    const checkpoint = async () => {
+      if (await this.queue.isCancelRequested(job.id)) {
+        throw new JobCanceledError();
+      }
+    };
     try {
-      await this.handlers.run(job, {
-        checkpoint: async () => {
-          if (await this.queue.isCancelRequested(job.id)) {
-            throw new JobCanceledError();
-          }
-        },
-      });
+      // Também cobre jobs unitários, cujos handlers não possuem um loop
+      // interno no qual inserir pontos de cancelamento.
+      await checkpoint();
+      await this.handlers.run(job, { checkpoint });
+      await checkpoint();
       await this.queue.finish(job.id, this.workerId, { status: 'done' });
     } catch (err) {
       const canceled = err instanceof JobCanceledError;

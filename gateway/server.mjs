@@ -367,6 +367,25 @@ function attachSocket(socket) {
   };
   connections.set(conn.id, conn);
   log(`[conn ${conn.id}] conectado de ${conn.remote}`);
+
+  const cleanup = (reason) => {
+    if (!connections.has(conn.id)) return;
+    stopKeepAlive(conn);
+    connections.delete(conn.id);
+
+    const error = new Error(`conexão encerrada (${reason})`);
+    if (conn.inflight) {
+      clearTimeout(conn.inflight.timer);
+      conn.inflight.reject(error);
+      conn.inflight = null;
+    }
+    for (const item of conn.queue.splice(0)) {
+      clearTimeout(item.timer);
+      item.reject(error);
+    }
+    log(`[conn ${conn.id}] fechado ${conn.device?.DeviceID ?? ''} (${reason})`);
+  };
+
   socket.on('data', (chunk) => {
     try {
       onSocketData(conn, chunk);
@@ -375,13 +394,9 @@ function attachSocket(socket) {
       socket.destroy();
     }
   });
-  socket.on('close', () => {
-    stopKeepAlive(conn);
-    connections.delete(conn.id);
-    log(`[conn ${conn.id}] fechado ${conn.device?.DeviceID ?? ''}`);
-  });
+  socket.on('close', () => cleanup('close'));
   socket.on('error', (err) => {
-    log(`[conn ${conn.id}] socket: ${err.message}`);
+    cleanup(err.message);
   });
 }
 

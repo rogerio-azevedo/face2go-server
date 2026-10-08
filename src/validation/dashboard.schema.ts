@@ -20,6 +20,7 @@ export const clientDashboardRecentAccessSchema = z.object({
 
 export const clientDashboardSchema = z.object({
   clientType: clientTypeSchema,
+  segment: z.enum(['condo_market']).nullable(),
   timezoneOffsetMinutes: z.number().int(),
   registrations: z.object({
     pending: z.number().int(),

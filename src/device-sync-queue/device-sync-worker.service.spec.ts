@@ -73,7 +73,9 @@ describe('DeviceSyncWorkerService.runJob', () => {
 
   it('checkpoint com cancelamento pedido encerra como canceled', async () => {
     const { worker, queue, handlers } = setup();
-    queue.isCancelRequested.mockResolvedValue(true);
+    queue.isCancelRequested
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
     handlers.run.mockImplementation(
       async (_job: unknown, ctx: { checkpoint(): Promise<void> }) => {
         await ctx.checkpoint();
@@ -90,6 +92,37 @@ describe('DeviceSyncWorkerService.runJob', () => {
       expect.anything(),
       'Sync cancelado.',
     );
+  });
+
+  it('não inicia o handler quando o cancelamento já foi pedido', async () => {
+    const { worker, queue, handlers } = setup();
+    queue.isCancelRequested.mockResolvedValue(true);
+
+    await worker.runJob(job());
+
+    expect(handlers.run).not.toHaveBeenCalled();
+    expect(queue.finish).toHaveBeenCalledWith('job-1', worker.workerId, {
+      status: 'canceled',
+      error: new JobCanceledError().message,
+    });
+  });
+
+  it('cancela job unitário quando o pedido chega durante o handler', async () => {
+    const { worker, queue, handlers } = setup();
+    queue.isCancelRequested
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    await worker.runJob(job({ kind: 'face.person' }));
+
+    expect(handlers.run).toHaveBeenCalledTimes(1);
+    expect(queue.finish).toHaveBeenCalledWith('job-1', worker.workerId, {
+      status: 'canceled',
+      error: new JobCanceledError().message,
+    });
+    expect(queue.finish).not.toHaveBeenCalledWith('job-1', worker.workerId, {
+      status: 'done',
+    });
   });
 });
 

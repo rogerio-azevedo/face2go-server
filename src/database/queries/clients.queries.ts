@@ -36,6 +36,7 @@ export type ClientListRow = {
   name: string;
   slug: string | null;
   type: string;
+  segment: 'condo_market' | null;
   cnpj: string | null;
   phone: string | null;
   email: string | null;
@@ -124,6 +125,7 @@ export async function listClients(
       name: clients.name,
       slug: clients.slug,
       type: clients.type,
+      segment: clients.segment,
       cnpj: clients.cnpj,
       phone: clients.phone,
       email: clients.email,
@@ -178,6 +180,7 @@ export type ClientCreateInput = {
   companyId: string;
   name: string;
   type: 'office' | 'clinic' | 'condominium' | 'school' | 'other';
+  segment?: 'condo_market' | null;
   cnpj?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -204,6 +207,7 @@ export async function createClient(db: AppDb, input: ClientCreateInput) {
       name: input.name,
       slug,
       type: input.type,
+      segment: input.segment ?? null,
       cnpj: input.cnpj ?? null,
       phone: input.phone ?? null,
       email: input.email ?? null,
@@ -227,6 +231,7 @@ export async function createClient(db: AppDb, input: ClientCreateInput) {
 export type ClientUpdateInput = Partial<{
   name: string;
   type: 'office' | 'clinic' | 'condominium' | 'school' | 'other';
+  segment: 'condo_market' | null;
   cnpj: string | null;
   phone: string | null;
   email: string | null;
@@ -270,6 +275,7 @@ export async function updateClient(
   }
 
   if (input.type !== undefined) setPayload.type = input.type;
+  if (input.segment !== undefined) setPayload.segment = input.segment;
   if (input.cnpj !== undefined) setPayload.cnpj = input.cnpj;
   if (input.phone !== undefined) setPayload.phone = input.phone;
   if (input.email !== undefined) setPayload.email = input.email;

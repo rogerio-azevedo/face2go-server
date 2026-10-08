@@ -85,6 +85,7 @@ export class DashboardService {
 
     return {
       clientType: client.type,
+      segment: client.segment,
       timezoneOffsetMinutes,
       registrations: {
         pending: facts.pendingRegistrations,

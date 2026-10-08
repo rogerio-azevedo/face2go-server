@@ -34,6 +34,8 @@ export type UserContext =
       clientId: string;
       clientName: string;
       companyId: string;
+      clientType: 'office' | 'clinic' | 'condominium' | 'school' | 'other';
+      segment: 'condo_market' | null;
       role: 'client_admin' | 'client_operator';
       branding: TenantBranding;
       label: string;

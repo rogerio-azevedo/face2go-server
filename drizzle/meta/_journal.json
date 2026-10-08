@@ -624,6 +624,13 @@
       "when": 1779570000000,
       "tag": "0088_reader_device_info",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1779580000000,
+      "tag": "0089_client_segment",
+      "breakpoints": true
     }
   ]
 }

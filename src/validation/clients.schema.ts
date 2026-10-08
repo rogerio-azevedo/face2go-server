@@ -51,6 +51,7 @@ const baseClientShape = {
       message: 'Selecione um tipo válido.',
     },
   ),
+  segment: z.enum(['condo_market']).nullable().optional(),
   cnpj: optionalTrimmed.refine(
     (val) => val == null || (CNPJ_REGEX.test(val) && isValidCnpj(val)),
     { message: 'CNPJ inválido.' },
@@ -119,6 +120,13 @@ export const clientSchemaForCreate = z
     timezoneOffsetMinutes: timezoneOffsetCreate,
   })
   .superRefine((data, ctx) => {
+    if (data.segment === 'condo_market' && data.type !== 'condominium') {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Mercado em condomínio exige tipo Condomínio.',
+        path: ['segment'],
+      });
+    }
     if (data.privacyAlias && !data.privacyPolicyUrl) {
       ctx.addIssue({
         code: 'custom',

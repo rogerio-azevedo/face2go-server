@@ -289,6 +289,7 @@ export class ClientsService {
       companyId,
       name: parsed.data.name,
       type: parsed.data.type,
+      segment: parsed.data.segment,
       cnpj: parsed.data.cnpj,
       phone: parsed.data.phone,
       email: parsed.data.email,
@@ -324,6 +325,7 @@ export class ClientsService {
     if (
       d.name === undefined &&
       d.type === undefined &&
+      d.segment === undefined &&
       d.cnpj === undefined &&
       d.phone === undefined &&
       d.email === undefined &&
@@ -341,6 +343,21 @@ export class ClientsService {
     ) {
       throw new BadRequestException('Nada para atualizar.');
     }
+    if (d.type !== undefined || d.segment !== undefined) {
+      const current = await clientsQueries.getClientById(
+        this.database.db,
+        clientId,
+        companyId,
+      );
+      if (!current) throw new NotFoundException('Cliente não encontrado.');
+      const nextType = d.type ?? current.type;
+      const nextSegment = d.segment !== undefined ? d.segment : current.segment;
+      if (nextSegment === 'condo_market' && nextType !== 'condominium') {
+        throw new BadRequestException(
+          'Mercado em condomínio exige tipo Condomínio.',
+        );
+      }
+    }
     if (d.ienhFilialCode !== undefined && d.ienhFilialCode !== null) {
       await clientsQueries.clearIenhFilialCodeFromOtherClients(
         this.database.db,
@@ -356,6 +373,7 @@ export class ClientsService {
       {
         ...(d.name !== undefined ? { name: d.name } : {}),
         ...(d.type !== undefined ? { type: d.type } : {}),
+        ...(d.segment !== undefined ? { segment: d.segment } : {}),
         ...(d.cnpj !== undefined ? { cnpj: d.cnpj } : {}),
         ...(d.phone !== undefined ? { phone: d.phone } : {}),
         ...(d.email !== undefined ? { email: d.email } : {}),
