@@ -41,6 +41,11 @@ function limited(value: string | null, max: number): string | null {
 
 function safeDeviceError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
+  if (
+    raw === 'O equipamento não informou modelo, firmware ou número de série.'
+  ) {
+    return raw;
+  }
   if (/offline|not online|não conectado/i.test(raw)) {
     return 'Leitor offline. Conecte o equipamento e tente novamente.';
   }
@@ -133,14 +138,23 @@ export class ReadersDeviceInfoService {
       return hikvisionGetDeviceInfo(toHikvisionConnection(reader));
     }
     if (brand === 'intelbras') {
-      const [model, version] = await Promise.all([
-        intelbrasGetDeviceType(reader),
-        intelbrasGetSoftwareVersion(reader),
-      ]);
+      const modelResponse: unknown = await intelbrasGetDeviceType(reader);
+      const versionResponse: unknown =
+        await intelbrasGetSoftwareVersion(reader);
+      const model = typeof modelResponse === 'string' ? modelResponse : null;
+      const rawVersion =
+        versionResponse &&
+        typeof versionResponse === 'object' &&
+        'raw' in versionResponse &&
+        typeof versionResponse.raw === 'string'
+          ? versionResponse.raw
+          : null;
       return {
         model,
         serialNumber: null,
-        firmwareVersion: parseIntelbrasFirmwareLabel(version.raw),
+        firmwareVersion: rawVersion
+          ? parseIntelbrasFirmwareLabel(rawVersion)
+          : null,
       };
     }
     throw new BadRequestException(

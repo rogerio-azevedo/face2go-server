@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 import type { HikvisionReaderConnection } from './hikvision-connection.types';
 import { hikvisionIsapiRequest } from './hikvision-isapi-request';
 
@@ -6,6 +8,8 @@ export type HikvisionDeviceInfo = {
   serialNumber: string | null;
   firmwareVersion: string | null;
 };
+
+const log = new Logger('HikvisionDeviceInfo');
 
 function cleanText(value: unknown): string | null {
   if (typeof value === 'string' || typeof value === 'number') {
@@ -89,12 +93,77 @@ export function parseHikvisionDeviceInfo(
   return { model: null, serialNumber: null, firmwareVersion: null };
 }
 
+function responseShape(payload: unknown): string {
+  if (Buffer.isBuffer(payload)) {
+    return responseShape(payload.toString('utf8'));
+  }
+  if (typeof payload === 'string') {
+    const text = payload.replaceAll('\0', '').trim();
+    if (text.startsWith('{')) {
+      try {
+        return responseShape(JSON.parse(text) as unknown);
+      } catch {
+        return `invalid-json bytes=${Buffer.byteLength(text)}`;
+      }
+    }
+    const tags = [
+      ...new Set(
+        [...text.matchAll(/<(?:[\w-]+:)?([A-Za-z][\w-]*)\b/g)]
+          .slice(0, 20)
+          .map((match) => match[1]),
+      ),
+    ];
+    return `text bytes=${Buffer.byteLength(text)} tags=${tags.join(',')}`;
+  }
+  if (payload && typeof payload === 'object') {
+    const keys = Object.keys(payload).slice(0, 20);
+    return `json keys=${keys.join(',')}`;
+  }
+  return typeof payload;
+}
+
+function hasDeviceInfo(info: HikvisionDeviceInfo): boolean {
+  return Boolean(info.model || info.serialNumber || info.firmwareVersion);
+}
+
 export async function hikvisionGetDeviceInfo(
   connection: HikvisionReaderConnection,
 ): Promise<HikvisionDeviceInfo> {
-  const response = await hikvisionIsapiRequest(connection, {
-    method: 'GET',
-    url: `${connection.baseUrl}/ISAPI/System/deviceInfo?format=json`,
-  });
-  return parseHikvisionDeviceInfo(response.data);
+  // Alguns firmwares no passthrough ISUP só respondem à rota XML sem query.
+  const paths =
+    connection.connectionMode === 'auto_register'
+      ? ['/ISAPI/System/deviceInfo', '/ISAPI/System/deviceInfo?format=json']
+      : ['/ISAPI/System/deviceInfo?format=json', '/ISAPI/System/deviceInfo'];
+  const attempts: string[] = [];
+  let lastError: Error | null = null;
+  let receivedResponse = false;
+
+  for (const path of paths) {
+    try {
+      const response = await hikvisionIsapiRequest(connection, {
+        method: 'GET',
+        url: `${connection.baseUrl}${path}`,
+      });
+      receivedResponse = true;
+      const info = parseHikvisionDeviceInfo(response.data);
+      if (hasDeviceInfo(info)) return info;
+      attempts.push(
+        `${path}: HTTP ${response.status}, ${responseShape(response.data)}`,
+      );
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const status = (error as { response?: { status?: number } } | undefined)
+        ?.response?.status;
+      attempts.push(`${path}: HTTP ${status ?? 'indisponível'}`);
+    }
+  }
+
+  log.warn(
+    `Sem identificação do equipamento readerId=${connection.id ?? 'desconhecido'} ` +
+      `mode=${connection.connectionMode ?? 'direct'} attempts=[${attempts.join('; ')}]`,
+  );
+  if (!receivedResponse && lastError) throw lastError;
+  throw new Error(
+    'O equipamento não informou modelo, firmware ou número de série.',
+  );
 }
