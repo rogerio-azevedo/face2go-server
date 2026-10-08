@@ -301,6 +301,7 @@ export class ClientsService {
       supportWhatsapp: parsed.data.supportWhatsapp,
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
+      autoApproveRegistrations: parsed.data.autoApproveRegistrations,
     });
     await membersQueries.seedDefaultRolesForClient(
       this.database.db,
@@ -335,6 +336,7 @@ export class ClientsService {
       d.supportWhatsapp === undefined &&
       d.timezoneOffsetMinutes === undefined &&
       d.isActive === undefined &&
+      d.autoApproveRegistrations === undefined &&
       d.ienhFilialCode === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
@@ -380,6 +382,9 @@ export class ClientsService {
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
           : {}),
         ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+        ...(d.autoApproveRegistrations !== undefined
+          ? { autoApproveRegistrations: d.autoApproveRegistrations }
+          : {}),
         ...(d.ienhFilialCode !== undefined
           ? { ienhFilialCode: d.ienhFilialCode }
           : {}),

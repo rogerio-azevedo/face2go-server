@@ -8,6 +8,7 @@ import * as registrationsQueries from '../database/queries/registrations.queries
 import { ClientBlocksRepository } from '../client-blocks/client-blocks.repository';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { PublicRegistrationService } from './public-registration.service';
+import { RegistrationsAdminService } from './registrations-admin.service';
 import { DOCUMENT_ALREADY_MEMBER_MESSAGE } from './registration-document-unique';
 import { UNIT_INVALID_MESSAGE } from './resolve-condominium-unit';
 
@@ -32,7 +33,7 @@ const condominiumBundle = {
     supportWhatsapp: ' (65) 99999-8888 ',
     registrationConfig: null,
   },
-} as never;
+};
 
 const submitBody = {
   registrationId,
@@ -52,6 +53,9 @@ describe('PublicRegistrationService', () => {
     countActiveUnits: jest.fn(),
     listActiveCatalog: jest.fn(),
   };
+  const registrationsAdmin = {
+    approveAutomatically: jest.fn(),
+  };
 
   beforeEach(async () => {
     blocks.getActiveUnitLocation.mockReset().mockResolvedValue({
@@ -63,6 +67,7 @@ describe('PublicRegistrationService', () => {
     });
     blocks.countActiveUnits.mockReset().mockResolvedValue(1);
     blocks.listActiveCatalog.mockReset().mockResolvedValue([]);
+    registrationsAdmin.approveAutomatically.mockReset().mockResolvedValue({});
 
     const module = await Test.createTestingModule({
       providers: [
@@ -73,6 +78,7 @@ describe('PublicRegistrationService', () => {
           useValue: { assertObjectExists: jest.fn() },
         },
         { provide: ClientBlocksRepository, useValue: blocks },
+        { provide: RegistrationsAdminService, useValue: registrationsAdmin },
       ],
     }).compile();
 
@@ -83,7 +89,7 @@ describe('PublicRegistrationService', () => {
   it('devolve 409 quando o documento já está no cliente', async () => {
     jest
       .spyOn(registrationsQueries, 'getActiveRegistrationLinkWithClient')
-      .mockResolvedValue(condominiumBundle);
+      .mockResolvedValue(condominiumBundle as never);
     jest
       .spyOn(readersQueries, 'hasRestrictMinorsReaderByClient')
       .mockResolvedValue(false);
@@ -102,7 +108,7 @@ describe('PublicRegistrationService', () => {
   it('recusa unidade de bloco administrativo no cadastro público', async () => {
     jest
       .spyOn(registrationsQueries, 'getActiveRegistrationLinkWithClient')
-      .mockResolvedValue(condominiumBundle);
+      .mockResolvedValue(condominiumBundle as never);
     jest
       .spyOn(readersQueries, 'hasRestrictMinorsReaderByClient')
       .mockResolvedValue(false);
@@ -122,7 +128,7 @@ describe('PublicRegistrationService', () => {
   it('preview lista só blocos residenciais', async () => {
     jest
       .spyOn(registrationsQueries, 'getActiveRegistrationLinkWithClient')
-      .mockResolvedValue(condominiumBundle);
+      .mockResolvedValue(condominiumBundle as never);
     jest
       .spyOn(readersQueries, 'hasRestrictMinorsReaderByClient')
       .mockResolvedValue(false);
@@ -168,6 +174,77 @@ describe('PublicRegistrationService', () => {
       'client-1',
       '52998224725',
       undefined,
+    );
+  });
+
+  it('mantém o cadastro pendente quando a aprovação automática está desativada', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getActiveRegistrationLinkWithClient')
+      .mockResolvedValue({
+        ...condominiumBundle,
+        client: {
+          ...condominiumBundle.client,
+          autoApproveRegistrations: false,
+        },
+      } as never);
+    jest
+      .spyOn(readersQueries, 'hasRestrictMinorsReaderByClient')
+      .mockResolvedValue(false);
+    jest
+      .spyOn(membersQueries, 'findMemberByNormalizedDocument')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(registrationsQueries, 'findRegistrationByNormalizedDocument')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(undefined);
+    jest.spyOn(registrationsQueries, 'insertRegistration').mockResolvedValue({
+      id: registrationId,
+    } as never);
+
+    const result = await service.submit('569SQ7AF', submitBody);
+
+    expect(result.message).toBe(
+      'Cadastro recebido. Aguarde a aprovação do administrador do cliente.',
+    );
+    expect(registrationsAdmin.approveAutomatically).not.toHaveBeenCalled();
+  });
+
+  it('executa a aprovação existente quando o cliente habilita auto approve', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getActiveRegistrationLinkWithClient')
+      .mockResolvedValue({
+        ...condominiumBundle,
+        client: {
+          ...condominiumBundle.client,
+          autoApproveRegistrations: true,
+        },
+      } as never);
+    jest
+      .spyOn(readersQueries, 'hasRestrictMinorsReaderByClient')
+      .mockResolvedValue(false);
+    jest
+      .spyOn(membersQueries, 'findMemberByNormalizedDocument')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(registrationsQueries, 'findRegistrationByNormalizedDocument')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(undefined);
+    jest.spyOn(registrationsQueries, 'insertRegistration').mockResolvedValue({
+      id: registrationId,
+    } as never);
+
+    const result = await service.submit('569SQ7AF', submitBody);
+
+    expect(registrationsAdmin.approveAutomatically).toHaveBeenCalledWith(
+      'client-1',
+      registrationId,
+    );
+    expect(result.message).toBe(
+      'Cadastro recebido. Aguarde a aprovação do administrador do cliente.',
     );
   });
 });

@@ -371,10 +371,18 @@ export class RegistrationsAdminService {
     return this.approveShared(clientId, registrationId, user.sub);
   }
 
+  async approveAutomatically(clientId: string, registrationId: string) {
+    return this.approveShared(clientId, registrationId, null, {
+      eventBody: 'Aprovação automática pela configuração do cliente.',
+      mapResult: false,
+    });
+  }
+
   private async approveShared(
     clientId: string,
     registrationId: string,
-    decidedByUserId: string,
+    decidedByUserId: string | null,
+    options?: { eventBody?: string | null; mapResult?: boolean },
   ) {
     const client = await clientsQueries.getClientByIdOnly(
       this.database.db,
@@ -404,6 +412,7 @@ export class RegistrationsAdminService {
         registrationId,
         type: 'approved',
         authorUserId: decidedByUserId,
+        body: options?.eventBody ?? null,
       },
       (db) =>
         registrationsQueries.approveRegistration(
@@ -440,7 +449,7 @@ export class RegistrationsAdminService {
         await this.faceSync.enqueueApprovedRegistrationJob(
           registrationId,
           clientId,
-          decidedByUserId,
+          decidedByUserId ?? undefined,
         );
       } catch (err: unknown) {
         const msg =
@@ -483,6 +492,7 @@ export class RegistrationsAdminService {
       }
     }
 
+    if (options?.mapResult === false) return rowOut;
     return await this.mapRowForClient(rowOut, clientId);
   }
 
@@ -1185,7 +1195,7 @@ export class RegistrationsAdminService {
       clientId: string;
       registrationId: string;
       type: RegistrationEventType;
-      authorUserId: string;
+      authorUserId: string | null;
       body?: string | null;
     },
     change: (db: AppDb) => Promise<T | undefined>,

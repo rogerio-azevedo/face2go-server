@@ -49,6 +49,7 @@ export type ClientListRow = {
   timezoneOffsetMinutes: number;
   ienhFilialCode: number | null;
   isActive: boolean;
+  autoApproveRegistrations: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -136,6 +137,7 @@ export async function listClients(
       timezoneOffsetMinutes: clients.timezoneOffsetMinutes,
       ienhFilialCode: clients.ienhFilialCode,
       isActive: clients.isActive,
+      autoApproveRegistrations: clients.autoApproveRegistrations,
       createdAt: clients.createdAt,
       updatedAt: clients.updatedAt,
     })
@@ -188,6 +190,7 @@ export type ClientCreateInput = {
   supportWhatsapp?: string | null;
   timezoneOffsetMinutes?: number;
   isActive?: boolean;
+  autoApproveRegistrations?: boolean;
 };
 
 export async function createClient(db: AppDb, input: ClientCreateInput) {
@@ -213,6 +216,7 @@ export async function createClient(db: AppDb, input: ClientCreateInput) {
       supportWhatsapp: input.supportWhatsapp ?? null,
       timezoneOffsetMinutes: input.timezoneOffsetMinutes ?? 0,
       isActive: input.isActive ?? true,
+      autoApproveRegistrations: input.autoApproveRegistrations ?? false,
       updatedAt: now,
     })
     .returning();
@@ -236,6 +240,7 @@ export type ClientUpdateInput = Partial<{
   timezoneOffsetMinutes: number;
   ienhFilialCode: number | null;
   isActive: boolean;
+  autoApproveRegistrations: boolean;
 }>;
 
 export async function updateClient(
@@ -285,6 +290,9 @@ export async function updateClient(
     setPayload.timezoneOffsetMinutes = input.timezoneOffsetMinutes;
   }
   if (input.isActive !== undefined) setPayload.isActive = input.isActive;
+  if (input.autoApproveRegistrations !== undefined) {
+    setPayload.autoApproveRegistrations = input.autoApproveRegistrations;
+  }
   if (input.ienhFilialCode !== undefined) {
     setPayload.ienhFilialCode = input.ienhFilialCode;
   }

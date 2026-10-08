@@ -393,7 +393,7 @@ export async function approveRegistration(
   db: AppDb,
   registrationId: string,
   clientId: string,
-  approvedByUserId: string,
+  approvedByUserId: string | null,
 ): Promise<RegistrationRow | undefined> {
   const now = new Date();
   const [row] = await db

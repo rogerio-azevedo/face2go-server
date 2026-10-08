@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { z } from 'zod';
@@ -22,6 +23,7 @@ import { normalizeRegistrationFields } from './registration-additional-data';
 import { resolveCondominiumUnit } from './resolve-condominium-unit';
 import { assertDocumentAvailableInClient } from './registration-document-unique';
 import { resolveFieldsConsideringRestrictMinors } from './registration-fields-resolve';
+import { RegistrationsAdminService } from './registrations-admin.service';
 
 const presignBodySchema = z.object({
   registrationId: z.string().uuid(),
@@ -60,10 +62,13 @@ function isLinkBundleUsable(
 
 @Injectable()
 export class PublicRegistrationService {
+  private readonly logger = new Logger(PublicRegistrationService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly r2: R2StorageService,
     private readonly blocks: ClientBlocksRepository,
+    private readonly registrationsAdmin: RegistrationsAdminService,
   ) {}
 
   async getPreview(code: string) {
@@ -282,30 +287,22 @@ export class PublicRegistrationService {
       throw new ConflictException('Este cadastro já foi enviado.');
     }
 
+    let row: registrationsQueries.RegistrationRow;
     try {
-      const row = await registrationsQueries.insertRegistration(
-        this.database.db,
-        {
-          id: registrationId,
-          registrationLinkId: bundle.link.id,
-          clientId: bundle.client.id,
-          name: name.trim(),
-          document: normalized.document,
-          phone: normalized.phone,
-          email: normalized.email,
-          birthDate: normalized.birthDate,
-          faceImageKey,
-          additionalData: location.additionalData,
-          unitId: location.unitId,
-          truthDeclaredAt,
-        },
-      );
-      return {
-        success: true as const,
-        registrationId: row.id,
-        message:
-          'Cadastro recebido. Aguarde a aprovação do administrador do cliente.',
-      };
+      row = await registrationsQueries.insertRegistration(this.database.db, {
+        id: registrationId,
+        registrationLinkId: bundle.link.id,
+        clientId: bundle.client.id,
+        name: name.trim(),
+        document: normalized.document,
+        phone: normalized.phone,
+        email: normalized.email,
+        birthDate: normalized.birthDate,
+        faceImageKey,
+        additionalData: location.additionalData,
+        unitId: location.unitId,
+        truthDeclaredAt,
+      });
     } catch (e: unknown) {
       const codePg =
         e && typeof e === 'object' && 'code' in e ? String(e.code) : '';
@@ -314,5 +311,27 @@ export class PublicRegistrationService {
       }
       throw e;
     }
+
+    if (bundle.client.autoApproveRegistrations) {
+      try {
+        await this.registrationsAdmin.approveAutomatically(
+          bundle.client.id,
+          row.id,
+        );
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : 'Falha na aprovação automática.';
+        this.logger.warn(
+          `Aprovação automática falhou client=${bundle.client.id} reg=${row.id}: ${message}`,
+        );
+      }
+    }
+
+    return {
+      success: true as const,
+      registrationId: row.id,
+      message:
+        'Cadastro recebido. Aguarde a aprovação do administrador do cliente.',
+    };
   }
 }

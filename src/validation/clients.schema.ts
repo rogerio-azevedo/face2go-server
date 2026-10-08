@@ -90,6 +90,7 @@ const baseClientShape = {
   supportPhone: optionalTrimmed,
   supportWhatsapp: optionalTrimmed,
   isActive: z.boolean(),
+  autoApproveRegistrations: z.boolean().default(false),
 };
 
 /** Campo obrigatório no create (omissão/no branco ⇒ 0 = UTC). */

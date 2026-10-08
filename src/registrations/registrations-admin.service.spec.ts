@@ -378,4 +378,48 @@ describe('RegistrationsAdminService lifecycle', () => {
 
     expect(email.sendRegistrationApprovedEmail).not.toHaveBeenCalled();
   });
+
+  it('registra a aprovação automática como ação do sistema', async () => {
+    const row = {
+      id: 'reg-1',
+      clientId: 'client-1',
+      status: 'approved',
+      isActive: true,
+      submittedAt: new Date(),
+      name: 'Ana',
+      email: null,
+      faceImageKey: 'face-key',
+    };
+    mockApprove(row);
+    jest
+      .spyOn(registrationsQueries, 'bumpClientFaceCounter')
+      .mockResolvedValue(12);
+    jest
+      .spyOn(registrationsQueries, 'setRegistrationFaceAfterApprove')
+      .mockResolvedValue({ ...row, faceId: 12 } as never);
+
+    await service.approveAutomatically('client-1', 'reg-1');
+
+    expect(registrationsQueries.approveRegistration).toHaveBeenCalledWith(
+      db,
+      'reg-1',
+      'client-1',
+      null,
+    );
+    expect(events.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: 'client-1',
+        registrationId: 'reg-1',
+        type: 'approved',
+        authorUserId: null,
+        body: 'Aprovação automática pela configuração do cliente.',
+      }),
+      db,
+    );
+    expect(faceSync.enqueueApprovedRegistrationJob).toHaveBeenCalledWith(
+      'reg-1',
+      'client-1',
+      undefined,
+    );
+  });
 });

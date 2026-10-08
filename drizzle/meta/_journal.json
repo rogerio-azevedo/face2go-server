@@ -610,6 +610,13 @@
       "when": 1779550000000,
       "tag": "0086_reader_minimum_access_age",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1779560000000,
+      "tag": "0087_clients_auto_approve_registrations",
+      "breakpoints": true
     }
   ]
 }
