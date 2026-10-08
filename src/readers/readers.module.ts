@@ -12,6 +12,8 @@ import { ReadersDeviceUsersController } from './readers-device-users.controller'
 import { ReadersDeviceUsersService } from './readers-device-users.service';
 import { ReadersDeviceWipeSyncService } from './readers-device-wipe-sync.service';
 import { ReadersCredentialsService } from './readers-credentials.service';
+import { ReadersDeviceInfoRepository } from './readers-device-info.repository';
+import { ReadersDeviceInfoService } from './readers-device-info.service';
 import { ReadersRemoteOpenService } from './readers-remote-open.service';
 import { ReadersService } from './readers.service';
 
@@ -35,6 +37,8 @@ import { ReadersService } from './readers.service';
     ReadersDeviceWipeSyncService,
     ReadersRemoteOpenService,
     ReadersCredentialsService,
+    ReadersDeviceInfoService,
+    ReadersDeviceInfoRepository,
   ],
 })
 export class ReadersModule {}

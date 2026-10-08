@@ -2712,6 +2712,66 @@
         ]
       }
     },
+    "/readers/{readerId}/device-info/refresh": {
+      "post": {
+        "operationId": "ReadersController_refreshDeviceInfo",
+        "parameters": [
+          {
+            "name": "readerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "model",
+                    "serialNumber",
+                    "firmwareVersion",
+                    "syncedAt"
+                  ],
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "serialNumber": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "firmwareVersion": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "syncedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Consultar e persistir modelo, firmware e serial do equipamento",
+        "tags": [
+          "readers"
+        ]
+      }
+    },
     "/readers/{readerId}/open": {
       "post": {
         "operationId": "ReadersController_openDoor",

@@ -30,6 +30,9 @@ export type ReaderListRow = {
   port: number;
   serialNumber: string | null;
   model: string | null;
+  firmwareVersion: string | null;
+  deviceInfoSyncedAt: Date | null;
+  deviceInfoLastError: string | null;
   location: string | null;
   username: string | null;
   hasCredentials: boolean;
@@ -73,6 +76,9 @@ export async function listReaders(
       port: facialReaders.port,
       serialNumber: facialReaders.serialNumber,
       model: facialReaders.model,
+      firmwareVersion: facialReaders.firmwareVersion,
+      deviceInfoSyncedAt: facialReaders.deviceInfoSyncedAt,
+      deviceInfoLastError: facialReaders.deviceInfoLastError,
       location: facialReaders.location,
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,
@@ -124,6 +130,9 @@ export async function getReaderById(
       port: facialReaders.port,
       serialNumber: facialReaders.serialNumber,
       model: facialReaders.model,
+      firmwareVersion: facialReaders.firmwareVersion,
+      deviceInfoSyncedAt: facialReaders.deviceInfoSyncedAt,
+      deviceInfoLastError: facialReaders.deviceInfoLastError,
       location: facialReaders.location,
       username: facialReaders.username,
       passwordEncrypted: facialReaders.passwordEncrypted,

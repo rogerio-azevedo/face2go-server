@@ -3,18 +3,26 @@ import {
   Controller,
   Get,
   Header,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ReadersCredentialsService } from './readers-credentials.service';
+import { ReadersDeviceInfoService } from './readers-device-info.service';
 import { ReadersRemoteOpenService } from './readers-remote-open.service';
 import { ReadersService } from './readers.service';
 
@@ -27,6 +35,7 @@ export class ReadersController {
     private readonly readersService: ReadersService,
     private readonly remoteOpen: ReadersRemoteOpenService,
     private readonly credentials: ReadersCredentialsService,
+    private readonly deviceInfo: ReadersDeviceInfoService,
   ) {}
 
   @Get('monitor/status')
@@ -109,6 +118,30 @@ export class ReadersController {
     @Param('readerId', ParseUUIDPipe) readerId: string,
   ) {
     return this.credentials.revealPassword(user, readerId);
+  }
+
+  @Post(':readerId/device-info/refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Consultar e persistir modelo, firmware e serial do equipamento',
+  })
+  @ApiOkResponse({
+    schema: {
+      type: 'object',
+      required: ['model', 'serialNumber', 'firmwareVersion', 'syncedAt'],
+      properties: {
+        model: { type: 'string', nullable: true },
+        serialNumber: { type: 'string', nullable: true },
+        firmwareVersion: { type: 'string', nullable: true },
+        syncedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  refreshDeviceInfo(
+    @CurrentUser() user: JwtPayload,
+    @Param('readerId', ParseUUIDPipe) readerId: string,
+  ) {
+    return this.deviceInfo.refresh(user, readerId);
   }
 
   @Post(':readerId/open')

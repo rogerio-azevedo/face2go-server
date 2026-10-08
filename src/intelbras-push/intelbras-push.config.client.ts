@@ -47,6 +47,22 @@ export function parseIntelbrasFirmwareDate(text: string): number | null {
   return null;
 }
 
+export function parseIntelbrasFirmwareLabel(text: string): string | null {
+  const config = parseIntelbrasConfigText(text);
+  const version =
+    config['version.Version'] ??
+    config['Version.Version'] ??
+    /(?:^|\n)version\s*[=:]\s*([^\r\n]+)/i.exec(text)?.[1]?.trim();
+  const build =
+    config['version.BuildDate'] ??
+    config['Version.BuildDate'] ??
+    /build\s*[=:]\s*([^\r\n]+)/i.exec(text)?.[1]?.trim();
+  if (version && build && !version.includes(build)) {
+    return `${version} (${build})`;
+  }
+  return version || build || null;
+}
+
 export async function intelbrasGetDeviceType(
   reader: PlainReaderCredential,
 ): Promise<string> {

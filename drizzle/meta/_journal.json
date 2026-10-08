@@ -617,6 +617,13 @@
       "when": 1779560000000,
       "tag": "0087_clients_auto_approve_registrations",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1779570000000,
+      "tag": "0088_reader_device_info",
+      "breakpoints": true
     }
   ]
 }
