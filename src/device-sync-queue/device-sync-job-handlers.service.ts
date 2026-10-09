@@ -176,6 +176,25 @@ export class DeviceSyncJobHandlersService {
       let processed = already;
       for (const person of people) {
         await ctx.checkpoint();
+        if (person.entityKind === 'registration') {
+          const registration =
+            await registrationsQueries.getRegistrationByIdForClient(
+              this.database.db,
+              person.id,
+              job.clientId,
+            );
+          if (
+            !registration?.isActive ||
+            (registration.status !== 'approved' &&
+              registration.status !== 'blocked') ||
+            registration.faceId !== person.faceId ||
+            registration.faceImageKey !== person.photoKey
+          ) {
+            processed += 1;
+            await this.queue.update(job.id, { processed, total });
+            continue;
+          }
+        }
         const { buffer } = await this.r2.getObjectBytes(person.photoKey);
         const outcome = await this.faceSync.syncPersonOnReaders({
           clientId: job.clientId,

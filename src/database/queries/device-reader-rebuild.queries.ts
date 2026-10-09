@@ -47,6 +47,7 @@ export async function listApprovedRegistrationsWithFaceByClient(
     .where(
       and(
         eq(registrations.clientId, clientId),
+        eq(registrations.isActive, true),
         inArray(registrations.status, ['approved', 'blocked']),
         isNotNull(registrations.faceImageKey),
         isNotNull(registrations.faceId),
