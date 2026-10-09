@@ -2,6 +2,7 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import {
+  clientMembers,
   clients,
   registrationEvents,
   registrationFaceRetakeLinks,
@@ -137,7 +138,8 @@ export async function consumeFaceRetakeAndSetPhoto(
       registration.submittedAt != null &&
       (registration.status === 'draft' ||
         registration.status === 'rejected' ||
-        registration.status === 'approved');
+        registration.status === 'approved' ||
+        registration.status === 'blocked');
     if (!canRetake) {
       return { ok: false, reason: 'ineligible' };
     }
@@ -185,6 +187,17 @@ export async function consumeFaceRetakeAndSetPhoto(
     if (!updated) {
       return { ok: false, reason: 'ineligible' };
     }
+    if (updated.status === 'approved' || updated.status === 'blocked') {
+      await tx
+        .update(clientMembers)
+        .set({ photoKey: faceImageKey, updatedAt: now })
+        .where(
+          and(
+            eq(clientMembers.clientId, link.clientId),
+            eq(clientMembers.registrationId, updated.id),
+          ),
+        );
+    }
     await tx.insert(registrationEvents).values({
       registrationId: updated.id,
       clientId: link.clientId,
@@ -193,7 +206,9 @@ export async function consumeFaceRetakeAndSetPhoto(
         ? 'Nova foto recebida; cadastro enviado para nova análise.'
         : updated.status === 'approved'
           ? 'Nova foto recebida; reenvio forçado aos leitores solicitado.'
-          : 'Nova foto recebida; cadastro permanece aguardando aprovação.',
+          : updated.status === 'blocked'
+            ? 'Nova foto recebida; atualização nos leitores solicitada sem remover o bloqueio.'
+            : 'Nova foto recebida; cadastro permanece aguardando aprovação.',
       authorUserId: null,
     });
     return { ok: true, registration: updated };

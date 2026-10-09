@@ -17,7 +17,8 @@ export function registrationCanRetakeFace(row: {
     row.submittedAt != null &&
     (row.status === 'draft' ||
       row.status === 'rejected' ||
-      row.status === 'approved')
+      row.status === 'approved' ||
+      row.status === 'blocked')
   );
 }
 

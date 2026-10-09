@@ -386,6 +386,33 @@ describe('FaceSyncService', () => {
     });
   });
 
+  it('mantém o perfil bloqueado ao enfileirar foto nova', async () => {
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue(
+        registration({
+          status: 'blocked',
+          faceImageKey: 'nova-foto.jpg',
+          faceId: 10,
+        }),
+      );
+    jest
+      .spyOn(registrationsQueries, 'updateRegistrationDeviceSync')
+      .mockResolvedValue(registration({ status: 'blocked' }));
+
+    await service.enqueueApprovedRegistrationJob(
+      'reg-1',
+      'client-1',
+      'user-1',
+      { resetReaderProgress: true },
+    );
+
+    const [arg] = queue.enqueue.mock.calls[0] as [
+      { payload: { blocked?: boolean } },
+    ];
+    expect(arg.payload.blocked).toBe(true);
+  });
+
   it('marca sync_failed quando a fila recusa o job', async () => {
     jest
       .spyOn(registrationsQueries, 'getRegistrationByIdForClient')

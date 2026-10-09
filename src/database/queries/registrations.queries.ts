@@ -438,8 +438,9 @@ export async function rejectRegistration(
       and(
         eq(registrations.id, registrationId),
         eq(registrations.clientId, clientId),
-        eq(registrations.status, 'draft'),
+        inArray(registrations.status, ['draft', 'approved']),
         isNotNull(registrations.submittedAt),
+        eq(registrations.isActive, true),
       ),
     )
     .returning();

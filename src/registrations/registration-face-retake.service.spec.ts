@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 
@@ -86,16 +85,20 @@ describe('RegistrationFaceRetakeService', () => {
     expect(retakes.insertReplacingOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('recusa gerar link para cadastro bloqueado', async () => {
+  it('gera link para cadastro bloqueado', async () => {
     retakes.findRegistration.mockResolvedValue({
       isActive: true,
       submittedAt: new Date(),
       status: 'blocked',
     });
-    await expect(
-      service.createForClientTenant(user, registrationId),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(retakes.insertReplacingOpen).not.toHaveBeenCalled();
+    retakes.insertReplacingOpen.mockImplementation(
+      (input: { code: string; expiresAt: Date }) => input,
+    );
+
+    const result = await service.createForClientTenant(user, registrationId);
+
+    expect(result.url).toContain('/cadastro/refazer/');
+    expect(retakes.insertReplacingOpen).toHaveBeenCalledTimes(1);
   });
 
   it('devolve a URL pública e a mensagem padrão', async () => {
@@ -148,6 +151,47 @@ describe('RegistrationFaceRetakeService', () => {
     const result = await service.uploadPhoto('ABC123', file);
 
     expect(result.faceImageKey).toBe('co/client-1/reg/face.jpg');
+    expect(result.outcome).toBe('force_sync_queued');
+    expect(faceSync.enqueueApprovedRegistrationJob).toHaveBeenCalledWith(
+      registrationId,
+      'client-1',
+      undefined,
+      { resetReaderProgress: true },
+    );
+  });
+
+  it('atualiza a foto no leitor sem desbloquear o cadastro', async () => {
+    retakes.findBundleByCode.mockResolvedValue({
+      companyId: 'company-1',
+      clientIsActive: true,
+      clientName: 'Portaria',
+      clientLogoUrl: null,
+      link: { usedAt: null, expiresAt: new Date(Date.now() + 60_000) },
+      registration: {
+        id: registrationId,
+        clientId: 'client-1',
+        name: 'Maria Souza',
+        isActive: true,
+        submittedAt: new Date(),
+        status: 'blocked',
+      },
+    });
+    retakes.consumeAndSetFace.mockResolvedValue({
+      ok: true,
+      registration: {
+        id: registrationId,
+        clientId: 'client-1',
+        status: 'blocked',
+        faceId: 12,
+      },
+    });
+
+    const file = {
+      buffer: Buffer.alloc(2048, 1),
+      mimetype: 'image/jpeg',
+    } as Express.Multer.File;
+    const result = await service.uploadPhoto('ABC123', file);
+
     expect(result.outcome).toBe('force_sync_queued');
     expect(faceSync.enqueueApprovedRegistrationJob).toHaveBeenCalledWith(
       registrationId,

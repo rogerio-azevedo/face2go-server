@@ -164,6 +164,88 @@ describe('RegistrationsAdminService lifecycle', () => {
     );
   });
 
+  it('rejeita cadastro aprovado somente após remover a face dos leitores', async () => {
+    jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
+      id: 'client-1',
+      companyId: 'company-1',
+    } as never);
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue({
+        id: 'reg-1',
+        clientId: 'client-1',
+        status: 'approved',
+        isActive: true,
+        submittedAt: new Date(),
+        faceId: 12,
+        name: 'Ana',
+      } as never);
+    const reject = jest
+      .spyOn(registrationsQueries, 'rejectRegistration')
+      .mockResolvedValue({
+        id: 'reg-1',
+        clientId: 'client-1',
+        status: 'rejected',
+        isActive: true,
+        faceId: 12,
+        name: 'Ana',
+      } as never);
+
+    await service.rejectForCompanyUser(companyAdmin(), 'client-1', 'reg-1', {
+      notes: 'Foto escura',
+    });
+
+    expect(faceSync.removePersonFromReaders).toHaveBeenCalledWith({
+      clientId: 'client-1',
+      faceId: 12,
+      logContext: 'reject-registration=reg-1',
+      requireAll: true,
+    });
+    expect(members.setActiveByRegistrationId).toHaveBeenCalledWith(
+      'client-1',
+      'reg-1',
+      false,
+    );
+    expect(reject).toHaveBeenCalledWith(
+      expect.anything(),
+      'reg-1',
+      'client-1',
+      'admin-1',
+      'Foto escura',
+    );
+    expect(
+      faceSync.removePersonFromReaders.mock.invocationCallOrder[0],
+    ).toBeLessThan(reject.mock.invocationCallOrder[0]);
+  });
+
+  it('mantém o cadastro aprovado quando algum leitor não remove a face', async () => {
+    jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
+      id: 'client-1',
+      companyId: 'company-1',
+    } as never);
+    jest
+      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+      .mockResolvedValue({
+        id: 'reg-1',
+        clientId: 'client-1',
+        status: 'approved',
+        isActive: true,
+        submittedAt: new Date(),
+        faceId: 12,
+      } as never);
+    const reject = jest.spyOn(registrationsQueries, 'rejectRegistration');
+    faceSync.removePersonFromReaders.mockRejectedValueOnce(
+      new Error('Leitor indisponível'),
+    );
+
+    await expect(
+      service.rejectForCompanyUser(companyAdmin(), 'client-1', 'reg-1', {}),
+    ).rejects.toThrow('Leitor indisponível');
+
+    expect(reject).not.toHaveBeenCalled();
+    expect(members.setActiveByRegistrationId).not.toHaveBeenCalled();
+  });
+
   it('restaura cadastro e enfileira resync da face', async () => {
     jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
       id: 'client-1',

@@ -1039,7 +1039,26 @@ export class MembersService {
       registration.id,
     );
     if (existingByReg) {
-      return existingByReg;
+      return membersQueries.updateMember(
+        this.database.db,
+        existingByReg.id,
+        registration.clientId,
+        {
+          isActive: true,
+          name: registration.name?.trim() || existingByReg.name,
+          email: registration.email,
+          phone: registration.phone,
+          document: registration.document,
+          birthDate: toIsoDateString(registration.birthDate),
+          photoKey: registration.faceImageKey,
+          faceId: registration.faceId,
+          deviceSyncStatus: registration.deviceSyncStatus,
+          deviceSyncedAt: registration.deviceSyncedAt,
+          deviceSyncError: registration.deviceSyncError,
+          additionalData: registration.additionalData,
+          unitId: registration.unitId,
+        },
+      );
     }
 
     await assertDocumentAvailableInClient(

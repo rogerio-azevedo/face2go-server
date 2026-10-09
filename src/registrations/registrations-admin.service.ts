@@ -526,6 +526,50 @@ export class RegistrationsAdminService {
       throw new BadRequestException(zodFirstMessage(parsed.error));
     }
     const notes = parsed.data.notes?.trim() ?? null;
+    const existing = await registrationsQueries.getRegistrationByIdForClient(
+      this.database.db,
+      registrationId,
+      clientId,
+    );
+    if (!existing || !existing.isActive || !existing.submittedAt) {
+      throw new NotFoundException(
+        'Cadastro não encontrado ou já foi processado.',
+      );
+    }
+    if (existing.status !== 'draft' && existing.status !== 'approved') {
+      throw new BadRequestException(
+        'Só é possível rejeitar cadastros aguardando ou aprovados.',
+      );
+    }
+
+    if (existing.status === 'approved') {
+      const member = await this.membersService.getByRegistrationId(
+        clientId,
+        registrationId,
+      );
+      if (existing.faceId != null) {
+        const removeFromReader =
+          await this.personProfile.shouldRemoveFaceFromReader(
+            existing.faceId,
+            clientId,
+            { memberId: member?.id },
+          );
+        if (removeFromReader) {
+          await this.faceSync.removePersonFromReaders({
+            clientId,
+            faceId: existing.faceId,
+            logContext: `reject-registration=${registrationId}`,
+            requireAll: true,
+          });
+        }
+      }
+      await this.membersService.setActiveByRegistrationId(
+        clientId,
+        registrationId,
+        false,
+      );
+    }
+
     const updated = await this.withEvent(
       {
         clientId,

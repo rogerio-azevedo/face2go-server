@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import * as personReaderSyncQueries from '../database/queries/person-reader-sync.queries';
 import * as readersQueries from '../database/queries/readers.queries';
+import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as vehicleCameraSyncQueries from '../database/queries/vehicle-camera-sync.queries';
 import type { DeviceSyncJobRow } from '../database/schema/device-sync-jobs';
 import { FaceReaderRebuildService } from '../face-sync/face-reader-rebuild.service';
@@ -97,6 +98,23 @@ export class DeviceSyncJobHandlersService {
     const payload = job.payload as FacePersonJobPayload;
     if (!payload.photoKey || payload.faceId == null) {
       throw new Error('Job de face sem photoKey/faceId.');
+    }
+    if (payload.entityKind === 'registration') {
+      const registration =
+        await registrationsQueries.getRegistrationByIdForClient(
+          this.database.db,
+          job.targetId,
+          job.clientId,
+        );
+      if (
+        !registration?.isActive ||
+        (registration.status !== 'approved' &&
+          registration.status !== 'blocked') ||
+        registration.faceId !== payload.faceId
+      ) {
+        await this.queue.update(job.id, { processed: 1, total: 1 });
+        return;
+      }
     }
     const { buffer } = await this.r2.getObjectBytes(payload.photoKey);
     const outcome = await this.faceSync.syncPersonOnReaders({
