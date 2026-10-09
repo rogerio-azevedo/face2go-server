@@ -35,6 +35,12 @@ describe('namesMismatch', () => {
     expect(namesMismatch('MARIA SILVA', system)).toBe(false);
   });
 
+  it('aceita o CardName abreviado pelo limite Intelbras de 32 caracteres', () => {
+    expect(
+      namesMismatch('MARIA PEREIRA', 'Maria Aparecida dos Santos Pereira'),
+    ).toBe(false);
+  });
+
   it('marca divergência quando os nomes são de pessoas diferentes', () => {
     expect(namesMismatch('RONALDO TORRES', 'Ana Souza')).toBe(true);
   });

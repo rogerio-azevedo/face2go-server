@@ -9,8 +9,12 @@ function sanitizeReaderName(value: string): string {
     .toUpperCase();
 }
 
+/** Limite de CardName no AccessControlCard da API HTTP Intelbras. */
+export const INTELBRAS_CARD_NAME_MAX_LENGTH = 32;
+
 /**
- * Normaliza o nome para o leitor Intelbras/Dahua (CardName).
+ * Normaliza o nome para leitores faciais. Para CardName Intelbras, passe
+ * INTELBRAS_CARD_NAME_MAX_LENGTH como limite.
  * Mantém todos os tokens quando cabem em `maxLength`.
  * Nomes maiores caem para primeiro + último.
  */
