@@ -1,4 +1,7 @@
-import { normalizeNameForFacialReader } from '../face-sync/normalize-name-for-reader';
+import {
+  INTELBRAS_CARD_NAME_MAX_LENGTH,
+  normalizeNameForFacialReader,
+} from '../face-sync/normalize-name-for-reader';
 import type { AccessPersonType } from '../common/access-person.types';
 import type { DeviceUserSystemPerson } from '../database/queries/device-user-reconcile.queries';
 
@@ -40,6 +43,11 @@ export function namesMismatch(deviceName: string, systemName: string): boolean {
 
   const readerForm = normalizeNameForFacialReader(systemName);
   if (readerForm && device === readerForm) return false;
+  const intelbrasCardName = normalizeNameForFacialReader(
+    systemName,
+    INTELBRAS_CARD_NAME_MAX_LENGTH,
+  );
+  if (intelbrasCardName && device === intelbrasCardName) return false;
   if (device.includes(system) || system.includes(device)) return false;
   if (
     readerForm &&

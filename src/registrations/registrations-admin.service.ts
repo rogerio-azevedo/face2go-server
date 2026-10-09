@@ -398,11 +398,18 @@ export class RegistrationsAdminService {
       clientId,
     );
     if (client.type !== 'school' && existing) {
+      const linkedMember = await this.membersService.getByRegistrationId(
+        clientId,
+        registrationId,
+      );
       await assertDocumentAvailableInClient(
         this.database.db,
         clientId,
         existing.document,
-        { excludeRegistrationId: registrationId },
+        {
+          excludeRegistrationId: registrationId,
+          excludeMemberId: linkedMember?.id,
+        },
       );
     }
 

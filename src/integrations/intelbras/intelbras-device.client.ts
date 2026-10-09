@@ -12,7 +12,10 @@ import {
   buildAccessTimeScheduleQueryString,
   buildTimeSectionsRecordUpdaterParams,
 } from './intelbras-time-schedule.util';
-import { normalizeNameForFacialReader } from '../../face-sync/normalize-name-for-reader';
+import {
+  INTELBRAS_CARD_NAME_MAX_LENGTH,
+  normalizeNameForFacialReader,
+} from '../../face-sync/normalize-name-for-reader';
 import { recoverUnauthorizedIfExists } from '../../face-sync/recover-unauthorized-if-exists.util';
 import {
   extractHttpError,
@@ -901,7 +904,10 @@ export async function intelbrasUpsertFaceOnReader(
 ): Promise<void> {
   const label = readerLabel(reader);
   const normalizedName =
-    normalizeNameForFacialReader(displayName.trim() || 'USUARIO') || 'USUARIO';
+    normalizeNameForFacialReader(
+      displayName.trim() || 'USUARIO',
+      INTELBRAS_CARD_NAME_MAX_LENGTH,
+    ) || 'USUARIO';
   const faceId = String(faceIdNumeric);
   const cleanBase64 = stripDataUriBase64(rawBase64).trim();
   const decBytes = Buffer.from(cleanBase64, 'base64').length;

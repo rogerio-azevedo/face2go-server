@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -461,6 +461,87 @@ describe('RegistrationsAdminService lifecycle', () => {
       .spyOn(registrationsQueries, 'approveRegistration')
       .mockResolvedValue(row as never);
   }
+
+  it('reaprova cadastro rejeitado sem tratar o próprio membro como CPF duplicado', async () => {
+    const rejectedRow = {
+      id: 'reg-1',
+      clientId: 'client-1',
+      status: 'rejected',
+      isActive: true,
+      submittedAt: new Date(),
+      name: 'Ana',
+      document: '529.982.247-25',
+    };
+    const approvedRow = { ...rejectedRow, status: 'approved' };
+    mockApprove(rejectedRow);
+    members.getByRegistrationId.mockResolvedValue({
+      id: 'member-1',
+      isActive: false,
+    });
+    jest.spyOn(clientsQueries, 'getClientByIdOnly').mockResolvedValue({
+      id: 'client-1',
+      type: 'condominium',
+    } as never);
+    jest
+      .spyOn(registrationsQueries, 'approveRegistration')
+      .mockResolvedValue(approvedRow as never);
+    const findMember = jest
+      .spyOn(membersQueries, 'findMemberByNormalizedDocument')
+      .mockImplementation((_db, _clientId, _document, excludeId) =>
+        Promise.resolve(
+          excludeId === 'member-1' ? null : ({ id: 'member-1' } as never),
+        ),
+      );
+    jest
+      .spyOn(registrationsQueries, 'findRegistrationByNormalizedDocument')
+      .mockResolvedValue(null);
+
+    await service.approveForCompanyUser(companyAdmin(), 'client-1', 'reg-1');
+
+    expect(members.getByRegistrationId).toHaveBeenCalledWith(
+      'client-1',
+      'reg-1',
+    );
+    expect(findMember).toHaveBeenCalledWith(
+      db,
+      'client-1',
+      '52998224725',
+      'member-1',
+    );
+    expect(members.upsertFromApprovedRegistration).toHaveBeenCalledWith(
+      approvedRow,
+      'condominium',
+    );
+  });
+
+  it('continua bloqueando a aprovação quando outro membro tem o mesmo CPF', async () => {
+    mockApprove({
+      id: 'reg-1',
+      clientId: 'client-1',
+      status: 'rejected',
+      submittedAt: new Date(),
+      document: '529.982.247-25',
+    });
+    jest.spyOn(clientsQueries, 'getClientByIdOnly').mockResolvedValue({
+      id: 'client-1',
+      type: 'condominium',
+    } as never);
+    const findMember = jest
+      .spyOn(membersQueries, 'findMemberByNormalizedDocument')
+      .mockResolvedValue({ id: 'member-2' } as never);
+
+    await expect(
+      service.approveForCompanyUser(companyAdmin(), 'client-1', 'reg-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(findMember).toHaveBeenCalledWith(
+      db,
+      'client-1',
+      '52998224725',
+      'member-1',
+    );
+    expect(registrationsQueries.approveRegistration).not.toHaveBeenCalled();
+  });
 
   it('envia e-mail quando o cadastro aprovado tem e-mail', async () => {
     mockApprove({
