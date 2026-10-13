@@ -41,6 +41,14 @@ export const registrationEventTypeSchema = z.enum([
   'restored',
 ]);
 
+export const deleteRegistrationSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, 'Informe o motivo da exclusão (mínimo 3 caracteres).')
+    .max(2000, 'O motivo da exclusão deve ter no máximo 2.000 caracteres.'),
+});
+
 export const createRegistrationNoteSchema = z.object({
   body: z.string().trim().min(3).max(2000),
 });

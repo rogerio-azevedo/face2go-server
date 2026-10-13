@@ -7,6 +7,7 @@ import {
 import { ChildApprovalRepository } from './child-approval.repository';
 import { ChildApprovalService } from './child-approval.service';
 import { ChildApprovalDeliveryService } from './child-approval-delivery.service';
+import { ChildApprovalRevocationService } from './child-approval-revocation.service';
 import {
   CHILD_APPROVAL_ACCEPTED,
   CHILD_APPROVAL_CHANGED,
@@ -24,9 +25,11 @@ export class ChildApprovalMaintenanceService
     private readonly repository: ChildApprovalRepository,
     private readonly approvals: ChildApprovalService,
     private readonly delivery: ChildApprovalDeliveryService,
+    private readonly revocations: ChildApprovalRevocationService,
   ) {}
 
   onModuleInit() {
+    void this.tick();
     this.timer = setInterval(() => void this.tick(), 60_000);
     this.timer.unref();
   }
@@ -102,6 +105,8 @@ export class ChildApprovalMaintenanceService
             child.id,
           );
           if (
+            client.isActive &&
+            child.isActive &&
             child.childApprovalRequestedAt &&
             (count > 0 || !needsChildApproval(client, child))
           )
@@ -113,12 +118,11 @@ export class ChildApprovalMaintenanceService
           if (
             count === 0 &&
             needsChildApproval(client, child) &&
-            ['approved', 'blocked'].includes(child.status) &&
-            child.deviceSyncStatus != null
+            ['approved', 'blocked'].includes(child.status)
           ) {
-            await this.repository.patchRegistration(client.id, child.id, {
-              childApprovalRemovalPending: true,
-            });
+            await this.repository.transaction((db) =>
+              this.revocations.rejectIfUnauthorized(db, client.id, child.id),
+            );
           }
           const fresh = await this.repository.registration(client.id, child.id);
           if (fresh?.childApprovalRemovalPending)
@@ -127,7 +131,12 @@ export class ChildApprovalMaintenanceService
               client.id,
               child.id,
             );
-          if (count === 0 && needsChildApproval(client, child))
+          if (
+            client.isActive &&
+            child.isActive &&
+            count === 0 &&
+            needsChildApproval(client, child)
+          )
             await this.approvals.requestEmails(client.id, child.id);
         }
         if (cases.length < 100) break;

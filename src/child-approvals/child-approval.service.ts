@@ -11,10 +11,8 @@ import { ChildApprovalPublicService } from './child-approval-public.service';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 import { PermissionsService } from '../permissions/permissions.service';
-import {
-  ChildApprovalRepository,
-  type ApprovalDb,
-} from './child-approval.repository';
+import { ChildApprovalRepository } from './child-approval.repository';
+import { ChildApprovalRevocationService } from './child-approval-revocation.service';
 import { ChildApprovalPolicyService } from './child-approval-policy.service';
 import {
   ageForApproval,
@@ -31,6 +29,7 @@ export class ChildApprovalService {
     private readonly permissions: PermissionsService,
     private readonly invitations: ChildApprovalInvitationService,
     private readonly publicApproval: ChildApprovalPublicService,
+    private readonly revocations: ChildApprovalRevocationService,
   ) {}
 
   requestEmails(clientId: string, registrationId: string, resend = false) {
@@ -97,29 +96,6 @@ export class ChildApprovalService {
     return true;
   }
 
-  private async revokeInTransaction(
-    db: ApprovalDb,
-    clientId: string,
-    consentId: string,
-    registrationId: string,
-    actor: string,
-    reason: string,
-  ) {
-    for (const faceId of await this.repository.faceIds(
-      clientId,
-      registrationId,
-      db,
-    ))
-      await this.repository.lockFace(db, clientId, faceId);
-    await this.repository.revoke(clientId, consentId, actor, reason, db);
-    await this.repository.patchRegistration(
-      clientId,
-      registrationId,
-      { childApprovalRemovalPending: true },
-      db,
-    );
-  }
-
   async revokeAdmin(
     user: JwtPayload,
     clientId: string,
@@ -141,7 +117,7 @@ export class ChildApprovalService {
         db,
         true,
       );
-      await this.revokeInTransaction(
+      await this.revocations.revoke(
         db,
         clientId,
         consentId,

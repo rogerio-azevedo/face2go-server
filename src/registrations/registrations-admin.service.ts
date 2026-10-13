@@ -32,6 +32,7 @@ import type {
 } from '../validation/registrations.schema';
 import {
   blockRegistrationSchema,
+  deleteRegistrationSchema,
   unblockRegistrationSchema,
   updateRegistrationSchema,
 } from '../validation/registrations.schema';
@@ -1087,23 +1088,34 @@ export class RegistrationsAdminService {
     user: JwtPayload,
     clientId: string,
     registrationId: string,
+    body: unknown,
   ) {
     this.ensureCompanyAdmin(user);
     await this.ensureCompanyCanAccessClient(user, clientId);
-    return this.softDeleteShared(clientId, registrationId, user.sub);
+    return this.softDeleteShared(clientId, registrationId, user.sub, body);
   }
 
-  async softDeleteForClientTenant(user: JwtPayload, registrationId: string) {
+  async softDeleteForClientTenant(
+    user: JwtPayload,
+    registrationId: string,
+    body: unknown,
+  ) {
     this.ensureClientAdmin(user);
     const clientId = this.ensureClientTenant(user);
-    return this.softDeleteShared(clientId, registrationId, user.sub);
+    return this.softDeleteShared(clientId, registrationId, user.sub, body);
   }
 
   private async softDeleteShared(
     clientId: string,
     registrationId: string,
     decidedByUserId: string,
+    body: unknown,
   ) {
+    const parsed = deleteRegistrationSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(zodFirstMessage(parsed.error));
+    }
+    const { reason } = parsed.data;
     const row = await registrationsQueries.getRegistrationByIdForClient(
       this.database.db,
       registrationId,
@@ -1154,6 +1166,7 @@ export class RegistrationsAdminService {
         clientId,
         registrationId,
         type: 'deleted',
+        body: reason,
         authorUserId: decidedByUserId,
       },
       (db) =>

@@ -2,10 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
-import {
-  ChildApprovalRepository,
-  type ApprovalDb,
-} from './child-approval.repository';
+import { ChildApprovalRepository } from './child-approval.repository';
+import { ChildApprovalRevocationService } from './child-approval-revocation.service';
 
 import {
   ageForApproval,
@@ -24,6 +22,7 @@ export class ChildApprovalPublicService {
     private readonly repository: ChildApprovalRepository,
     private readonly invitations: ChildApprovalInvitationService,
     private readonly events: EventEmitter2,
+    private readonly revocations: ChildApprovalRevocationService,
   ) {}
   async preview(token: string) {
     const { request, client, child, adult } =
@@ -195,7 +194,7 @@ export class ChildApprovalPublicService {
         db,
       );
       if (!consent) return 'Não há aceite para revogar.';
-      await this.revokeInTransaction(
+      await this.revocations.revoke(
         db,
         client.id,
         consent.id,
@@ -212,29 +211,6 @@ export class ChildApprovalPublicService {
       message:
         'Seu aceite foi revogado. O acesso é retirado se não houver outra autorização válida.',
     };
-  }
-
-  private async revokeInTransaction(
-    db: ApprovalDb,
-    clientId: string,
-    consentId: string,
-    registrationId: string,
-    actor: string,
-    reason: string,
-  ) {
-    for (const faceId of await this.repository.faceIds(
-      clientId,
-      registrationId,
-      db,
-    ))
-      await this.repository.lockFace(db, clientId, faceId);
-    await this.repository.revoke(clientId, consentId, actor, reason, db);
-    await this.repository.patchRegistration(
-      clientId,
-      registrationId,
-      { childApprovalRemovalPending: true },
-      db,
-    );
   }
 
   async notify(event: string, clientId: string, registrationId: string) {

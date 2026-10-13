@@ -1,7 +1,11 @@
 import { ChildApprovalService } from '../child-approvals/child-approval.service';
 import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
 import { ChildApprovalRepository } from '../child-approvals/child-approval.repository';
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
@@ -61,6 +65,7 @@ describe('RegistrationsAdminService lifecycle', () => {
   let email: { sendRegistrationApprovedEmail: jest.Mock };
 
   beforeEach(async () => {
+    events.record.mockClear();
     faceSync = {
       removePersonFromReaders: jest.fn().mockResolvedValue({
         removed: 1,
@@ -143,55 +148,121 @@ describe('RegistrationsAdminService lifecycle', () => {
 
   it('bloqueia exclusão para operador da empresa', async () => {
     await expect(
-      service.softDeleteForCompanyUser(companyOperator(), 'client-1', 'reg-1'),
+      service.softDeleteForCompanyUser(companyOperator(), 'client-1', 'reg-1', {
+        reason: 'Solicitação do usuário',
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('exclui cadastro aprovado, remove face e desativa o membro', async () => {
-    jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
-      id: 'client-1',
-      companyId: 'company-1',
-    } as never);
-    jest
-      .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
-      .mockResolvedValue({
-        id: 'reg-1',
-        clientId: 'client-1',
-        status: 'approved',
-        isActive: true,
-        faceId: 12,
-        faceImageKey: 'k',
-        name: 'Ana',
-      } as never);
-    jest
-      .spyOn(registrationsQueries, 'setRegistrationActive')
-      .mockResolvedValue({
-        id: 'reg-1',
-        clientId: 'client-1',
-        status: 'approved',
-        isActive: false,
-        faceId: 12,
-        name: 'Ana',
-      } as never);
+  it.each([
+    undefined,
+    {},
+    { reason: '' },
+    { reason: '   ' },
+    { reason: 'ab' },
+    { reason: 'a'.repeat(2001) },
+  ])(
+    'recusa motivo inválido antes de consultar ou remover faces: %j',
+    async (body) => {
+      const lookup = jest.spyOn(
+        registrationsQueries,
+        'getRegistrationByIdForClient',
+      );
+      await expect(
+        service.softDeleteForClientTenant(
+          {
+            ...companyAdmin(),
+            role: 'client_admin',
+            contextType: 'client',
+            clientId: 'client-1',
+          },
+          'reg-1',
+          body,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(lookup).not.toHaveBeenCalled();
+      expect(faceSync.removePersonFromReaders).not.toHaveBeenCalled();
+      expect(members.setActiveByRegistrationId).not.toHaveBeenCalled();
+      expect(events.record).not.toHaveBeenCalled();
+    },
+  );
 
-    const deactivate = jest.spyOn(
-      registrationsQueries,
-      'setRegistrationActive',
-    );
-    await service.softDeleteForCompanyUser(companyAdmin(), 'client-1', 'reg-1');
+  it.each(['company', 'client'])(
+    'exclui cadastro aprovado via %s, registra motivo e desativa o membro',
+    async (variant) => {
+      jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
+        id: 'client-1',
+        companyId: 'company-1',
+      } as never);
+      jest
+        .spyOn(registrationsQueries, 'getRegistrationByIdForClient')
+        .mockResolvedValue({
+          id: 'reg-1',
+          clientId: 'client-1',
+          status: 'approved',
+          isActive: true,
+          faceId: 12,
+          faceImageKey: 'k',
+          name: 'Ana',
+        } as never);
+      jest
+        .spyOn(registrationsQueries, 'setRegistrationActive')
+        .mockResolvedValue({
+          id: 'reg-1',
+          clientId: 'client-1',
+          status: 'approved',
+          isActive: false,
+          faceId: 12,
+          name: 'Ana',
+        } as never);
 
-    expect(faceSync.removePersonFromReaders).toHaveBeenCalledWith(
-      expect.objectContaining({ clientId: 'client-1', faceId: 12 }),
-    );
-    expect(members.setActiveByRegistrationId).toHaveBeenCalledWith(
-      'client-1',
-      'reg-1',
-      false,
-    );
-    expect(
-      faceSync.removePersonFromReaders.mock.invocationCallOrder[0],
-    ).toBeLessThan(deactivate.mock.invocationCallOrder[0]);
-  });
+      const deactivate = jest.spyOn(
+        registrationsQueries,
+        'setRegistrationActive',
+      );
+      if (variant === 'company') {
+        await service.softDeleteForCompanyUser(
+          companyAdmin(),
+          'client-1',
+          'reg-1',
+          { reason: '  Solicitação do usuário  ' },
+        );
+      } else {
+        await service.softDeleteForClientTenant(
+          {
+            ...companyAdmin(),
+            role: 'client_admin',
+            contextType: 'client',
+            clientId: 'client-1',
+          },
+          'reg-1',
+          { reason: '  Solicitação do usuário  ' },
+        );
+      }
+
+      expect(events.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'deleted',
+          body: 'Solicitação do usuário',
+          authorUserId: 'admin-1',
+          clientId: 'client-1',
+          registrationId: 'reg-1',
+        }),
+        db,
+      );
+      expect(faceSync.removePersonFromReaders).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'client-1', faceId: 12 }),
+      );
+      expect(members.setActiveByRegistrationId).toHaveBeenCalledWith(
+        'client-1',
+        'reg-1',
+        false,
+      );
+      expect(
+        faceSync.removePersonFromReaders.mock.invocationCallOrder[0],
+      ).toBeLessThan(deactivate.mock.invocationCallOrder[0]);
+    },
+  );
 
   it('não exclui o cadastro se a remoção da face falhar em algum leitor', async () => {
     jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue({
@@ -216,7 +287,9 @@ describe('RegistrationsAdminService lifecycle', () => {
     );
 
     await expect(
-      service.softDeleteForCompanyUser(companyAdmin(), 'client-1', 'reg-1'),
+      service.softDeleteForCompanyUser(companyAdmin(), 'client-1', 'reg-1', {
+        reason: '  Solicitação do usuário  ',
+      }),
     ).rejects.toThrow('Leitor indisponível');
 
     expect(deactivate).not.toHaveBeenCalled();

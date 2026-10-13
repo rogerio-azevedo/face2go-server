@@ -175,15 +175,17 @@ export class ChildApprovalRepository extends ChildApprovalRequestsRepository {
       .from(registrations)
       .innerJoin(clients, eq(clients.id, registrations.clientId))
       .where(
-        and(
-          eq(registrations.childApprovalRequired, true),
-          eq(registrations.isActive, true),
-          or(
-            eq(clients.enableChildApprove, true),
-            isNotNull(registrations.childApprovalRequestedAt),
-            eq(registrations.childApprovalRemovalPending, true),
+        or(
+          eq(registrations.childApprovalRemovalPending, true),
+          and(
+            eq(registrations.childApprovalRequired, true),
+            eq(registrations.isActive, true),
+            eq(clients.isActive, true),
+            or(
+              eq(clients.enableChildApprove, true),
+              isNotNull(registrations.childApprovalRequestedAt),
+            ),
           ),
-          eq(clients.isActive, true),
         ),
       )
       .orderBy(registrations.id)
@@ -288,21 +290,45 @@ export class ChildApprovalRepository extends ChildApprovalRequestsRepository {
       },
       db,
     );
+    await this.deactivateMembers(clientId, registrationId, db);
+    await this.recordRejection(
+      clientId,
+      registrationId,
+      userId,
+      'Cadastro encaminhado manualmente para regularização de autorização de menor.',
+      db,
+    );
+  }
+
+  async deactivateMembers(
+    clientId: string,
+    registrationId: string,
+    db: ApprovalDb,
+  ) {
     await db
       .update(clientMembers)
-      .set({ isActive: false, updatedAt: now })
+      .set({ isActive: false, updatedAt: new Date() })
       .where(
         and(
           eq(clientMembers.clientId, clientId),
           eq(clientMembers.registrationId, registrationId),
         ),
       );
+  }
+
+  async recordRejection(
+    clientId: string,
+    registrationId: string,
+    authorUserId: string | null,
+    body: string,
+    db: ApprovalDb,
+  ) {
     await db.insert(registrationEvents).values({
       clientId,
       registrationId,
-      authorUserId: userId,
+      authorUserId,
       type: 'rejected',
-      body: 'Cadastro encaminhado manualmente para regularização de autorização de menor.',
+      body,
     });
   }
 }

@@ -26,6 +26,12 @@ import { ChildApprovalDeliveryRepository } from './child-approval-delivery.repos
 import { ChildApprovalDeliveryService } from './child-approval-delivery.service';
 import { ChildApprovalPublicService } from './child-approval-public.service';
 import { ChildApprovalService } from './child-approval.service';
+import { ChildApprovalRevocationService } from './child-approval-revocation.service';
+import { ChildApprovalMaintenanceService } from './child-approval-maintenance.service';
+import { DeviceSyncQueueService } from '../device-sync-queue/device-sync-queue.service';
+import { DeviceSyncWorkerService } from '../device-sync-queue/device-sync-worker.service';
+import type { FaceSyncService } from '../face-sync/face-sync.service';
+import { DeviceSyncJobHandlersService } from '../device-sync-queue/device-sync-job-handlers.service';
 import {
   CHILD_APPROVAL_ACCEPTED,
   CHILD_APPROVAL_CHANGED,
@@ -46,6 +52,7 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
   const database = { db } as DatabaseService;
   const repository = new ChildApprovalRepository(database);
   const policy = new ChildApprovalPolicyService(repository);
+  const revocations = new ChildApprovalRevocationService(repository);
   const key = '0123456789abcdef'.repeat(4);
   const config = new ConfigService({
     READER_ENCRYPTION_KEY: key,
@@ -76,6 +83,7 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     repository,
     invitations,
     events,
+    revocations,
   );
   const approvals = new ChildApprovalService(
     repository,
@@ -84,6 +92,7 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     {} as never,
     invitations,
     publicApproval,
+    revocations,
   );
   const faceSync = {
     enqueueApprovedRegistrationJob: jest.fn(),
@@ -102,6 +111,20 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     queue as never,
     faceSync as never,
   );
+  const removalWorker = (durableQueue: DeviceSyncQueueService) =>
+    new DeviceSyncWorkerService(
+      durableQueue,
+      new DeviceSyncJobHandlersService(
+        durableQueue,
+        faceSync as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        database,
+        removal,
+      ),
+    );
   const admin = new RegistrationsAdminService(
     database,
     {} as never,
@@ -148,7 +171,8 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     contextType: 'client',
     clientId,
   });
-  const token = (email: string) => emails.find((e) => e.to === email)!.token;
+  const token = (email: string) =>
+    [...emails].reverse().find((e) => e.to === email)!.token;
   const accept = async (email = 'adult1@example.test', cpf = cpf1) => {
     const t = token(email);
     const preview = await approvals.preview(t);
@@ -209,6 +233,11 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     await pool.query('TRUNCATE companies, "user" CASCADE');
     emails.length = 0;
     jest.clearAllMocks();
+    queue.enqueue.mockReset();
+    queue.update.mockReset();
+    faceSync.removePersonFromReaders
+      .mockReset()
+      .mockResolvedValue({ removed: 0, total: 0 });
     userId = randomUUID();
     clientId = randomUUID();
     childId = randomUUID();
@@ -409,6 +438,14 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     expect(await repository.activeConsentCount(clientId, childId)).toBe(2);
     await approvals.revokeOwn(token('adult1@example.test'), cpf1);
     expect(await policy.faceAllowed(clientId, 52)).toBe(true);
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'approved',
+    );
+    expect(
+      (await repository.registration(clientId, childId))
+        ?.childApprovalRemovalPending,
+    ).toBe(false);
+    expect(queue.enqueue).not.toHaveBeenCalled();
     const consent = (await repository.history(clientId, childId)).find(
       (c) => !c.revokedAt,
     )!;
@@ -420,6 +457,12 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
       childId,
     );
     expect(await policy.faceAllowed(clientId, 52)).toBe(false);
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'rejected',
+    );
+    expect((await db.select().from(schema.clientMembers))[0].isActive).toBe(
+      false,
+    );
     await removal.run({
       id: randomUUID(),
       clientId,
@@ -428,6 +471,190 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     expect(await policy.faceAllowed(clientId, 53)).toBe(false);
     expect(faceSync.removePersonFromReaders).toHaveBeenCalledTimes(2);
     expect(await repository.history(clientId, childId)).toHaveLength(2);
+  });
+  it('recupera a remoção quando o processo para depois do commit e antes de enfileirar', async () => {
+    await admin.approveAutomatically(clientId, childId);
+    await accept();
+    const durableQueue = new DeviceSyncQueueService(database);
+    queue.enqueue.mockRejectedValueOnce(new Error('Processo interrompido'));
+    await approvals.revokeOwn(token('adult1@example.test'), cpf1);
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'rejected',
+    );
+    expect(
+      (await repository.registration(clientId, childId))
+        ?.childApprovalRemovalPending,
+    ).toBe(true);
+    expect(await durableQueue.listByIds([])).toEqual([]);
+    expect(
+      (await pool.query('SELECT * FROM device_sync_jobs')).rows,
+    ).toHaveLength(0);
+    queue.enqueue.mockImplementation(
+      (input: Parameters<DeviceSyncQueueService['enqueue']>[0]) =>
+        durableQueue.enqueue(input),
+    );
+    queue.update.mockImplementation(
+      (id: string, patch: Parameters<DeviceSyncQueueService['update']>[1]) =>
+        durableQueue.update(id, patch),
+    );
+    const maintenance = new ChildApprovalMaintenanceService(
+      repository,
+      approvals,
+      delivery,
+      revocations,
+    );
+    await maintenance.tick();
+    const abandoned = (await durableQueue.claimNext('worker-before-crash'))!;
+    expect(abandoned.kind).toBe('face.remove');
+    await pool.query(
+      "UPDATE device_sync_jobs SET heartbeat_at = now() - interval '3 minutes' WHERE id = $1",
+      [abandoned.id],
+    );
+    expect(await durableQueue.recoverRunning({ staleSeconds: 120 }, 3)).toEqual(
+      [{ id: abandoned.id, status: 'queued' }],
+    );
+    const recovered = (await durableQueue.claimNext('worker-after-restart'))!;
+    const worker = removalWorker(durableQueue);
+    // runJob finaliza somente leases pertencentes a esta instância.
+    await pool.query(
+      'UPDATE device_sync_jobs SET locked_by = $1 WHERE id = $2',
+      [worker.workerId, recovered.id],
+    );
+    await worker.runJob(recovered);
+    expect((await durableQueue.getById(recovered.id))?.status).toBe('done');
+    expect(
+      (await repository.registration(clientId, childId))
+        ?.childApprovalRemovalPending,
+    ).toBe(false);
+    expect(faceSync.removePersonFromReaders).toHaveBeenCalledTimes(2);
+  });
+  it('mantém a pendência após falha parcial e só limpa sincronização quando todos os leitores removem', async () => {
+    await admin.approveAutomatically(clientId, childId);
+    await accept();
+    await repository.patchRegistration(clientId, childId, {
+      deviceSyncStatus: 'synced',
+      deviceSyncedAt: new Date(),
+    });
+    await db
+      .update(schema.clientMembers)
+      .set({ deviceSyncStatus: 'synced', deviceSyncedAt: new Date() });
+    const durableQueue = new DeviceSyncQueueService(database);
+    queue.enqueue.mockImplementation(
+      (input: Parameters<DeviceSyncQueueService['enqueue']>[0]) =>
+        durableQueue.enqueue(input),
+    );
+    queue.update.mockImplementation(
+      (id: string, patch: Parameters<DeviceSyncQueueService['update']>[1]) =>
+        durableQueue.update(id, patch),
+    );
+    const readers = new Map([
+      [52, new Set(['reader-1', 'reader-2'])],
+      [53, new Set(['reader-1', 'reader-2'])],
+    ]);
+    let fail = true;
+    const readerCount = jest
+      .spyOn(repository, 'activeReaderCount')
+      .mockResolvedValue(2);
+    faceSync.removePersonFromReaders.mockImplementation(
+      ({
+        faceId,
+      }: Parameters<FaceSyncService['removePersonFromReaders']>[0]) => {
+        readers.get(faceId)!.delete('reader-1');
+        if (fail) return Promise.reject(new Error('Leitor 2 indisponível'));
+        readers.get(faceId)!.delete('reader-2');
+        return Promise.resolve({ removed: 2, total: 2 });
+      },
+    );
+    try {
+      await approvals.revokeOwn(token('adult1@example.test'), cpf1);
+      const worker = removalWorker(durableQueue);
+      const first = (await durableQueue.claimNext(worker.workerId))!;
+      await worker.runJob(first);
+      expect((await durableQueue.getById(first.id))?.status).toBe('failed');
+      const failed = await repository.registration(clientId, childId);
+      expect(failed.status).toBe('rejected');
+      expect(failed.childApprovalRemovalPending).toBe(true);
+      expect(failed.deviceSyncStatus).toBe('synced');
+      expect(readers.get(52)!.size).toBe(1);
+      fail = false;
+      const maintenance = new ChildApprovalMaintenanceService(
+        repository,
+        approvals,
+        delivery,
+        revocations,
+      );
+      await maintenance.tick();
+      const retry = (await durableQueue.claimNext(worker.workerId))!;
+      await worker.runJob(retry);
+      expect((await durableQueue.getById(retry.id))?.status).toBe('done');
+      const removed = await repository.registration(clientId, childId);
+      expect(removed.childApprovalRemovalPending).toBe(false);
+      expect(removed.deviceSyncStatus).toBeNull();
+      expect(removed.deviceSyncedAt).toBeNull();
+      expect(
+        (await db.select().from(schema.clientMembers))[0].deviceSyncStatus,
+      ).toBeNull();
+      expect([...readers.values()].every((faces) => faces.size === 0)).toBe(
+        true,
+      );
+      expect(faceSync.removePersonFromReaders).toHaveBeenCalledWith(
+        expect.objectContaining({ requireAll: true }),
+      );
+      await maintenance.tick();
+      expect(await durableQueue.claimNext(worker.workerId)).toBeNull();
+    } finally {
+      readerCount.mockRestore();
+    }
+  });
+  it('um novo aceite após revogação exige reaprovação iniciada e preserva o histórico', async () => {
+    await admin.approveAutomatically(clientId, childId);
+    await accept();
+    await approvals.revokeOwn(token('adult1@example.test'), cpf1);
+    await admin.approveAutomatically(clientId, childId);
+    expect(
+      (await repository.registration(clientId, childId))
+        ?.childApprovalRequestedAt,
+    ).not.toBeNull();
+    await new ChildApprovalMaintenanceService(
+      repository,
+      approvals,
+      delivery,
+      revocations,
+    ).tick();
+    expect(
+      (await repository.registration(clientId, childId))
+        ?.childApprovalRequestedAt,
+    ).not.toBeNull();
+    await accept();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'approved',
+    );
+    expect(
+      (await repository.history(clientId, childId)).filter((c) => c.revokedAt),
+    ).toHaveLength(1);
+    expect(await repository.activeConsentCount(clientId, childId)).toBe(1);
+  });
+  it('continua reconciliando a remoção mesmo se o cadastro e o cliente forem desativados', async () => {
+    await admin.approveAutomatically(clientId, childId);
+    await accept();
+    await approvals.revokeOwn(token('adult1@example.test'), cpf1);
+    await repository.patchRegistration(clientId, childId, { isActive: false });
+    await db
+      .update(schema.clients)
+      .set({ isActive: false })
+      .where(eq(schema.clients.id, clientId));
+    expect(
+      (await repository.pendingCases()).map((c) => c.registration.id),
+    ).toContain(childId);
+    await new ChildApprovalMaintenanceService(
+      repository,
+      approvals,
+      delivery,
+      revocations,
+    ).tick();
+    expect(queue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'face.remove', targetId: childId }),
+    );
   });
   it('CPF incorreto persiste tentativas e trava após cinco erros', async () => {
     for (let i = 0; i < 5; i++)

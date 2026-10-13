@@ -22,6 +22,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
   BlockRegistrationDto,
+  DeleteRegistrationDto,
   CreateRegistrationNoteDto,
   ExportRegistrationsQueryDto,
   ListRegistrationsQueryDto,
@@ -183,10 +184,12 @@ export class ClientRegistrationsController {
   softDelete(
     @CurrentUser() user: JwtPayload,
     @Param('registrationId', ParseUUIDPipe) registrationId: string,
+    @Body() dto: DeleteRegistrationDto,
   ) {
     return this.registrationsAdmin.softDeleteForClientTenant(
       user,
       registrationId,
+      dto,
     );
   }
 
