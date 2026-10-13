@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { join } from 'node:path';
+import {
+  escapeEmailHtml as escapeHtml,
+  face2goEmail,
+} from './face2go-email.template';
 
 import type {
   EmailProvider,
@@ -206,6 +209,46 @@ Equipe Face2Go`;
     );
   }
 
+  async sendChildApprovalRequestEmail(params: {
+    to: string;
+    adultName: string | null;
+    childName: string | null;
+    clientName: string;
+    token: string;
+  }): Promise<void> {
+    if (!this.sender.isConfigured() || !this.frontendUrl)
+      throw new Error('Envio de autorizações indisponível.');
+    const url = `${this.frontendUrl}/autorizar-menor/${params.token}`;
+    const adultName = params.adultName?.trim() || 'morador';
+    const childName = params.childName?.trim() || 'Um menor';
+    const text = `Olá, ${adultName}.\n\n${childName}, da sua unidade, solicita autorização para acesso em ${params.clientName}.\n\nConfira a foto do menor, leia o termo e, se concordar, confirme com o CPF do seu cadastro:\n${url}\n\nAbrir o link não autoriza o acesso. O aceite é registrado somente após sua confirmação.\n\nEste link é individual. Guarde este e-mail: você também poderá usá-lo para consultar ou revogar seu aceite.\n\nEquipe Face2Go`;
+    const branded = face2goEmail(
+      `<h1 style="margin:0 0 20px;font-size:24px;line-height:1.3;color:#001b3d;">Autorização de acesso de menor</h1>
+      <p style="margin:0 0 16px;">Olá, ${escapeHtml(adultName)}.</p>
+      <p style="margin:0 0 20px;">Um menor da sua unidade solicita sua autorização para acessar o local abaixo.</p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f4f6f8;border-radius:8px;">
+        <tr><td style="padding:16px 20px;font-family:Arial,sans-serif;">
+          <p style="margin:0 0 4px;font-size:13px;color:#607083;">Cadastro do menor</p>
+          <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#001b3d;">${escapeHtml(childName)}</p>
+          <p style="margin:0;font-size:14px;color:#607083;">${escapeHtml(params.clientName)}</p>
+        </td></tr>
+      </table>
+      <p style="margin:0 0 20px;">Confira a foto, leia o termo e, se concordar, confirme com o <strong>CPF do seu cadastro</strong>.</p>
+      <p style="margin:0 0 20px;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:14px 22px;background:#001b3d;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">Ver foto e revisar autorização</a></p>
+      <p style="margin:0 0 20px;font-size:13px;color:#607083;">Abrir o link não autoriza o acesso. O aceite é registrado somente após sua confirmação.</p>
+      <p style="margin:0 0 20px;font-size:14px;">Este link é individual. Guarde este e-mail para consultar ou revogar seu aceite quando precisar.</p>
+      <p style="margin:0 0 20px;font-size:12px;color:#607083;word-break:break-all;">Se o botão não funcionar, copie este link para o navegador:<br /><a href="${escapeHtml(url)}" style="color:#006b65;">${escapeHtml(url)}</a></p>
+      <p style="margin:0;">Equipe Face2Go</p>`,
+      `Confira a foto e a solicitação de ${childName} em ${params.clientName}.`,
+    );
+    await this.sender.send({
+      to: params.to,
+      subject: 'Face2Go — autorização de acesso de menor',
+      text,
+      ...branded,
+    });
+  }
+
   async sendRegistrationApprovedEmail(params: {
     to: string;
     name: string | null | undefined;
@@ -224,76 +267,32 @@ Equipe Face2Go`;
 
     const subject = 'Face2Go — cadastro aprovado';
     const siteUrl = 'https://www.face2go.com.br';
-    const logoCid = 'face2go-logo';
     const text = `${greeting},
 
 Seu cadastro em ${place} foi aprovado.
 
-O acesso facial já pode ser usado.
+Após a atualização dos leitores, o acesso estará disponível conforme as regras do local.
 
 Equipe Face2Go
 
 ${siteUrl}`;
 
-    const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<body style="margin:0;padding:0;background:#f4f6f8;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:24px 0;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background:#ffffff;">
-          <tr>
-            <td style="background:#001b3d;padding:20px 28px;">
-              <img src="cid:${logoCid}" alt="Face2Go" width="180" height="45" style="display:block;border:0;width:180px;height:45px;" />
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#00c7b7;height:4px;font-size:0;line-height:0;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="padding:28px;font-family:Arial,sans-serif;font-size:16px;line-height:1.6;color:#1a1a2e;">
-              <p style="margin:0 0 16px;">${escapeHtml(greeting)},</p>
+    const branded = face2goEmail(
+      `<p style="margin:0 0 16px;">${escapeHtml(greeting)},</p>
               <p style="margin:0 0 16px;">Seu cadastro em <strong>${escapeHtml(place)}</strong> foi aprovado.</p>
-              <p style="margin:0 0 16px;">O acesso facial já pode ser usado.</p>
-              <p style="margin:0;">Equipe Face2Go</p>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:20px 28px;background:#f4f6f8;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#607083;text-align:center;">
-              <p style="margin:0 0 6px;">Gestão de cadastro e acesso com biometria</p>
-              <p style="margin:0;"><a href="${siteUrl}" style="color:#00c7b7;text-decoration:none;">face2go.com.br</a></p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+              <p style="margin:0 0 16px;">Após a atualização dos leitores, o acesso estará disponível conforme as regras do local.</p>
+              <p style="margin:0;">Equipe Face2Go</p>`,
+      `Seu cadastro em ${place} foi aprovado.`,
+    );
 
     await this.sender.send({
       to,
       subject,
       text,
-      html,
-      attachments: [
-        {
-          filename: 'face2go-white.png',
-          path: join(__dirname, 'assets', 'face2go-white.png'),
-          cid: logoCid,
-        },
-      ],
+      ...branded,
     });
     this.logger.log(
       `E-mail de cadastro aprovado enviado para ${to} (cliente="${place}")`,
     );
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }

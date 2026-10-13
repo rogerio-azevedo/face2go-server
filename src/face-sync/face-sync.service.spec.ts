@@ -1,3 +1,5 @@
+import * as clientsQueries from '../database/queries/clients.queries';
+import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -89,6 +91,18 @@ describe('FaceSyncService', () => {
     const module = await Test.createTestingModule({
       providers: [
         FaceSyncService,
+        {
+          provide: ChildApprovalPolicyService,
+          useValue: {
+            assertFaceAllowed: jest.fn().mockResolvedValue(undefined),
+            faceAllowed: jest.fn().mockResolvedValue(true),
+            trackedFaces: jest.fn().mockResolvedValue([]),
+            withFaceAccess: jest.fn(
+              (_client: string, _face: number, work: () => Promise<unknown>) =>
+                work(),
+            ),
+          },
+        },
         { provide: DatabaseService, useValue: { db: {} } },
         { provide: R2StorageService, useValue: {} },
         {
@@ -832,6 +846,9 @@ describe('FaceSyncService', () => {
   });
 
   it('mantém o rastreamento quando o hardware não confirma a remoção', async () => {
+    jest
+      .spyOn(clientsQueries, 'getClientByIdOnly')
+      .mockResolvedValue({ enableChildApprove: false } as never);
     const reader = {
       ...mercadoReaders()[0],
       minimumAccessAge: 18,

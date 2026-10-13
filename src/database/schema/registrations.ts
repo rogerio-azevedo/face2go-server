@@ -95,6 +95,16 @@ export const registrations = pgTable(
     unitId: uuid('unit_id').references(() => clientUnits.id, {
       onDelete: 'restrict',
     }),
+    childApprovalRequired: boolean('child_approval_required')
+      .default(false)
+      .notNull(),
+    childApprovalRemovalPending: boolean('child_approval_removal_pending')
+      .default(false)
+      .notNull(),
+    childApprovalRequestedAt: timestamp('child_approval_requested_at'),
+    childApprovalRequestedByUserId: text(
+      'child_approval_requested_by_user_id',
+    ).references(() => users.id, { onDelete: 'set null' }),
     status: registrationStatusEnum('status').notNull().default('draft'),
     isActive: boolean('is_active').default(true).notNull(),
     approvedByUserId: text('approved_by_user_id').references(() => users.id, {

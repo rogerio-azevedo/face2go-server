@@ -87,6 +87,23 @@ export async function countClientDeviceSyncJobsByStatus(
     .groupBy(deviceSyncJobs.status);
 }
 
+/** Remove somente o histórico de falhas do cliente, sem alterar cadastros. */
+export async function clearFailedDeviceSyncJobs(
+  db: AppDb,
+  clientId: string,
+): Promise<number> {
+  const rows = await db
+    .delete(deviceSyncJobs)
+    .where(
+      and(
+        eq(deviceSyncJobs.clientId, clientId),
+        eq(deviceSyncJobs.status, 'failed'),
+      ),
+    )
+    .returning({ id: deviceSyncJobs.id });
+  return rows.length;
+}
+
 /** Cancela jobs ainda na fila; sem `ids`, cancela toda a fila do cliente. */
 export async function cancelQueuedDeviceSyncJobs(
   db: AppDb,

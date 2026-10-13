@@ -1,3 +1,5 @@
+import { ChildApprovalsModule } from '../child-approvals/child-approvals.module';
+import { ChildApprovalRegistrationListener } from './child-approval-registration.listener';
 import { Module } from '@nestjs/common';
 
 import { ClientBlocksModule } from '../client-blocks/client-blocks.module';
@@ -28,6 +30,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
 @Module({
   imports: [
     DatabaseModule,
+    ChildApprovalsModule,
     ClientBlocksModule,
     EmailModule,
     PermissionsModule,
@@ -47,6 +50,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
     CompanyRegistrationsController,
   ],
   providers: [
+    ChildApprovalRegistrationListener,
     RegistrationLinksService,
     RegistrationConfigService,
     PublicRegistrationService,
@@ -57,6 +61,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
     RegistrationsAdminService,
   ],
   exports: [
+    ChildApprovalRegistrationListener,
     RegistrationLinksService,
     RegistrationConfigService,
     RegistrationsAdminService,

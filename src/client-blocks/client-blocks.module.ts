@@ -8,6 +8,8 @@ import { ClientBlocksController } from './client-blocks.controller';
 import { ClientBlocksRepository } from './client-blocks.repository';
 import { ClientBlocksService } from './client-blocks.service';
 import { CondominiumAccessService } from './condominium-access.service';
+import { LocationPersonMoveRepository } from './location-person-move.repository';
+import { LocationPersonMoveService } from './location-person-move.service';
 import { LocationReviewController } from './location-review.controller';
 import { LocationReviewRepository } from './location-review.repository';
 import { LocationReviewService } from './location-review.service';
@@ -21,6 +23,8 @@ import { LocationReviewService } from './location-review.service';
     ClientBlocksRepository,
     ClientBlocksService,
     CondominiumAccessService,
+    LocationPersonMoveRepository,
+    LocationPersonMoveService,
     LocationReviewRepository,
     LocationReviewService,
   ],

@@ -10,6 +10,7 @@ export const deviceSyncJobStatusSchema = z.enum([
 
 export const deviceSyncJobKindSchema = z.enum([
   'face.person',
+  'face.remove',
   'face.reader',
   'face.school',
   'lpr.vehicle',
@@ -84,4 +85,8 @@ export const deviceSyncJobCancelResultSchema = z.object({
 
 export const deviceSyncCancelQueuedResultSchema = z.object({
   canceled: z.number().int(),
+});
+
+export const deviceSyncClearFailedResultSchema = z.object({
+  removed: z.number().int(),
 });

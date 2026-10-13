@@ -1,3 +1,4 @@
+import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
 import {
   BadRequestException,
   ConflictException,
@@ -164,6 +165,7 @@ export class FaceSyncService {
     private readonly accessTimeZone: AccessTimeZoneService,
     private readonly queue: DeviceSyncQueueService,
     private readonly faceMatch: FaceMatchService,
+    private readonly childPolicy: ChildApprovalPolicyService,
   ) {}
 
   takePersistHook(jobId: string) {
@@ -307,7 +309,15 @@ export class FaceSyncService {
    * Envia a face aos leitores que ainda não estão synced.
    * O chamador atualiza o resumo `device_sync_*` da entidade.
    */
-  async syncPersonOnReaders(params: {
+  async syncPersonOnReaders(
+    params: Parameters<FaceSyncService['syncPersonOnReadersAllowed']>[0],
+  ) {
+    return this.childPolicy.withFaceAccess(params.clientId, params.faceId, () =>
+      this.syncPersonOnReadersAllowed(params),
+    );
+  }
+
+  private async syncPersonOnReadersAllowed(params: {
     clientId: string;
     faceId: number;
     name: string;
@@ -908,7 +918,12 @@ export class FaceSyncService {
         'Leitor ativo com credenciais não encontrado para reconciliar a política.',
       );
     }
-    if (reader.minimumAccessAge == null) return 0;
+    const client = await clientsQueries.getClientByIdOnly(
+      this.database.db,
+      clientId,
+    );
+    if (reader.minimumAccessAge == null && !client?.enableChildApprove)
+      return 0;
 
     const [synced, known] = await Promise.all([
       personReaderSyncQueries.listSyncedFaceIdsByReader(
@@ -918,7 +933,11 @@ export class FaceSyncService {
       ),
       personBirthDateQueries.listFaceIdsByClient(this.database.db, clientId),
     ]);
-    const candidates = new Set<number>([...synced, ...known]);
+    const candidates = new Set<number>([
+      ...synced,
+      ...known,
+      ...(await this.childPolicy.trackedFaces(clientId)),
+    ]);
     if (candidates.size === 0) return 0;
 
     const birthDates = await personBirthDateQueries.listBirthDatesByFaceIds(
@@ -930,9 +949,16 @@ export class FaceSyncService {
       (faceId) =>
         !isPersonAllowedOnReader(reader, birthDates.get(faceId) ?? null),
     );
+    for (const faceId of candidates) {
+      if (
+        !ineligible.includes(faceId) &&
+        !(await this.childPolicy.faceAllowed(clientId, faceId))
+      )
+        ineligible.push(faceId);
+    }
     if (ineligible.length === 0) return 0;
 
-    return withReaderSyncGate(reader.id, async () => {
+    return (async () => {
       const cipher = createReaderCredentialsCipher(
         this.configService.get('READER_ENCRYPTION_KEY', { infer: true }),
       );
@@ -944,27 +970,42 @@ export class FaceSyncService {
       const failures: string[] = [];
       for (const faceId of ineligible) {
         try {
-          if (reader.brand === 'hikvision') {
-            const connection = toHikvisionConnection(plain);
-            const result = await hikvisionDeleteUser(
-              connection,
-              String(faceId),
-            );
-            if (!result.success) {
-              throw new Error(
-                result.error ?? 'Falha ao remover usuário Hikvision',
+          const remove = () =>
+            withReaderSyncGate(reader.id, async () => {
+              if (reader.brand === 'hikvision') {
+                const connection = toHikvisionConnection(plain);
+                const result = await hikvisionDeleteUser(
+                  connection,
+                  String(faceId),
+                );
+                if (!result.success) {
+                  throw new Error(
+                    result.error ?? 'Falha ao remover usuário Hikvision',
+                  );
+                }
+              } else {
+                await intelbrasRemoveUserFromReader(plain, faceId);
+              }
+              await personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
+                this.database.db,
+                clientId,
+                faceId,
+                readerId,
               );
-            }
-          } else {
-            await intelbrasRemoveUserFromReader(plain, faceId);
-          }
-          removed += 1;
-          await personReaderSyncQueries.deletePersonReaderSyncByFaceAndReader(
-            this.database.db,
-            clientId,
-            faceId,
-            readerId,
-          );
+            });
+          if (
+            !isPersonAllowedOnReader(reader, birthDates.get(faceId) ?? null)
+          ) {
+            await remove();
+            removed += 1;
+          } else if (
+            await this.childPolicy.removeIfUnauthorized(
+              clientId,
+              faceId,
+              remove,
+            )
+          )
+            removed += 1;
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           const failure = `${reader.name}: face ${faceId}: ${msg}`;
@@ -990,7 +1031,7 @@ export class FaceSyncService {
         );
       }
       return removed;
-    });
+    })();
   }
 
   /** Sincroniza um cadastro aprovado (foto no R2) com todos os leitores ativos do cliente. */
@@ -1024,6 +1065,7 @@ export class FaceSyncService {
       );
     }
 
+    await this.childPolicy.assertFaceAllowed(clientId, row.faceId);
     await registrationsQueries.updateRegistrationDeviceSync(
       this.database.db,
       registrationId,
@@ -1059,6 +1101,7 @@ export class FaceSyncService {
         blocked: row.status === 'blocked',
       });
 
+    await this.childPolicy.assertFaceAllowed(clientId, row.faceId);
     await registrationsQueries.updateRegistrationDeviceSync(
       this.database.db,
       registrationId,
@@ -1120,6 +1163,7 @@ export class FaceSyncService {
     deviceSyncError: string | null;
     jobId?: string;
   }> {
+    await this.childPolicy.assertFaceAllowed(payload.clientId, payload.faceId);
     const entityId =
       payload.entityId ?? `${payload.clientId}:${payload.faceId}`;
     const entityKind = payload.entityKind ?? 'registration';
@@ -1211,6 +1255,7 @@ export class FaceSyncService {
         'Cadastro sem face_id — reaprovar ou contactar suporte.',
       );
     }
+    await this.childPolicy.assertFaceAllowed(clientId, row.faceId);
     await registrationsQueries.updateRegistrationDeviceSync(
       this.database.db,
       registrationId,

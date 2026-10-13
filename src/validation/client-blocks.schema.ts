@@ -114,6 +114,21 @@ export type EnsureLocationUnitInput = z.infer<typeof ensureLocationUnitSchema>;
 export type BindLocationGroupInput = z.infer<typeof bindLocationGroupSchema>;
 export type MoveLocationGroupInput = z.infer<typeof moveLocationGroupSchema>;
 
+/** The source is the expected current link, used to reject stale edits. */
+export const moveLocationPersonSchema = z
+  .object({
+    kind: z.enum(['registration', 'member']),
+    personId: z.uuid(),
+    sourceUnitId: z.uuid(),
+    targetBlockId: z.uuid(),
+    targetUnitId: z.uuid(),
+  })
+  .refine((value) => value.sourceUnitId !== value.targetUnitId, {
+    message: 'Escolha uma unidade diferente da atual.',
+    path: ['targetUnitId'],
+  });
+export type MoveLocationPersonInput = z.infer<typeof moveLocationPersonSchema>;
+
 export const MAX_GENERATED_UNITS = 500;
 export const MAX_STRUCTURE_BLOCKS = 500;
 export const MAX_STRUCTURE_UNITS = 5000;

@@ -16,6 +16,7 @@ import { clients } from './clients';
 
 export const deviceSyncJobKindEnum = pgEnum('device_sync_job_kind', [
   'face.person',
+  'face.remove',
   'face.reader',
   'face.school',
   'lpr.vehicle',

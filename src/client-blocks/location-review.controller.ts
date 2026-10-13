@@ -15,7 +15,9 @@ import {
   BindLocationGroupsDto,
   EnsureLocationUnitDto,
   MoveLocationGroupsDto,
+  MoveLocationPersonDto,
 } from '../validation/dto/client-blocks.dto';
+import { LocationPersonMoveService } from './location-person-move.service';
 import { LocationReviewService } from './location-review.service';
 
 @ApiTags('client-blocks')
@@ -23,7 +25,10 @@ import { LocationReviewService } from './location-review.service';
 @Roles('company_admin')
 @Controller('condominiums/location-review')
 export class LocationReviewController {
-  constructor(private readonly locationReview: LocationReviewService) {}
+  constructor(
+    private readonly locationReview: LocationReviewService,
+    private readonly personMove: LocationPersonMoveService,
+  ) {}
 
   @Get('clients/:clientId')
   @ApiOperation({
@@ -56,6 +61,16 @@ export class LocationReviewController {
     @Body() dto: BindLocationGroupsDto,
   ) {
     return this.locationReview.bindGroups(user, clientId, dto.items);
+  }
+
+  @Post('clients/:clientId/move-person')
+  @ApiOperation({ summary: 'Corrigir o bloco e a unidade de uma única pessoa' })
+  movePerson(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @Body() dto: MoveLocationPersonDto,
+  ) {
+    return this.personMove.move(user, clientId, dto);
   }
 
   @Post('clients/:clientId/move')

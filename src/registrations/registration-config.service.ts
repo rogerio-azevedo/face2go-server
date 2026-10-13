@@ -93,12 +93,14 @@ export class RegistrationConfigService {
     clientId: string,
     clientType: string,
     stored: unknown,
+    enableChildApprove = false,
   ): Promise<RegistrationConfigResponse> {
     const resolved = await resolveFieldsConsideringRestrictMinors(
       this.database.db,
       clientId,
       clientType,
       stored,
+      enableChildApprove,
     );
     return {
       clientId,
@@ -112,7 +114,12 @@ export class RegistrationConfigService {
 
   async getForCompanyUser(user: JwtPayload, clientId: string) {
     const client = await this.ensureCompanyCanAccessClient(user, clientId);
-    return this.toResponse(client.id, client.type, client.registrationConfig);
+    return this.toResponse(
+      client.id,
+      client.type,
+      client.registrationConfig,
+      client.enableChildApprove,
+    );
   }
 
   async getForClientTenant(user: JwtPayload) {
@@ -122,7 +129,12 @@ export class RegistrationConfigService {
       clientId,
     );
     if (!client) throw new NotFoundException('Cliente não encontrado.');
-    return this.toResponse(client.id, client.type, client.registrationConfig);
+    return this.toResponse(
+      client.id,
+      client.type,
+      client.registrationConfig,
+      client.enableChildApprove,
+    );
   }
 
   private async save(
@@ -130,12 +142,14 @@ export class RegistrationConfigService {
     clientType: string,
     stored: unknown,
     patch: UpdateRegistrationFieldsConfigDto,
+    enableChildApprove = false,
   ) {
     const resolved = await resolveFieldsConsideringRestrictMinors(
       this.database.db,
       clientId,
       clientType,
       stored,
+      enableChildApprove,
     );
     if (
       resolved.birthDateRequiredByRestrictMinors &&
@@ -144,6 +158,17 @@ export class RegistrationConfigService {
     ) {
       throw new BadRequestException(BIRTH_DATE_REQUIRED_WITH_18_PLUS);
     }
+    if (
+      enableChildApprove &&
+      ['birthDate', 'document', 'email', 'unit', 'block'].some(
+        (field) =>
+          patch[field as keyof typeof patch] !== undefined &&
+          patch[field as keyof typeof patch] !== 'required',
+      )
+    )
+      throw new BadRequestException(
+        'Nascimento, CPF, e-mail, bloco e unidade são obrigatórios com autorização de menores ativa.',
+      );
     const current = resolveRegistrationFieldsConfig(clientType, stored);
     const merged = {
       ...defaultConfigForClientType(clientType),
@@ -164,6 +189,7 @@ export class RegistrationConfigService {
       updated.id,
       updated.type,
       updated.registrationConfig,
+      updated.enableChildApprove,
     );
   }
 
@@ -173,7 +199,13 @@ export class RegistrationConfigService {
     patch: UpdateRegistrationFieldsConfigDto,
   ) {
     const client = await this.ensureCompanyCanAccessClient(user, clientId);
-    return this.save(client.id, client.type, client.registrationConfig, patch);
+    return this.save(
+      client.id,
+      client.type,
+      client.registrationConfig,
+      patch,
+      client.enableChildApprove,
+    );
   }
 
   async updateForClientTenant(
@@ -186,6 +218,12 @@ export class RegistrationConfigService {
       clientId,
     );
     if (!client) throw new NotFoundException('Cliente não encontrado.');
-    return this.save(client.id, client.type, client.registrationConfig, patch);
+    return this.save(
+      client.id,
+      client.type,
+      client.registrationConfig,
+      patch,
+      client.enableChildApprove,
+    );
   }
 }

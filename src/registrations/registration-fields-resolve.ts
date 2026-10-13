@@ -13,6 +13,7 @@ export async function resolveFieldsConsideringRestrictMinors(
   clientId: string,
   clientType: string,
   stored: unknown,
+  enableChildApprove = false,
 ): Promise<{
   fields: ResolvedRegistrationFieldsConfig;
   birthDateRequiredByRestrictMinors: boolean;
@@ -20,6 +21,13 @@ export async function resolveFieldsConsideringRestrictMinors(
   const hasRestrictMinorsReader =
     await readersQueries.hasRestrictMinorsReaderByClient(db, clientId);
   const base = resolveRegistrationFieldsConfig(clientType, stored);
+  if (enableChildApprove) {
+    base.birthDate = 'required';
+    base.document = 'required';
+    base.email = 'required';
+    base.unit = 'required';
+    base.block = 'required';
+  }
   return {
     fields: applyRestrictMinorsFieldRules(base, hasRestrictMinorsReader),
     birthDateRequiredByRestrictMinors: hasRestrictMinorsReader,

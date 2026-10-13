@@ -303,6 +303,7 @@ export class ClientsService {
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
       autoApproveRegistrations: parsed.data.autoApproveRegistrations,
+      enableChildApprove: parsed.data.enableChildApprove,
     });
     await membersQueries.seedDefaultRolesForClient(
       this.database.db,
@@ -339,11 +340,16 @@ export class ClientsService {
       d.timezoneOffsetMinutes === undefined &&
       d.isActive === undefined &&
       d.autoApproveRegistrations === undefined &&
+      d.enableChildApprove === undefined &&
       d.ienhFilialCode === undefined
     ) {
       throw new BadRequestException('Nada para atualizar.');
     }
-    if (d.type !== undefined || d.segment !== undefined) {
+    if (
+      d.type !== undefined ||
+      d.segment !== undefined ||
+      d.enableChildApprove !== undefined
+    ) {
       const current = await clientsQueries.getClientById(
         this.database.db,
         clientId,
@@ -351,6 +357,14 @@ export class ClientsService {
       );
       if (!current) throw new NotFoundException('Cliente não encontrado.');
       const nextType = d.type ?? current.type;
+      if (
+        (d.enableChildApprove ?? current.enableChildApprove) &&
+        nextType !== 'condominium'
+      ) {
+        throw new BadRequestException(
+          'Autorização de menores exige um cliente com blocos e unidades.',
+        );
+      }
       const nextSegment = d.segment !== undefined ? d.segment : current.segment;
       if (nextSegment === 'condo_market' && nextType !== 'condominium') {
         throw new BadRequestException(
@@ -400,6 +414,9 @@ export class ClientsService {
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
           : {}),
         ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+        ...(d.enableChildApprove !== undefined
+          ? { enableChildApprove: d.enableChildApprove }
+          : {}),
         ...(d.autoApproveRegistrations !== undefined
           ? { autoApproveRegistrations: d.autoApproveRegistrations }
           : {}),

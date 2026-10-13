@@ -1,3 +1,4 @@
+import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
 import { Injectable } from '@nestjs/common';
 
 import { toIsoDateString } from '../common/utils/birth-date';
@@ -42,6 +43,7 @@ export class FaceReaderRebuildService {
   constructor(
     private readonly database: DatabaseService,
     private readonly accessTimeZone: AccessTimeZoneService,
+    private readonly childPolicy: ChildApprovalPolicyService,
   ) {}
 
   async listPeopleToSync(
@@ -137,6 +139,7 @@ export class FaceReaderRebuildService {
 
     const people: RebuildPerson[] = [];
     for (const row of pending) {
+      if (!(await this.childPolicy.faceAllowed(clientId, row.faceId))) continue;
       people.push({
         ...row,
         timeSectionIds: await this.resolveTimeSections(clientId, row),

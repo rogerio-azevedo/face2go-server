@@ -27,6 +27,7 @@ describe('DeviceSyncJobHandlersService', () => {
       {} as never,
       r2 as never,
       database as never,
+      {} as never,
     );
     const job = {
       id: 'job-1',

@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { ChildApprovalService } from '../child-approvals/child-approval.service';
+import { ageForApproval } from '../child-approvals/child-approval.util';
 
 import { resolveClientAppBrand } from '../common/utils/client-app-brand';
 import { ClientBlocksRepository } from '../client-blocks/client-blocks.repository';
@@ -69,6 +71,7 @@ export class PublicRegistrationService {
     private readonly r2: R2StorageService,
     private readonly blocks: ClientBlocksRepository,
     private readonly registrationsAdmin: RegistrationsAdminService,
+    private readonly childApprovals: ChildApprovalService,
   ) {}
 
   async getPreview(code: string) {
@@ -93,6 +96,7 @@ export class PublicRegistrationService {
           bundle.client.id,
           bundle.client.type,
           bundle.client.registrationConfig,
+          bundle.client.enableChildApprove ?? false,
         )
       ).fields,
       blocks:
@@ -228,6 +232,7 @@ export class PublicRegistrationService {
         bundle.client.id,
         bundle.client.type,
         bundle.client.registrationConfig,
+        bundle.client.enableChildApprove ?? false,
       )
     ).fields;
     const isCondominium = bundle.client.type === 'condominium';
@@ -302,6 +307,12 @@ export class PublicRegistrationService {
         additionalData: location.additionalData,
         unitId: location.unitId,
         truthDeclaredAt,
+        childApprovalRequired:
+          bundle.client.enableChildApprove &&
+          (ageForApproval(
+            normalized.birthDate,
+            bundle.client.timezoneOffsetMinutes,
+          ) ?? -1) < 18,
       });
     } catch (e: unknown) {
       const codePg =
@@ -311,6 +322,9 @@ export class PublicRegistrationService {
       }
       throw e;
     }
+
+    if (row.childApprovalRequired)
+      await this.childApprovals.requestEmails(bundle.client.id, row.id);
 
     if (bundle.client.autoApproveRegistrations) {
       try {

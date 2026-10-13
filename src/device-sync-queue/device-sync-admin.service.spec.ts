@@ -99,6 +99,50 @@ describe('DeviceSyncAdminService', () => {
     );
   });
 
+  it('limpa falhas sem modificar o status de sync dos cadastros', async () => {
+    const { service, queue, persist } = setup();
+    const clear = jest
+      .spyOn(adminQueries, 'clearFailedDeviceSyncJobs')
+      .mockResolvedValue(260);
+
+    await expect(service.clearFailed(admin, 'client-1')).resolves.toEqual({
+      removed: 260,
+    });
+    expect(clear).toHaveBeenCalledWith({}, 'client-1');
+    expect(persist.persistFacePerson).not.toHaveBeenCalled();
+    expect(queue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('não permite limpar falhas de cliente de outra empresa', async () => {
+    const { service } = setup();
+    jest.spyOn(clientsQueries, 'getClientById').mockResolvedValue(undefined);
+    const clear = jest.spyOn(adminQueries, 'clearFailedDeviceSyncJobs');
+
+    await expect(service.clearFailed(admin, 'client-x')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('não permite que operador limpe as falhas', async () => {
+    const { service } = setup();
+    const clear = jest.spyOn(adminQueries, 'clearFailedDeviceSyncJobs');
+
+    await expect(
+      service.clearFailed({ ...admin, role: 'company_operator' }, 'client-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('limpar falhas de uma fila vazia retorna zero', async () => {
+    const { service } = setup();
+    jest.spyOn(adminQueries, 'clearFailedDeviceSyncJobs').mockResolvedValue(0);
+
+    await expect(service.clearFailed(admin, 'client-1')).resolves.toEqual({
+      removed: 0,
+    });
+  });
+
   it('job em execução recebe pedido de cancelamento', async () => {
     const { service, queue } = setup();
     queue.getById.mockResolvedValue(job({ status: 'running' }));

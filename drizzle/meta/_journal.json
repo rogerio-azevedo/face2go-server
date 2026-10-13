@@ -631,6 +631,20 @@
       "when": 1779580000000,
       "tag": "0089_client_segment",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1791821735385,
+      "tag": "0090_child_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1791821735386,
+      "tag": "0091_location_person_moves",
+      "breakpoints": true
     }
   ]
 }

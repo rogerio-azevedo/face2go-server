@@ -1,3 +1,6 @@
+import { ChildApprovalService } from '../child-approvals/child-approval.service';
+import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
+import { ChildApprovalRepository } from '../child-approvals/child-approval.repository';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
@@ -89,6 +92,25 @@ describe('RegistrationsAdminService lifecycle', () => {
     const module = await Test.createTestingModule({
       providers: [
         RegistrationsAdminService,
+        {
+          provide: ChildApprovalService,
+          useValue: { deferApproval: jest.fn().mockResolvedValue(false) },
+        },
+        {
+          provide: ChildApprovalPolicyService,
+          useValue: {
+            summary: jest
+              .fn()
+              .mockResolvedValue({ childApprovalStatus: 'not_applicable' }),
+          },
+        },
+        {
+          provide: ChildApprovalRepository,
+          useValue: {
+            clearApprovalIntent: jest.fn(),
+            cancelOpenRequests: jest.fn(),
+          },
+        },
         { provide: DatabaseService, useValue: { db } },
         { provide: RegistrationEventsService, useValue: events },
         { provide: PermissionsService, useValue: {} },

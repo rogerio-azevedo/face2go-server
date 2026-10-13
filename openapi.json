@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/device-sync-jobs/{jobId}": {
+    "/api/device-sync-jobs/{jobId}": {
       "get": {
         "operationId": "DeviceSyncJobsController_getJob",
         "parameters": [
@@ -30,7 +30,7 @@
         ]
       }
     },
-    "/clients/{clientId}/device-sync-jobs": {
+    "/api/clients/{clientId}/device-sync-jobs": {
       "get": {
         "operationId": "ClientDeviceSyncJobsController_list",
         "parameters": [
@@ -75,6 +75,7 @@
               "type": "string",
               "enum": [
                 "face.person",
+                "face.remove",
                 "face.reader",
                 "face.school",
                 "lpr.vehicle",
@@ -128,7 +129,7 @@
         ]
       }
     },
-    "/clients/{clientId}/device-sync-jobs/summary": {
+    "/api/clients/{clientId}/device-sync-jobs/summary": {
       "get": {
         "operationId": "ClientDeviceSyncJobsController_summary",
         "parameters": [
@@ -164,7 +165,7 @@
         ]
       }
     },
-    "/clients/{clientId}/device-sync-jobs/cancel-queued": {
+    "/api/clients/{clientId}/device-sync-jobs/cancel-queued": {
       "post": {
         "operationId": "ClientDeviceSyncJobsController_cancelQueued",
         "parameters": [
@@ -200,7 +201,43 @@
         ]
       }
     },
-    "/clients/{clientId}/device-sync-jobs/{jobId}/cancel": {
+    "/api/clients/{clientId}/device-sync-jobs/clear-failed": {
+      "post": {
+        "operationId": "ClientDeviceSyncJobsController_clearFailed",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceSyncClearFailedResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove o histórico de jobs com falha do cliente",
+        "tags": [
+          "device-sync-jobs"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/device-sync-jobs/{jobId}/cancel": {
       "post": {
         "operationId": "ClientDeviceSyncJobsController_cancel",
         "parameters": [
@@ -244,7 +281,7 @@
         ]
       }
     },
-    "/clients/{clientId}/device-sync-jobs/{jobId}/retry": {
+    "/api/clients/{clientId}/device-sync-jobs/{jobId}/retry": {
       "post": {
         "operationId": "ClientDeviceSyncJobsController_retry",
         "parameters": [
@@ -288,7 +325,7 @@
         ]
       }
     },
-    "/companies/{id}/features": {
+    "/api/companies/{id}/features": {
       "get": {
         "operationId": "CompanyFeaturesController_list",
         "parameters": [
@@ -317,7 +354,7 @@
         ]
       }
     },
-    "/companies/{id}/features/{slug}": {
+    "/api/companies/{id}/features/{slug}": {
       "patch": {
         "operationId": "CompanyFeaturesController_toggle",
         "parameters": [
@@ -364,7 +401,7 @@
         ]
       }
     },
-    "/clients/{clientId}/lpr-plates/{vehicleId}/sync": {
+    "/api/clients/{clientId}/lpr-plates/{vehicleId}/sync": {
       "post": {
         "operationId": "CompanyLprPlateSyncController_syncOne",
         "parameters": [
@@ -401,7 +438,7 @@
         ]
       }
     },
-    "/clients/{clientId}/lpr-plates/sync-all/progress": {
+    "/api/clients/{clientId}/lpr-plates/sync-all/progress": {
       "get": {
         "operationId": "CompanyLprPlateSyncController_syncAllProgress",
         "parameters": [
@@ -430,7 +467,7 @@
         ]
       }
     },
-    "/client/lpr-plates/{vehicleId}/sync": {
+    "/api/client/lpr-plates/{vehicleId}/sync": {
       "post": {
         "operationId": "ClientLprPlateSyncController_syncOne",
         "parameters": [
@@ -459,7 +496,7 @@
         ]
       }
     },
-    "/client/lpr-plates/sync-all/progress": {
+    "/api/client/lpr-plates/sync-all/progress": {
       "get": {
         "operationId": "ClientLprPlateSyncController_syncAllProgress",
         "parameters": [],
@@ -479,7 +516,7 @@
         ]
       }
     },
-    "/auth/login": {
+    "/api/auth/login": {
       "post": {
         "operationId": "AuthController_login",
         "parameters": [],
@@ -504,7 +541,7 @@
         ]
       }
     },
-    "/auth/select-context": {
+    "/api/auth/select-context": {
       "post": {
         "operationId": "AuthController_selectContext",
         "parameters": [],
@@ -534,7 +571,7 @@
         ]
       }
     },
-    "/auth/register": {
+    "/api/auth/register": {
       "post": {
         "operationId": "AuthController_register",
         "parameters": [],
@@ -559,7 +596,7 @@
         ]
       }
     },
-    "/auth/join-context": {
+    "/api/auth/join-context": {
       "post": {
         "operationId": "AuthController_joinContext",
         "parameters": [],
@@ -584,7 +621,7 @@
         ]
       }
     },
-    "/auth/request-password": {
+    "/api/auth/request-password": {
       "post": {
         "operationId": "AuthController_requestPassword",
         "parameters": [],
@@ -609,7 +646,7 @@
         ]
       }
     },
-    "/auth/reset-password": {
+    "/api/auth/reset-password": {
       "post": {
         "operationId": "AuthController_resetPassword",
         "parameters": [],
@@ -634,7 +671,7 @@
         ]
       }
     },
-    "/auth/me": {
+    "/api/auth/me": {
       "get": {
         "operationId": "AuthController_me",
         "parameters": [],
@@ -654,7 +691,7 @@
         ]
       }
     },
-    "/companies": {
+    "/api/companies": {
       "get": {
         "operationId": "CompaniesController_list",
         "parameters": [
@@ -711,7 +748,7 @@
         ]
       }
     },
-    "/companies/{id}/users": {
+    "/api/companies/{id}/users": {
       "get": {
         "operationId": "CompaniesController_companyUsers",
         "parameters": [
@@ -740,7 +777,7 @@
         ]
       }
     },
-    "/companies/{id}": {
+    "/api/companies/{id}": {
       "get": {
         "operationId": "CompaniesController_get",
         "parameters": [
@@ -833,7 +870,7 @@
         ]
       }
     },
-    "/companies/{id}/invite-links": {
+    "/api/companies/{id}/invite-links": {
       "post": {
         "operationId": "CompaniesController_invite",
         "parameters": [
@@ -872,7 +909,7 @@
         ]
       }
     },
-    "/invite-links/{code}": {
+    "/api/invite-links/{code}": {
       "get": {
         "operationId": "InviteLinksController_preview",
         "parameters": [
@@ -896,7 +933,7 @@
         ]
       }
     },
-    "/clients": {
+    "/api/clients": {
       "get": {
         "operationId": "ClientsController_list",
         "parameters": [],
@@ -918,6 +955,16 @@
       "post": {
         "operationId": "ClientsController_create",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateClientDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -934,7 +981,7 @@
         ]
       }
     },
-    "/clients/map-points": {
+    "/api/clients/map-points": {
       "get": {
         "operationId": "ClientsController_listMapPoints",
         "parameters": [],
@@ -954,7 +1001,7 @@
         ]
       }
     },
-    "/clients/{clientId}/display-short-code": {
+    "/api/clients/{clientId}/display-short-code": {
       "get": {
         "operationId": "ClientsController_ensureDisplayShortCode",
         "parameters": [
@@ -983,7 +1030,7 @@
         ]
       }
     },
-    "/clients/{clientId}/display-token": {
+    "/api/clients/{clientId}/display-token": {
       "get": {
         "operationId": "ClientsController_ensureDisplayToken",
         "parameters": [
@@ -1012,7 +1059,7 @@
         ]
       }
     },
-    "/clients/{clientId}/display-token/regenerate": {
+    "/api/clients/{clientId}/display-token/regenerate": {
       "post": {
         "operationId": "ClientsController_regenerateDisplayToken",
         "parameters": [
@@ -1041,7 +1088,7 @@
         ]
       }
     },
-    "/clients/{clientId}/display-devices": {
+    "/api/clients/{clientId}/display-devices": {
       "get": {
         "operationId": "ClientsController_getDisplayDevices",
         "parameters": [
@@ -1097,7 +1144,7 @@
         ]
       }
     },
-    "/clients/{clientId}/client-users": {
+    "/api/clients/{clientId}/client-users": {
       "get": {
         "operationId": "ClientsController_listClientUsers",
         "parameters": [
@@ -1126,7 +1173,7 @@
         ]
       }
     },
-    "/clients/{clientId}/invite-links": {
+    "/api/clients/{clientId}/invite-links": {
       "get": {
         "operationId": "ClientsController_listClientInviteLinks",
         "parameters": [
@@ -1182,7 +1229,7 @@
         ]
       }
     },
-    "/clients/{clientId}/active": {
+    "/api/clients/{clientId}/active": {
       "patch": {
         "operationId": "ClientsController_setActive",
         "parameters": [
@@ -1211,7 +1258,7 @@
         ]
       }
     },
-    "/clients/{clientId}": {
+    "/api/clients/{clientId}": {
       "get": {
         "operationId": "ClientsController_getById",
         "parameters": [
@@ -1251,6 +1298,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchClientDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -1267,7 +1324,7 @@
         ]
       }
     },
-    "/clients/display/resolve/{shortCode}": {
+    "/api/clients/display/resolve/{shortCode}": {
       "get": {
         "operationId": "ClientDisplayResolveController_resolve",
         "parameters": [
@@ -1291,7 +1348,7 @@
         ]
       }
     },
-    "/clients/{clientId}/addresses": {
+    "/api/clients/{clientId}/addresses": {
       "get": {
         "operationId": "ClientAddressesController_list",
         "parameters": [
@@ -1357,7 +1414,7 @@
         ]
       }
     },
-    "/clients/{clientId}/addresses/{addressId}": {
+    "/api/clients/{clientId}/addresses/{addressId}": {
       "get": {
         "operationId": "ClientAddressesController_getById",
         "parameters": [
@@ -1474,7 +1531,7 @@
         ]
       }
     },
-    "/clients/{clientId}/addresses/{addressId}/set-primary": {
+    "/api/clients/{clientId}/addresses/{addressId}/set-primary": {
       "post": {
         "operationId": "ClientAddressesController_setPrimary",
         "parameters": [
@@ -1511,7 +1568,7 @@
         ]
       }
     },
-    "/clients/{clientId}/blocks": {
+    "/api/clients/{clientId}/blocks": {
       "get": {
         "operationId": "ClientBlocksController_list",
         "parameters": [
@@ -1577,7 +1634,7 @@
         ]
       }
     },
-    "/clients/{clientId}/blocks/generate-structure": {
+    "/api/clients/{clientId}/blocks/generate-structure": {
       "post": {
         "operationId": "ClientBlocksController_generateStructure",
         "parameters": [
@@ -1616,7 +1673,7 @@
         ]
       }
     },
-    "/clients/{clientId}/blocks/{blockId}": {
+    "/api/clients/{clientId}/blocks/{blockId}": {
       "patch": {
         "operationId": "ClientBlocksController_updateBlock",
         "parameters": [
@@ -1698,7 +1755,7 @@
         ]
       }
     },
-    "/clients/{clientId}/blocks/{blockId}/units": {
+    "/api/clients/{clientId}/blocks/{blockId}/units": {
       "post": {
         "operationId": "ClientBlocksController_createUnit",
         "parameters": [
@@ -1745,7 +1802,7 @@
         ]
       }
     },
-    "/clients/{clientId}/blocks/{blockId}/units/generate": {
+    "/api/clients/{clientId}/blocks/{blockId}/units/generate": {
       "post": {
         "operationId": "ClientBlocksController_generateUnits",
         "parameters": [
@@ -1792,7 +1849,7 @@
         ]
       }
     },
-    "/clients/{clientId}/units/{unitId}": {
+    "/api/clients/{clientId}/units/{unitId}": {
       "patch": {
         "operationId": "ClientBlocksController_updateUnit",
         "parameters": [
@@ -1874,7 +1931,7 @@
         ]
       }
     },
-    "/clients/{clientId}/units/{unitId}/people": {
+    "/api/clients/{clientId}/units/{unitId}/people": {
       "get": {
         "operationId": "ClientBlocksController_listUnitPeople",
         "parameters": [
@@ -1911,7 +1968,7 @@
         ]
       }
     },
-    "/condominiums/location-review/clients/{clientId}": {
+    "/api/condominiums/location-review/clients/{clientId}": {
       "get": {
         "operationId": "LocationReviewController_getClientReview",
         "parameters": [
@@ -1940,7 +1997,7 @@
         ]
       }
     },
-    "/condominiums/location-review/clients/{clientId}/ensure-unit": {
+    "/api/condominiums/location-review/clients/{clientId}/ensure-unit": {
       "post": {
         "operationId": "LocationReviewController_ensureUnit",
         "parameters": [
@@ -1979,7 +2036,7 @@
         ]
       }
     },
-    "/condominiums/location-review/clients/{clientId}/bind": {
+    "/api/condominiums/location-review/clients/{clientId}/bind": {
       "post": {
         "operationId": "LocationReviewController_bind",
         "parameters": [
@@ -2018,7 +2075,46 @@
         ]
       }
     },
-    "/condominiums/location-review/clients/{clientId}/move": {
+    "/api/condominiums/location-review/clients/{clientId}/move-person": {
+      "post": {
+        "operationId": "LocationReviewController_movePerson",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveLocationPersonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Corrigir o bloco e a unidade de uma única pessoa",
+        "tags": [
+          "client-blocks"
+        ]
+      }
+    },
+    "/api/condominiums/location-review/clients/{clientId}/move": {
       "post": {
         "operationId": "LocationReviewController_move",
         "parameters": [
@@ -2057,7 +2153,7 @@
         ]
       }
     },
-    "/client-invite-links/{code}": {
+    "/api/client-invite-links/{code}": {
       "get": {
         "operationId": "ClientInviteLinksController_preview",
         "parameters": [
@@ -2081,7 +2177,7 @@
         ]
       }
     },
-    "/client/invite-links": {
+    "/api/client/invite-links": {
       "get": {
         "operationId": "ClientInviteLinksController_list",
         "parameters": [],
@@ -2119,7 +2215,7 @@
         ]
       }
     },
-    "/client/client-users": {
+    "/api/client/client-users": {
       "get": {
         "operationId": "ClientInviteLinksController_listClientUsers",
         "parameters": [],
@@ -2139,7 +2235,7 @@
         ]
       }
     },
-    "/client/client-users/{clientUserId}/profile": {
+    "/api/client/client-users/{clientUserId}/profile": {
       "patch": {
         "operationId": "ClientInviteLinksController_updateClientUserProfile",
         "parameters": [
@@ -2178,7 +2274,7 @@
         ]
       }
     },
-    "/client/client-users/{clientUserId}/role": {
+    "/api/client/client-users/{clientUserId}/role": {
       "patch": {
         "operationId": "ClientInviteLinksController_updateClientUserRole",
         "parameters": [
@@ -2217,7 +2313,7 @@
         ]
       }
     },
-    "/client/client-users/{clientUserId}/active": {
+    "/api/client/client-users/{clientUserId}/active": {
       "patch": {
         "operationId": "ClientInviteLinksController_setClientUserActive",
         "parameters": [
@@ -2256,7 +2352,7 @@
         ]
       }
     },
-    "/client/client-users/{clientUserId}/password": {
+    "/api/client/client-users/{clientUserId}/password": {
       "patch": {
         "operationId": "ClientInviteLinksController_setClientUserPassword",
         "parameters": [
@@ -2295,7 +2391,7 @@
         ]
       }
     },
-    "/clients/{clientId}/client-users/{clientUserId}/profile": {
+    "/api/clients/{clientId}/client-users/{clientUserId}/profile": {
       "patch": {
         "operationId": "CompanyClientUsersController_updateProfile",
         "parameters": [
@@ -2342,7 +2438,7 @@
         ]
       }
     },
-    "/clients/{clientId}/client-users/{clientUserId}/role": {
+    "/api/clients/{clientId}/client-users/{clientUserId}/role": {
       "patch": {
         "operationId": "CompanyClientUsersController_updateRole",
         "parameters": [
@@ -2389,7 +2485,7 @@
         ]
       }
     },
-    "/clients/{clientId}/client-users/{clientUserId}/active": {
+    "/api/clients/{clientId}/client-users/{clientUserId}/active": {
       "patch": {
         "operationId": "CompanyClientUsersController_setActive",
         "parameters": [
@@ -2436,7 +2532,7 @@
         ]
       }
     },
-    "/clients/{clientId}/client-users/{clientUserId}/password": {
+    "/api/clients/{clientId}/client-users/{clientUserId}/password": {
       "patch": {
         "operationId": "CompanyClientUsersController_setPassword",
         "parameters": [
@@ -2483,7 +2579,7 @@
         ]
       }
     },
-    "/readers/monitor/status": {
+    "/api/readers/monitor/status": {
       "get": {
         "operationId": "ReadersController_monitorStatus",
         "parameters": [
@@ -2512,7 +2608,7 @@
         ]
       }
     },
-    "/readers": {
+    "/api/readers": {
       "get": {
         "operationId": "ReadersController_list",
         "parameters": [
@@ -2559,7 +2655,7 @@
         ]
       }
     },
-    "/readers/intelbras-push/provision-all": {
+    "/api/readers/intelbras-push/provision-all": {
       "post": {
         "operationId": "ReadersController_provisionAllIntelbrasPush",
         "parameters": [
@@ -2588,7 +2684,7 @@
         ]
       }
     },
-    "/readers/{readerId}": {
+    "/api/readers/{readerId}": {
       "patch": {
         "operationId": "ReadersController_update",
         "parameters": [
@@ -2617,7 +2713,7 @@
         ]
       }
     },
-    "/readers/{readerId}/push-config": {
+    "/api/readers/{readerId}/push-config": {
       "get": {
         "operationId": "ReadersController_pushConfig",
         "parameters": [
@@ -2646,7 +2742,7 @@
         ]
       }
     },
-    "/readers/{readerId}/provision-push": {
+    "/api/readers/{readerId}/provision-push": {
       "post": {
         "operationId": "ReadersController_provisionPush",
         "parameters": [
@@ -2683,7 +2779,7 @@
         ]
       }
     },
-    "/readers/{readerId}/credentials/reveal": {
+    "/api/readers/{readerId}/credentials/reveal": {
       "post": {
         "operationId": "ReadersController_revealCredentials",
         "parameters": [
@@ -2712,7 +2808,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-info/refresh": {
+    "/api/readers/{readerId}/device-info/refresh": {
       "post": {
         "operationId": "ReadersController_refreshDeviceInfo",
         "parameters": [
@@ -2772,7 +2868,7 @@
         ]
       }
     },
-    "/readers/{readerId}/open": {
+    "/api/readers/{readerId}/open": {
       "post": {
         "operationId": "ReadersController_openDoor",
         "parameters": [
@@ -2801,7 +2897,7 @@
         ]
       }
     },
-    "/readers/{readerId}/active": {
+    "/api/readers/{readerId}/active": {
       "patch": {
         "operationId": "ReadersController_setActive",
         "parameters": [
@@ -2830,7 +2926,7 @@
         ]
       }
     },
-    "/client/readers/monitor/status": {
+    "/api/client/readers/monitor/status": {
       "get": {
         "operationId": "ClientReadersController_monitorStatus",
         "parameters": [],
@@ -2850,7 +2946,7 @@
         ]
       }
     },
-    "/client/readers": {
+    "/api/client/readers": {
       "get": {
         "operationId": "ClientReadersController_list",
         "parameters": [],
@@ -2870,7 +2966,7 @@
         ]
       }
     },
-    "/client/readers/{readerId}/open": {
+    "/api/client/readers/{readerId}/open": {
       "post": {
         "operationId": "ClientReadersController_openDoor",
         "parameters": [
@@ -2899,7 +2995,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users": {
+    "/api/readers/{readerId}/device-users": {
       "get": {
         "operationId": "ReadersDeviceUsersController_getDeviceUsers",
         "parameters": [
@@ -2952,7 +3048,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/batch-delete": {
+    "/api/readers/{readerId}/device-users/batch-delete": {
       "post": {
         "operationId": "ReadersDeviceUsersController_batchDeleteDeviceUsers",
         "parameters": [
@@ -2991,7 +3087,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/remove-orphans": {
+    "/api/readers/{readerId}/device-users/remove-orphans": {
       "post": {
         "operationId": "ReadersDeviceUsersController_removeOrphans",
         "parameters": [
@@ -3030,7 +3126,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/wipe-all": {
+    "/api/readers/{readerId}/device-users/wipe-all": {
       "post": {
         "operationId": "ReadersDeviceUsersController_wipeAll",
         "parameters": [
@@ -3059,7 +3155,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/sync-status": {
+    "/api/readers/{readerId}/device-users/sync-status": {
       "get": {
         "operationId": "ReadersDeviceUsersController_getSyncStatus",
         "parameters": [
@@ -3088,7 +3184,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/sync-all": {
+    "/api/readers/{readerId}/device-users/sync-all": {
       "post": {
         "operationId": "ReadersDeviceUsersController_enqueueSyncAll",
         "parameters": [
@@ -3127,7 +3223,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/sync-all/progress": {
+    "/api/readers/{readerId}/device-users/sync-all/progress": {
       "get": {
         "operationId": "ReadersDeviceUsersController_syncAllProgress",
         "parameters": [
@@ -3164,7 +3260,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/{userId}": {
+    "/api/readers/{readerId}/device-users/{userId}": {
       "delete": {
         "operationId": "ReadersDeviceUsersController_removeDeviceUser",
         "parameters": [
@@ -3201,7 +3297,7 @@
         ]
       }
     },
-    "/readers/{readerId}/device-users/{userId}/face": {
+    "/api/readers/{readerId}/device-users/{userId}/face": {
       "get": {
         "operationId": "ReadersDeviceUsersController_getDeviceUserFace",
         "parameters": [
@@ -3238,7 +3334,7 @@
         ]
       }
     },
-    "/accesses/{id}/photo": {
+    "/api/accesses/{id}/photo": {
       "get": {
         "operationId": "AccessesController_photo",
         "parameters": [
@@ -3268,7 +3364,7 @@
         ]
       }
     },
-    "/accesses": {
+    "/api/accesses": {
       "get": {
         "operationId": "AccessesController_list",
         "parameters": [
@@ -3370,7 +3466,7 @@
         ]
       }
     },
-    "/client/accesses/{id}/photo": {
+    "/api/client/accesses/{id}/photo": {
       "get": {
         "operationId": "ClientAccessesController_photo",
         "parameters": [
@@ -3400,7 +3496,7 @@
         ]
       }
     },
-    "/client/accesses": {
+    "/api/client/accesses": {
       "get": {
         "operationId": "ClientAccessesController_list",
         "parameters": [
@@ -3493,7 +3589,7 @@
         ]
       }
     },
-    "/clients/{clientId}/faces/sync-all": {
+    "/api/clients/{clientId}/faces/sync-all": {
       "post": {
         "operationId": "CompanyFaceSyncController_enqueueSyncAll",
         "parameters": [
@@ -3532,7 +3628,7 @@
         ]
       }
     },
-    "/clients/{clientId}/faces/sync-status": {
+    "/api/clients/{clientId}/faces/sync-status": {
       "get": {
         "operationId": "CompanyFaceSyncController_getBatchSyncStatus",
         "parameters": [
@@ -3561,7 +3657,7 @@
         ]
       }
     },
-    "/clients/{clientId}/faces/{registrationId}/sync": {
+    "/api/clients/{clientId}/faces/{registrationId}/sync": {
       "post": {
         "operationId": "CompanyFaceSyncController_syncOne",
         "parameters": [
@@ -3643,7 +3739,7 @@
         ]
       }
     },
-    "/clients/{clientId}/faces/sync-all/progress": {
+    "/api/clients/{clientId}/faces/sync-all/progress": {
       "get": {
         "operationId": "CompanyFaceSyncController_syncAllProgress",
         "parameters": [
@@ -3680,7 +3776,7 @@
         ]
       }
     },
-    "/client/faces/sync-all": {
+    "/api/client/faces/sync-all": {
       "post": {
         "operationId": "ClientFaceSyncController_enqueueSyncAll",
         "parameters": [],
@@ -3710,7 +3806,7 @@
         ]
       }
     },
-    "/client/faces/sync-status": {
+    "/api/client/faces/sync-status": {
       "get": {
         "operationId": "ClientFaceSyncController_getBatchSyncStatus",
         "parameters": [],
@@ -3730,7 +3826,7 @@
         ]
       }
     },
-    "/client/faces/{registrationId}/sync": {
+    "/api/client/faces/{registrationId}/sync": {
       "post": {
         "operationId": "ClientFaceSyncController_syncOne",
         "parameters": [
@@ -3796,7 +3892,7 @@
         ]
       }
     },
-    "/client/faces/sync-all/progress": {
+    "/api/client/faces/sync-all/progress": {
       "get": {
         "operationId": "ClientFaceSyncController_syncAllProgress",
         "parameters": [
@@ -3825,7 +3921,7 @@
         ]
       }
     },
-    "/cameras/monitor/status": {
+    "/api/cameras/monitor/status": {
       "get": {
         "operationId": "CamerasController_monitorStatus",
         "parameters": [
@@ -3854,7 +3950,7 @@
         ]
       }
     },
-    "/cameras/{cameraId}/device-plates": {
+    "/api/cameras/{cameraId}/device-plates": {
       "get": {
         "operationId": "CamerasController_getDevicePlates",
         "parameters": [
@@ -3907,7 +4003,7 @@
         ]
       }
     },
-    "/cameras/{cameraId}/device-plates/{recNo}": {
+    "/api/cameras/{cameraId}/device-plates/{recNo}": {
       "delete": {
         "operationId": "CamerasController_removeDevicePlate",
         "parameters": [
@@ -3952,7 +4048,7 @@
         ]
       }
     },
-    "/cameras": {
+    "/api/cameras": {
       "get": {
         "operationId": "CamerasController_list",
         "parameters": [
@@ -3999,7 +4095,7 @@
         ]
       }
     },
-    "/cameras/{cameraId}/active": {
+    "/api/cameras/{cameraId}/active": {
       "patch": {
         "operationId": "CamerasController_setActive",
         "parameters": [
@@ -4028,7 +4124,7 @@
         ]
       }
     },
-    "/cameras/{cameraId}": {
+    "/api/cameras/{cameraId}": {
       "patch": {
         "operationId": "CamerasController_update",
         "parameters": [
@@ -4057,7 +4153,7 @@
         ]
       }
     },
-    "/lpr-accesses/{id}/photo": {
+    "/api/lpr-accesses/{id}/photo": {
       "get": {
         "operationId": "LprAccessesController_photos",
         "parameters": [
@@ -4087,7 +4183,7 @@
         ]
       }
     },
-    "/lpr-accesses": {
+    "/api/lpr-accesses": {
       "get": {
         "operationId": "LprAccessesController_list",
         "parameters": [
@@ -4140,7 +4236,7 @@
         ]
       }
     },
-    "/client/lpr-accesses/{id}/photo": {
+    "/api/client/lpr-accesses/{id}/photo": {
       "get": {
         "operationId": "ClientLprAccessesController_photos",
         "parameters": [
@@ -4170,7 +4266,7 @@
         ]
       }
     },
-    "/client/lpr-accesses": {
+    "/api/client/lpr-accesses": {
       "get": {
         "operationId": "ClientLprAccessesController_list",
         "parameters": [
@@ -4263,7 +4359,7 @@
         ]
       }
     },
-    "/client/registration-links": {
+    "/api/client/registration-links": {
       "post": {
         "operationId": "ClientRegistrationLinksController_create",
         "parameters": [],
@@ -4301,7 +4397,7 @@
         ]
       }
     },
-    "/client/registration-links/{linkId}": {
+    "/api/client/registration-links/{linkId}": {
       "patch": {
         "operationId": "ClientRegistrationLinksController_setActive",
         "parameters": [
@@ -4357,7 +4453,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registration-links": {
+    "/api/clients/{clientId}/registration-links": {
       "post": {
         "operationId": "CompanyRegistrationLinksController_create",
         "parameters": [
@@ -4413,7 +4509,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registration-links/{linkId}": {
+    "/api/clients/{clientId}/registration-links/{linkId}": {
       "patch": {
         "operationId": "CompanyRegistrationLinksController_setActive",
         "parameters": [
@@ -4485,7 +4581,7 @@
         ]
       }
     },
-    "/client/registration-config": {
+    "/api/client/registration-config": {
       "get": {
         "operationId": "ClientRegistrationConfigController_get",
         "parameters": [],
@@ -4533,7 +4629,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registration-config": {
+    "/api/clients/{clientId}/registration-config": {
       "get": {
         "operationId": "CompanyRegistrationConfigController_get",
         "parameters": [
@@ -4599,7 +4695,7 @@
         ]
       }
     },
-    "/register/{code}": {
+    "/api/register/{code}": {
       "get": {
         "operationId": "PublicRegisterController_preview",
         "parameters": [
@@ -4623,7 +4719,7 @@
         ]
       }
     },
-    "/register/{code}/presign-photo": {
+    "/api/register/{code}/presign-photo": {
       "post": {
         "operationId": "PublicRegisterController_presign",
         "parameters": [
@@ -4647,7 +4743,7 @@
         ]
       }
     },
-    "/register/{code}/upload-photo": {
+    "/api/register/{code}/upload-photo": {
       "post": {
         "operationId": "PublicRegisterController_uploadPhoto",
         "parameters": [
@@ -4695,7 +4791,7 @@
         ]
       }
     },
-    "/register/{code}/check-document": {
+    "/api/register/{code}/check-document": {
       "post": {
         "operationId": "PublicRegisterController_checkDocument",
         "parameters": [
@@ -4729,7 +4825,7 @@
         ]
       }
     },
-    "/register/{code}/submit": {
+    "/api/register/{code}/submit": {
       "post": {
         "operationId": "PublicRegisterController_submit",
         "parameters": [
@@ -4753,7 +4849,7 @@
         ]
       }
     },
-    "/register/retake/{code}": {
+    "/api/register/retake/{code}": {
       "get": {
         "operationId": "PublicFaceRetakeController_preview",
         "parameters": [
@@ -4777,7 +4873,7 @@
         ]
       }
     },
-    "/register/retake/{code}/upload-photo": {
+    "/api/register/retake/{code}/upload-photo": {
       "post": {
         "operationId": "PublicFaceRetakeController_uploadPhoto",
         "parameters": [
@@ -4820,7 +4916,7 @@
         ]
       }
     },
-    "/client/registrations": {
+    "/api/client/registrations": {
       "get": {
         "operationId": "ClientRegistrationsController_list",
         "parameters": [
@@ -4906,7 +5002,7 @@
         ]
       }
     },
-    "/client/registrations/export": {
+    "/api/client/registrations/export": {
       "get": {
         "operationId": "ClientRegistrationsController_exportXlsx",
         "parameters": [
@@ -4977,7 +5073,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/face-url": {
+    "/api/client/registrations/{registrationId}/face-url": {
       "get": {
         "operationId": "ClientRegistrationsController_faceUrl",
         "parameters": [
@@ -5006,7 +5102,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/approve": {
+    "/api/client/registrations/{registrationId}/approve": {
       "post": {
         "operationId": "ClientRegistrationsController_approve",
         "parameters": [
@@ -5035,7 +5131,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/block": {
+    "/api/client/registrations/{registrationId}/block": {
       "post": {
         "operationId": "ClientRegistrationsController_block",
         "parameters": [
@@ -5074,7 +5170,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/unblock": {
+    "/api/client/registrations/{registrationId}/unblock": {
       "post": {
         "operationId": "ClientRegistrationsController_unblock",
         "parameters": [
@@ -5113,7 +5209,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/events": {
+    "/api/client/registrations/{registrationId}/events": {
       "get": {
         "operationId": "ClientRegistrationsController_listEvents",
         "parameters": [
@@ -5196,7 +5292,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/reject": {
+    "/api/client/registrations/{registrationId}/reject": {
       "post": {
         "operationId": "ClientRegistrationsController_reject",
         "parameters": [
@@ -5225,7 +5321,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}": {
+    "/api/client/registrations/{registrationId}": {
       "patch": {
         "operationId": "ClientRegistrationsController_update",
         "parameters": [
@@ -5291,7 +5387,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/restore": {
+    "/api/client/registrations/{registrationId}/restore": {
       "post": {
         "operationId": "ClientRegistrationsController_restore",
         "parameters": [
@@ -5320,7 +5416,7 @@
         ]
       }
     },
-    "/client/registrations/{registrationId}/face-retake-link": {
+    "/api/client/registrations/{registrationId}/face-retake-link": {
       "post": {
         "operationId": "ClientRegistrationsController_createFaceRetakeLink",
         "parameters": [
@@ -5349,7 +5445,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations": {
+    "/api/clients/{clientId}/registrations": {
       "get": {
         "operationId": "CompanyRegistrationsController_list",
         "parameters": [
@@ -5443,7 +5539,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/export": {
+    "/api/clients/{clientId}/registrations/export": {
       "get": {
         "operationId": "CompanyRegistrationsController_exportXlsx",
         "parameters": [
@@ -5522,7 +5618,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/face-url": {
+    "/api/clients/{clientId}/registrations/{registrationId}/face-url": {
       "get": {
         "operationId": "CompanyRegistrationsController_faceUrl",
         "parameters": [
@@ -5559,7 +5655,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/approve": {
+    "/api/clients/{clientId}/registrations/{registrationId}/approve": {
       "post": {
         "operationId": "CompanyRegistrationsController_approve",
         "parameters": [
@@ -5596,7 +5692,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/block": {
+    "/api/clients/{clientId}/registrations/{registrationId}/block": {
       "post": {
         "operationId": "CompanyRegistrationsController_block",
         "parameters": [
@@ -5643,7 +5739,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/unblock": {
+    "/api/clients/{clientId}/registrations/{registrationId}/unblock": {
       "post": {
         "operationId": "CompanyRegistrationsController_unblock",
         "parameters": [
@@ -5690,7 +5786,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/events": {
+    "/api/clients/{clientId}/registrations/{registrationId}/events": {
       "get": {
         "operationId": "CompanyRegistrationsController_listEvents",
         "parameters": [
@@ -5789,7 +5885,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/reject": {
+    "/api/clients/{clientId}/registrations/{registrationId}/reject": {
       "post": {
         "operationId": "CompanyRegistrationsController_reject",
         "parameters": [
@@ -5826,7 +5922,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}": {
+    "/api/clients/{clientId}/registrations/{registrationId}": {
       "patch": {
         "operationId": "CompanyRegistrationsController_update",
         "parameters": [
@@ -5908,7 +6004,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/restore": {
+    "/api/clients/{clientId}/registrations/{registrationId}/restore": {
       "post": {
         "operationId": "CompanyRegistrationsController_restore",
         "parameters": [
@@ -5945,7 +6041,7 @@
         ]
       }
     },
-    "/clients/{clientId}/registrations/{registrationId}/face-retake-link": {
+    "/api/clients/{clientId}/registrations/{registrationId}/face-retake-link": {
       "post": {
         "operationId": "CompanyRegistrationsController_createFaceRetakeLink",
         "parameters": [
@@ -5982,7 +6078,439 @@
         ]
       }
     },
-    "/clients/{clientId}/roles": {
+    "/api/child-approvals/{token}/photo": {
+      "get": {
+        "operationId": "PublicChildApprovalsController_photo",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ver miniatura do menor pelo link individual válido",
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/child-approvals/{token}": {
+      "get": {
+        "operationId": "PublicChildApprovalsController_preview",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Consultar termo individual de autorização de menor",
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/child-approvals/{token}/accept": {
+      "post": {
+        "operationId": "PublicChildApprovalsController_accept",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptChildApprovalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Aceitar termo com confirmação do CPF do destinatário",
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/child-approvals/{token}/revoke": {
+      "post": {
+        "operationId": "PublicChildApprovalsController_revoke",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChildApprovalCpfDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revogar o próprio aceite com confirmação do CPF",
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/child-approval": {
+      "get": {
+        "operationId": "ClientChildApprovalsController_history",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalHistoryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/child-approval/regularize": {
+      "post": {
+        "operationId": "ClientChildApprovalsController_regularize",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/child-approval/resend": {
+      "post": {
+        "operationId": "ClientChildApprovalsController_resend",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/child-approval/consents/{consentId}/revoke": {
+      "post": {
+        "operationId": "ClientChildApprovalsController_revoke",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "consentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeChildApprovalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/registrations/{registrationId}/child-approval": {
+      "get": {
+        "operationId": "CompanyChildApprovalsController_history",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalHistoryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/registrations/{registrationId}/child-approval/regularize": {
+      "post": {
+        "operationId": "CompanyChildApprovalsController_regularize",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/registrations/{registrationId}/child-approval/resend": {
+      "post": {
+        "operationId": "CompanyChildApprovalsController_resend",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "child-approvals"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/roles": {
       "get": {
         "operationId": "MembersController_listRoles",
         "parameters": [
@@ -6038,7 +6566,7 @@
         ]
       }
     },
-    "/clients/{clientId}/roles/{roleId}": {
+    "/api/clients/{clientId}/roles/{roleId}": {
       "patch": {
         "operationId": "MembersController_updateRole",
         "parameters": [
@@ -6075,7 +6603,7 @@
         ]
       }
     },
-    "/clients/{clientId}/members": {
+    "/api/clients/{clientId}/members": {
       "get": {
         "operationId": "MembersController_list",
         "parameters": [
@@ -6163,7 +6691,7 @@
         ]
       }
     },
-    "/clients/{clientId}/members/lookup": {
+    "/api/clients/{clientId}/members/lookup": {
       "get": {
         "operationId": "MembersController_lookupMember",
         "parameters": [
@@ -6208,7 +6736,7 @@
         ]
       }
     },
-    "/clients/{clientId}/members/{memberId}": {
+    "/api/clients/{clientId}/members/{memberId}": {
       "get": {
         "operationId": "MembersController_getOne",
         "parameters": [
@@ -6315,7 +6843,7 @@
         ]
       }
     },
-    "/clients/{clientId}/members/{memberId}/block": {
+    "/api/clients/{clientId}/members/{memberId}/block": {
       "post": {
         "operationId": "MembersController_block",
         "parameters": [
@@ -6362,7 +6890,7 @@
         ]
       }
     },
-    "/clients/{clientId}/members/{memberId}/unblock": {
+    "/api/clients/{clientId}/members/{memberId}/unblock": {
       "post": {
         "operationId": "MembersController_unblock",
         "parameters": [
@@ -6399,7 +6927,7 @@
         ]
       }
     },
-    "/clients/{clientId}/members/{memberId}/face/sync": {
+    "/api/clients/{clientId}/members/{memberId}/face/sync": {
       "post": {
         "operationId": "MembersController_syncFace",
         "parameters": [
@@ -6446,7 +6974,7 @@
         ]
       }
     },
-    "/reports/enrollment/summary": {
+    "/api/reports/enrollment/summary": {
       "get": {
         "operationId": "CompanyReportsController_summary",
         "parameters": [
@@ -6571,7 +7099,7 @@
         ]
       }
     },
-    "/reports/enrollment/list": {
+    "/api/reports/enrollment/list": {
       "get": {
         "operationId": "CompanyReportsController_list",
         "parameters": [
@@ -6689,7 +7217,7 @@
         ]
       }
     },
-    "/reports/enrollment/export": {
+    "/api/reports/enrollment/export": {
       "get": {
         "operationId": "CompanyReportsController_export",
         "parameters": [
@@ -6807,7 +7335,7 @@
         ]
       }
     },
-    "/client/reports/enrollment/summary": {
+    "/api/client/reports/enrollment/summary": {
       "get": {
         "operationId": "ClientReportsController_summary",
         "parameters": [
@@ -6922,7 +7450,7 @@
         ]
       }
     },
-    "/client/reports/enrollment/list": {
+    "/api/client/reports/enrollment/list": {
       "get": {
         "operationId": "ClientReportsController_list",
         "parameters": [
@@ -7030,7 +7558,7 @@
         ]
       }
     },
-    "/client/reports/enrollment/export": {
+    "/api/client/reports/enrollment/export": {
       "get": {
         "operationId": "ClientReportsController_export",
         "parameters": [
@@ -7138,7 +7666,7 @@
         ]
       }
     },
-    "/company-users": {
+    "/api/company-users": {
       "get": {
         "operationId": "CompanyUsersController_list",
         "parameters": [],
@@ -7158,7 +7686,7 @@
         ]
       }
     },
-    "/company-users/invite-links": {
+    "/api/company-users/invite-links": {
       "get": {
         "operationId": "CompanyUsersController_listInviteLinks",
         "parameters": [],
@@ -7206,7 +7734,7 @@
         ]
       }
     },
-    "/company-users/{companyUserId}/role": {
+    "/api/company-users/{companyUserId}/role": {
       "patch": {
         "operationId": "CompanyUsersController_updateRole",
         "parameters": [
@@ -7245,7 +7773,7 @@
         ]
       }
     },
-    "/company-users/{companyUserId}/active": {
+    "/api/company-users/{companyUserId}/active": {
       "patch": {
         "operationId": "CompanyUsersController_setActive",
         "parameters": [
@@ -7284,7 +7812,7 @@
         ]
       }
     },
-    "/company-users/{companyUserId}/profile": {
+    "/api/company-users/{companyUserId}/profile": {
       "patch": {
         "operationId": "CompanyUsersController_updateProfile",
         "parameters": [
@@ -7323,7 +7851,7 @@
         ]
       }
     },
-    "/company-users/{companyUserId}/permissions": {
+    "/api/company-users/{companyUserId}/permissions": {
       "patch": {
         "operationId": "CompanyUsersController_updatePermissions",
         "parameters": [
@@ -7362,7 +7890,7 @@
         ]
       }
     },
-    "/clients/{clientId}/school-classes": {
+    "/api/clients/{clientId}/school-classes": {
       "get": {
         "operationId": "SchoolClassesController_list",
         "parameters": [
@@ -7418,7 +7946,7 @@
         ]
       }
     },
-    "/clients/{clientId}/school-classes/{classId}": {
+    "/api/clients/{clientId}/school-classes/{classId}": {
       "patch": {
         "operationId": "SchoolClassesController_update",
         "parameters": [
@@ -7455,7 +7983,7 @@
         ]
       }
     },
-    "/clients/{clientId}/shifts": {
+    "/api/clients/{clientId}/shifts": {
       "get": {
         "operationId": "ShiftsController_list",
         "parameters": [
@@ -7511,7 +8039,7 @@
         ]
       }
     },
-    "/clients/{clientId}/shifts/{shiftId}": {
+    "/api/clients/{clientId}/shifts/{shiftId}": {
       "get": {
         "operationId": "ShiftsController_getOne",
         "parameters": [
@@ -7618,7 +8146,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students": {
+    "/api/clients/{clientId}/students": {
       "get": {
         "operationId": "StudentsController_list",
         "parameters": [
@@ -7706,7 +8234,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/face/global-sync/status": {
+    "/api/clients/{clientId}/students/face/global-sync/status": {
       "get": {
         "operationId": "StudentsController_getGlobalSyncStatus",
         "parameters": [
@@ -7735,7 +8263,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/face/global-sync": {
+    "/api/clients/{clientId}/students/face/global-sync": {
       "post": {
         "operationId": "StudentsController_enqueueGlobalSync",
         "parameters": [
@@ -7764,7 +8292,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/{studentId}/classes": {
+    "/api/clients/{clientId}/students/{studentId}/classes": {
       "post": {
         "operationId": "StudentsController_linkClass",
         "parameters": [
@@ -7801,7 +8329,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/{studentId}/classes/{classId}": {
+    "/api/clients/{clientId}/students/{studentId}/classes/{classId}": {
       "delete": {
         "operationId": "StudentsController_unlinkClass",
         "parameters": [
@@ -7846,7 +8374,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/{studentId}/responsibles": {
+    "/api/clients/{clientId}/students/{studentId}/responsibles": {
       "get": {
         "operationId": "StudentsController_listLinkedResponsibles",
         "parameters": [
@@ -7883,7 +8411,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/{studentId}/block": {
+    "/api/clients/{clientId}/students/{studentId}/block": {
       "post": {
         "operationId": "StudentsController_block",
         "parameters": [
@@ -7930,7 +8458,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/{studentId}/unblock": {
+    "/api/clients/{clientId}/students/{studentId}/unblock": {
       "post": {
         "operationId": "StudentsController_unblock",
         "parameters": [
@@ -7967,7 +8495,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/{studentId}/face/sync": {
+    "/api/clients/{clientId}/students/{studentId}/face/sync": {
       "post": {
         "operationId": "StudentsController_syncFace",
         "parameters": [
@@ -8014,7 +8542,7 @@
         ]
       }
     },
-    "/clients/{clientId}/students/{studentId}": {
+    "/api/clients/{clientId}/students/{studentId}": {
       "get": {
         "operationId": "StudentsController_getOne",
         "parameters": [
@@ -8121,7 +8649,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles": {
+    "/api/clients/{clientId}/responsibles": {
       "get": {
         "operationId": "ResponsiblesController_list",
         "parameters": [
@@ -8201,7 +8729,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/face/global-sync/status": {
+    "/api/clients/{clientId}/responsibles/face/global-sync/status": {
       "get": {
         "operationId": "ResponsiblesController_getGlobalSyncStatus",
         "parameters": [
@@ -8230,7 +8758,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/face/global-sync": {
+    "/api/clients/{clientId}/responsibles/face/global-sync": {
       "post": {
         "operationId": "ResponsiblesController_enqueueGlobalSync",
         "parameters": [
@@ -8259,7 +8787,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/lookup": {
+    "/api/clients/{clientId}/responsibles/lookup": {
       "get": {
         "operationId": "ResponsiblesController_lookupResponsible",
         "parameters": [
@@ -8304,7 +8832,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/{responsibleId}/students": {
+    "/api/clients/{clientId}/responsibles/{responsibleId}/students": {
       "get": {
         "operationId": "ResponsiblesController_listStudents",
         "parameters": [
@@ -8376,7 +8904,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/{responsibleId}/students/{studentId}": {
+    "/api/clients/{clientId}/responsibles/{responsibleId}/students/{studentId}": {
       "delete": {
         "operationId": "ResponsiblesController_unlinkStudent",
         "parameters": [
@@ -8464,7 +8992,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/{responsibleId}/block": {
+    "/api/clients/{clientId}/responsibles/{responsibleId}/block": {
       "post": {
         "operationId": "ResponsiblesController_block",
         "parameters": [
@@ -8511,7 +9039,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/{responsibleId}/unblock": {
+    "/api/clients/{clientId}/responsibles/{responsibleId}/unblock": {
       "post": {
         "operationId": "ResponsiblesController_unblock",
         "parameters": [
@@ -8548,7 +9076,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/{responsibleId}/face/sync": {
+    "/api/clients/{clientId}/responsibles/{responsibleId}/face/sync": {
       "post": {
         "operationId": "ResponsiblesController_syncFace",
         "parameters": [
@@ -8595,7 +9123,7 @@
         ]
       }
     },
-    "/clients/{clientId}/responsibles/{responsibleId}": {
+    "/api/clients/{clientId}/responsibles/{responsibleId}": {
       "get": {
         "operationId": "ResponsiblesController_getOne",
         "parameters": [
@@ -8702,7 +9230,7 @@
         ]
       }
     },
-    "/member/me": {
+    "/api/member/me": {
       "get": {
         "operationId": "MemberPortalController_getMe",
         "parameters": [],
@@ -8722,7 +9250,7 @@
         ]
       }
     },
-    "/member/accesses": {
+    "/api/member/accesses": {
       "get": {
         "operationId": "MemberPortalController_listAccesses",
         "parameters": [
@@ -8759,7 +9287,7 @@
         ]
       }
     },
-    "/member/accesses/snapshot": {
+    "/api/member/accesses/snapshot": {
       "get": {
         "operationId": "MemberPortalController_accessSnapshot",
         "parameters": [
@@ -8788,7 +9316,7 @@
         ]
       }
     },
-    "/responsible/children": {
+    "/api/responsible/children": {
       "get": {
         "operationId": "ResponsibleDashboardController_listChildren",
         "parameters": [],
@@ -8808,7 +9336,7 @@
         ]
       }
     },
-    "/responsible/accesses/snapshot": {
+    "/api/responsible/accesses/snapshot": {
       "get": {
         "operationId": "ResponsibleDashboardController_accessSnapshot",
         "parameters": [
@@ -8837,7 +9365,7 @@
         ]
       }
     },
-    "/responsible/accesses/all": {
+    "/api/responsible/accesses/all": {
       "get": {
         "operationId": "ResponsibleDashboardController_listAllHouseholdAccesses",
         "parameters": [
@@ -8874,7 +9402,7 @@
         ]
       }
     },
-    "/responsible/accesses/peer/{responsibleId}": {
+    "/api/responsible/accesses/peer/{responsibleId}": {
       "get": {
         "operationId": "ResponsibleDashboardController_listHouseholdPeerAccesses",
         "parameters": [
@@ -8919,7 +9447,7 @@
         ]
       }
     },
-    "/responsible/me/accesses": {
+    "/api/responsible/me/accesses": {
       "get": {
         "operationId": "ResponsibleDashboardController_listOwnAccesses",
         "parameters": [
@@ -8956,7 +9484,7 @@
         ]
       }
     },
-    "/responsible/other-responsibles": {
+    "/api/responsible/other-responsibles": {
       "get": {
         "operationId": "ResponsibleDashboardController_listPeerResponsibles",
         "parameters": [],
@@ -8976,7 +9504,7 @@
         ]
       }
     },
-    "/responsible/children/{studentId}/accesses": {
+    "/api/responsible/children/{studentId}/accesses": {
       "get": {
         "operationId": "ResponsibleDashboardController_listAccesses",
         "parameters": [
@@ -9021,7 +9549,7 @@
         ]
       }
     },
-    "/clients/{clientId}/pickup-authorizations": {
+    "/api/clients/{clientId}/pickup-authorizations": {
       "get": {
         "operationId": "PickupAuthorizationsSchoolController_list",
         "parameters": [
@@ -9066,7 +9594,7 @@
         ]
       }
     },
-    "/clients/{clientId}/pickup-authorizations/{id}/mark-used": {
+    "/api/clients/{clientId}/pickup-authorizations/{id}/mark-used": {
       "patch": {
         "operationId": "PickupAuthorizationsSchoolController_markUsed",
         "parameters": [
@@ -9103,7 +9631,7 @@
         ]
       }
     },
-    "/clients/{clientId}/pickup-authorizations/{id}/cancel": {
+    "/api/clients/{clientId}/pickup-authorizations/{id}/cancel": {
       "patch": {
         "operationId": "PickupAuthorizationsSchoolController_cancel",
         "parameters": [
@@ -9140,7 +9668,7 @@
         ]
       }
     },
-    "/clients/{clientId}/pickup-authorizations/{id}": {
+    "/api/clients/{clientId}/pickup-authorizations/{id}": {
       "delete": {
         "operationId": "PickupAuthorizationsSchoolController_delete",
         "parameters": [
@@ -9177,7 +9705,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations": {
+    "/api/responsible/pickup-authorizations": {
       "get": {
         "operationId": "PickupAuthorizationsResponsibleController_listMine",
         "parameters": [],
@@ -9215,7 +9743,7 @@
         ]
       }
     },
-    "/responsible/lookup-guest-responsible": {
+    "/api/responsible/lookup-guest-responsible": {
       "get": {
         "operationId": "PickupAuthorizationsResponsibleController_lookupGuestResponsible",
         "parameters": [
@@ -9244,7 +9772,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations/{id}": {
+    "/api/responsible/pickup-authorizations/{id}": {
       "patch": {
         "operationId": "PickupAuthorizationsResponsibleController_update",
         "parameters": [
@@ -9300,7 +9828,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations/{id}/guest-link": {
+    "/api/responsible/pickup-authorizations/{id}/guest-link": {
       "post": {
         "operationId": "PickupAuthorizationsResponsibleController_generateGuestLink",
         "parameters": [
@@ -9329,7 +9857,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations/{id}/guest-face-url": {
+    "/api/responsible/pickup-authorizations/{id}/guest-face-url": {
       "get": {
         "operationId": "PickupAuthorizationsResponsibleController_guestFaceUrl",
         "parameters": [
@@ -9358,7 +9886,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations/{id}/guest-face": {
+    "/api/responsible/pickup-authorizations/{id}/guest-face": {
       "post": {
         "operationId": "PickupAuthorizationsResponsibleController_submitGuestFace",
         "parameters": [
@@ -9387,7 +9915,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations/{id}/approve-guest-face": {
+    "/api/responsible/pickup-authorizations/{id}/approve-guest-face": {
       "post": {
         "operationId": "PickupAuthorizationsResponsibleController_approveGuestFace",
         "parameters": [
@@ -9416,7 +9944,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations/{id}/reject-guest-face": {
+    "/api/responsible/pickup-authorizations/{id}/reject-guest-face": {
       "post": {
         "operationId": "PickupAuthorizationsResponsibleController_rejectGuestFace",
         "parameters": [
@@ -9445,7 +9973,7 @@
         ]
       }
     },
-    "/responsible/pickup-authorizations/{id}/cancel": {
+    "/api/responsible/pickup-authorizations/{id}/cancel": {
       "patch": {
         "operationId": "PickupAuthorizationsResponsibleController_cancel",
         "parameters": [
@@ -9474,7 +10002,7 @@
         ]
       }
     },
-    "/pickup-register/{code}": {
+    "/api/pickup-register/{code}": {
       "get": {
         "operationId": "PublicPickupRegisterController_preview",
         "parameters": [
@@ -9498,7 +10026,7 @@
         ]
       }
     },
-    "/pickup-register/{code}/upload-photo": {
+    "/api/pickup-register/{code}/upload-photo": {
       "post": {
         "operationId": "PublicPickupRegisterController_uploadPhoto",
         "parameters": [
@@ -9541,7 +10069,7 @@
         ]
       }
     },
-    "/pickup-register/{code}/submit": {
+    "/api/pickup-register/{code}/submit": {
       "post": {
         "operationId": "PublicPickupRegisterController_submit",
         "parameters": [
@@ -9565,7 +10093,7 @@
         ]
       }
     },
-    "/clients/{clientId}/invites": {
+    "/api/clients/{clientId}/invites": {
       "get": {
         "operationId": "InvitesClientController_list",
         "parameters": [
@@ -9602,7 +10130,7 @@
         ]
       }
     },
-    "/clients/{clientId}/invites/{id}/mark-used": {
+    "/api/clients/{clientId}/invites/{id}/mark-used": {
       "patch": {
         "operationId": "InvitesClientController_markUsed",
         "parameters": [
@@ -9639,7 +10167,7 @@
         ]
       }
     },
-    "/clients/{clientId}/invites/{id}/cancel": {
+    "/api/clients/{clientId}/invites/{id}/cancel": {
       "patch": {
         "operationId": "InvitesClientController_cancel",
         "parameters": [
@@ -9676,7 +10204,7 @@
         ]
       }
     },
-    "/clients/{clientId}/invites/{id}": {
+    "/api/clients/{clientId}/invites/{id}": {
       "delete": {
         "operationId": "InvitesClientController_delete",
         "parameters": [
@@ -9713,7 +10241,7 @@
         ]
       }
     },
-    "/member/invites": {
+    "/api/member/invites": {
       "get": {
         "operationId": "InvitesMemberController_listMine",
         "parameters": [],
@@ -9751,7 +10279,7 @@
         ]
       }
     },
-    "/member/invites/{id}": {
+    "/api/member/invites/{id}": {
       "patch": {
         "operationId": "InvitesMemberController_update",
         "parameters": [
@@ -9807,7 +10335,7 @@
         ]
       }
     },
-    "/member/invites/{id}/guest-link": {
+    "/api/member/invites/{id}/guest-link": {
       "post": {
         "operationId": "InvitesMemberController_generateGuestLink",
         "parameters": [
@@ -9836,7 +10364,7 @@
         ]
       }
     },
-    "/member/invites/{id}/guest-face-url": {
+    "/api/member/invites/{id}/guest-face-url": {
       "get": {
         "operationId": "InvitesMemberController_guestFaceUrl",
         "parameters": [
@@ -9865,7 +10393,7 @@
         ]
       }
     },
-    "/member/invites/{id}/guest-face": {
+    "/api/member/invites/{id}/guest-face": {
       "post": {
         "operationId": "InvitesMemberController_submitGuestFace",
         "parameters": [
@@ -9894,7 +10422,7 @@
         ]
       }
     },
-    "/member/invites/{id}/approve-guest-face": {
+    "/api/member/invites/{id}/approve-guest-face": {
       "post": {
         "operationId": "InvitesMemberController_approveGuestFace",
         "parameters": [
@@ -9923,7 +10451,7 @@
         ]
       }
     },
-    "/member/invites/{id}/reject-guest-face": {
+    "/api/member/invites/{id}/reject-guest-face": {
       "post": {
         "operationId": "InvitesMemberController_rejectGuestFace",
         "parameters": [
@@ -9952,7 +10480,7 @@
         ]
       }
     },
-    "/member/invites/{id}/cancel": {
+    "/api/member/invites/{id}/cancel": {
       "patch": {
         "operationId": "InvitesMemberController_cancel",
         "parameters": [
@@ -9981,7 +10509,7 @@
         ]
       }
     },
-    "/invite-register/{code}": {
+    "/api/invite-register/{code}": {
       "get": {
         "operationId": "PublicInviteRegisterController_preview",
         "parameters": [
@@ -10005,7 +10533,7 @@
         ]
       }
     },
-    "/invite-register/{code}/upload-photo": {
+    "/api/invite-register/{code}/upload-photo": {
       "post": {
         "operationId": "PublicInviteRegisterController_uploadPhoto",
         "parameters": [
@@ -10048,7 +10576,7 @@
         ]
       }
     },
-    "/invite-register/{code}/submit": {
+    "/api/invite-register/{code}/submit": {
       "post": {
         "operationId": "PublicInviteRegisterController_submit",
         "parameters": [
@@ -10072,7 +10600,7 @@
         ]
       }
     },
-    "/responsible/managed-responsibles": {
+    "/api/responsible/managed-responsibles": {
       "post": {
         "operationId": "ManagedResponsiblesController_createManaged",
         "parameters": [],
@@ -10120,7 +10648,7 @@
         ]
       }
     },
-    "/responsible/managed-responsibles/{id}": {
+    "/api/responsible/managed-responsibles/{id}": {
       "delete": {
         "operationId": "ManagedResponsiblesController_deleteManaged",
         "parameters": [
@@ -10149,7 +10677,7 @@
         ]
       }
     },
-    "/responsible/responsible-invitations": {
+    "/api/responsible/responsible-invitations": {
       "post": {
         "operationId": "ManagedResponsiblesController_createInvitation",
         "parameters": [],
@@ -10197,7 +10725,7 @@
         ]
       }
     },
-    "/responsible/responsible-invitations/{id}/face-url": {
+    "/api/responsible/responsible-invitations/{id}/face-url": {
       "get": {
         "operationId": "ManagedResponsiblesController_faceUrl",
         "parameters": [
@@ -10226,7 +10754,7 @@
         ]
       }
     },
-    "/responsible/responsible-invitations/{id}/approve-face": {
+    "/api/responsible/responsible-invitations/{id}/approve-face": {
       "post": {
         "operationId": "ManagedResponsiblesController_approveFace",
         "parameters": [
@@ -10255,7 +10783,7 @@
         ]
       }
     },
-    "/responsible/responsible-invitations/{id}/reject-face": {
+    "/api/responsible/responsible-invitations/{id}/reject-face": {
       "post": {
         "operationId": "ManagedResponsiblesController_rejectFace",
         "parameters": [
@@ -10284,7 +10812,7 @@
         ]
       }
     },
-    "/responsible/responsible-invitations/{id}/cancel": {
+    "/api/responsible/responsible-invitations/{id}/cancel": {
       "patch": {
         "operationId": "ManagedResponsiblesController_cancel",
         "parameters": [
@@ -10313,7 +10841,7 @@
         ]
       }
     },
-    "/responsible-register/{code}": {
+    "/api/responsible-register/{code}": {
       "get": {
         "operationId": "PublicResponsibleRegisterController_preview",
         "parameters": [
@@ -10337,7 +10865,7 @@
         ]
       }
     },
-    "/responsible-register/{code}/upload-photo": {
+    "/api/responsible-register/{code}/upload-photo": {
       "post": {
         "operationId": "PublicResponsibleRegisterController_uploadPhoto",
         "parameters": [
@@ -10380,7 +10908,7 @@
         ]
       }
     },
-    "/responsible-register/{code}/submit": {
+    "/api/responsible-register/{code}/submit": {
       "post": {
         "operationId": "PublicResponsibleRegisterController_submit",
         "parameters": [
@@ -10404,7 +10932,7 @@
         ]
       }
     },
-    "/clients/{clientId}/vehicles/driver-options": {
+    "/api/clients/{clientId}/vehicles/driver-options": {
       "get": {
         "operationId": "ClientVehiclesController_driverOptions",
         "parameters": [
@@ -10433,7 +10961,7 @@
         ]
       }
     },
-    "/clients/{clientId}/vehicles": {
+    "/api/clients/{clientId}/vehicles": {
       "get": {
         "operationId": "ClientVehiclesController_list",
         "parameters": [
@@ -10513,7 +11041,7 @@
         ]
       }
     },
-    "/clients/{clientId}/vehicles/{id}": {
+    "/api/clients/{clientId}/vehicles/{id}": {
       "patch": {
         "operationId": "ClientVehiclesController_update",
         "parameters": [
@@ -10585,7 +11113,7 @@
         ]
       }
     },
-    "/responsible/vehicles/driver-options": {
+    "/api/responsible/vehicles/driver-options": {
       "get": {
         "operationId": "VehiclesResponsibleController_driverOptions",
         "parameters": [],
@@ -10605,7 +11133,7 @@
         ]
       }
     },
-    "/responsible/vehicles": {
+    "/api/responsible/vehicles": {
       "get": {
         "operationId": "VehiclesResponsibleController_list",
         "parameters": [],
@@ -10643,7 +11171,7 @@
         ]
       }
     },
-    "/responsible/vehicles/{id}": {
+    "/api/responsible/vehicles/{id}": {
       "patch": {
         "operationId": "VehiclesResponsibleController_update",
         "parameters": [
@@ -10699,7 +11227,7 @@
         ]
       }
     },
-    "/responsible/vehicles/{id}/sync": {
+    "/api/responsible/vehicles/{id}/sync": {
       "post": {
         "operationId": "VehiclesResponsibleController_sync",
         "parameters": [
@@ -10728,7 +11256,7 @@
         ]
       }
     },
-    "/member/vehicles": {
+    "/api/member/vehicles": {
       "get": {
         "operationId": "VehiclesMemberController_list",
         "parameters": [],
@@ -10766,7 +11294,7 @@
         ]
       }
     },
-    "/member/vehicles/{id}": {
+    "/api/member/vehicles/{id}": {
       "patch": {
         "operationId": "VehiclesMemberController_update",
         "parameters": [
@@ -10822,7 +11350,7 @@
         ]
       }
     },
-    "/member/vehicles/{id}/sync": {
+    "/api/member/vehicles/{id}/sync": {
       "post": {
         "operationId": "VehiclesMemberController_sync",
         "parameters": [
@@ -10851,7 +11379,7 @@
         ]
       }
     },
-    "/responsible/me/face": {
+    "/api/responsible/me/face": {
       "get": {
         "operationId": "FaceEnrollmentController_getMyFace",
         "parameters": [],
@@ -10899,7 +11427,7 @@
         ]
       }
     },
-    "/responsible/me/face/sync": {
+    "/api/responsible/me/face/sync": {
       "post": {
         "operationId": "FaceEnrollmentController_resyncMyFace",
         "parameters": [],
@@ -10919,7 +11447,7 @@
         ]
       }
     },
-    "/responsible/children/{studentId}/face": {
+    "/api/responsible/children/{studentId}/face": {
       "get": {
         "operationId": "FaceEnrollmentController_getChildFace",
         "parameters": [
@@ -10985,7 +11513,7 @@
         ]
       }
     },
-    "/responsible/children/{studentId}/face/sync": {
+    "/api/responsible/children/{studentId}/face/sync": {
       "post": {
         "operationId": "FaceEnrollmentController_resyncChildFace",
         "parameters": [
@@ -11014,7 +11542,7 @@
         ]
       }
     },
-    "/responsible/household/{responsibleId}/face": {
+    "/api/responsible/household/{responsibleId}/face": {
       "get": {
         "operationId": "FaceEnrollmentController_getHouseholdMemberFace",
         "parameters": [
@@ -11080,7 +11608,7 @@
         ]
       }
     },
-    "/responsible/household/{responsibleId}/face/sync": {
+    "/api/responsible/household/{responsibleId}/face/sync": {
       "post": {
         "operationId": "FaceEnrollmentController_resyncHouseholdMemberFace",
         "parameters": [
@@ -11109,7 +11637,7 @@
         ]
       }
     },
-    "/member/me/face": {
+    "/api/member/me/face": {
       "get": {
         "operationId": "MemberFaceEnrollmentController_getMyFace",
         "parameters": [],
@@ -11157,7 +11685,7 @@
         ]
       }
     },
-    "/member/me/face/sync": {
+    "/api/member/me/face/sync": {
       "post": {
         "operationId": "MemberFaceEnrollmentController_resyncMyFace",
         "parameters": [],
@@ -11177,7 +11705,7 @@
         ]
       }
     },
-    "/member/students": {
+    "/api/member/students": {
       "get": {
         "operationId": "MemberFaceEnrollmentController_listStudents",
         "parameters": [
@@ -11222,7 +11750,7 @@
         ]
       }
     },
-    "/member/students/{studentId}/face": {
+    "/api/member/students/{studentId}/face": {
       "post": {
         "operationId": "MemberFaceEnrollmentController_uploadStudentFace",
         "parameters": [
@@ -11261,7 +11789,7 @@
         ]
       }
     },
-    "/member/members": {
+    "/api/member/members": {
       "get": {
         "operationId": "MemberFaceEnrollmentController_listMembers",
         "parameters": [
@@ -11306,7 +11834,7 @@
         ]
       }
     },
-    "/member/members/{memberId}/face": {
+    "/api/member/members/{memberId}/face": {
       "post": {
         "operationId": "MemberFaceEnrollmentController_uploadMemberFace",
         "parameters": [
@@ -11345,7 +11873,7 @@
         ]
       }
     },
-    "/me/navigation": {
+    "/api/me/navigation": {
       "get": {
         "operationId": "MeController_navigation",
         "parameters": [],
@@ -11365,7 +11893,7 @@
         ]
       }
     },
-    "/me/sidebar-nav-access": {
+    "/api/me/sidebar-nav-access": {
       "get": {
         "operationId": "MeController_sidebarNavAccess",
         "parameters": [],
@@ -11385,7 +11913,7 @@
         ]
       }
     },
-    "/me/company-features": {
+    "/api/me/company-features": {
       "get": {
         "operationId": "MeController_companyFeatures",
         "parameters": [],
@@ -11405,7 +11933,7 @@
         ]
       }
     },
-    "/me/can-check": {
+    "/api/me/can-check": {
       "get": {
         "operationId": "MeController_canCheck",
         "parameters": [
@@ -11442,7 +11970,7 @@
         ]
       }
     },
-    "/me/permissions/{featureSlug}": {
+    "/api/me/permissions/{featureSlug}": {
       "get": {
         "operationId": "MeController_permissionsForFeature",
         "parameters": [
@@ -11471,7 +11999,7 @@
         ]
       }
     },
-    "/dashboard/stats": {
+    "/api/dashboard/stats": {
       "get": {
         "operationId": "DashboardController_getStats",
         "parameters": [],
@@ -11491,7 +12019,7 @@
         ]
       }
     },
-    "/client/dashboard": {
+    "/api/client/dashboard": {
       "get": {
         "operationId": "ClientDashboardController_getOverview",
         "parameters": [],
@@ -11518,7 +12046,7 @@
         ]
       }
     },
-    "/notifications/push-token": {
+    "/api/notifications/push-token": {
       "patch": {
         "operationId": "NotificationsController_registerPushToken",
         "parameters": [],
@@ -11548,7 +12076,7 @@
         ]
       }
     },
-    "/telegram/webhook": {
+    "/api/telegram/webhook": {
       "post": {
         "operationId": "TelegramWebhookController_webhook",
         "parameters": [],
@@ -11573,7 +12101,7 @@
         ]
       }
     },
-    "/client/telegram-alerts": {
+    "/api/client/telegram-alerts": {
       "get": {
         "operationId": "TelegramAlertsController_list",
         "parameters": [],
@@ -11593,7 +12121,7 @@
         ]
       }
     },
-    "/client/telegram-alerts/link-token": {
+    "/api/client/telegram-alerts/link-token": {
       "post": {
         "operationId": "TelegramAlertsController_createLinkToken",
         "parameters": [],
@@ -11623,7 +12151,7 @@
         ]
       }
     },
-    "/client/telegram-alerts/{id}": {
+    "/api/client/telegram-alerts/{id}": {
       "patch": {
         "operationId": "TelegramAlertsController_setActive",
         "parameters": [
@@ -11689,7 +12217,7 @@
         ]
       }
     },
-    "/health": {
+    "/api/health": {
       "get": {
         "operationId": "HealthController_ping",
         "parameters": [],
@@ -11704,7 +12232,7 @@
         ]
       }
     },
-    "/legal-documents/{type}/active": {
+    "/api/legal-documents/{type}/active": {
       "get": {
         "operationId": "LegalDocumentsController_getActive",
         "parameters": [
@@ -11728,7 +12256,7 @@
         ]
       }
     },
-    "/legal-documents/{type}/versions": {
+    "/api/legal-documents/{type}/versions": {
       "get": {
         "operationId": "LegalDocumentsController_listVersions",
         "parameters": [
@@ -11752,7 +12280,7 @@
         ]
       }
     },
-    "/legal-documents/{type}/{version}": {
+    "/api/legal-documents/{type}/{version}": {
       "get": {
         "operationId": "LegalDocumentsController_getByVersion",
         "parameters": [
@@ -11784,7 +12312,7 @@
         ]
       }
     },
-    "/clients/{clientId}/arrivals/stream": {
+    "/api/clients/{clientId}/arrivals/stream": {
       "get": {
         "operationId": "ArrivalsController_arrivalsStream",
         "parameters": [
@@ -11807,7 +12335,7 @@
         ]
       }
     },
-    "/simulate/people": {
+    "/api/simulate/people": {
       "get": {
         "operationId": "SimulateController_people",
         "parameters": [
@@ -11836,7 +12364,7 @@
         ]
       }
     },
-    "/simulate/face-access": {
+    "/api/simulate/face-access": {
       "post": {
         "operationId": "SimulateController_faceAccess",
         "parameters": [],
@@ -11866,7 +12394,7 @@
         ]
       }
     },
-    "/ienh/filial-mappings": {
+    "/api/ienh/filial-mappings": {
       "get": {
         "operationId": "IenhController_listFilialMappings",
         "parameters": [],
@@ -11904,7 +12432,7 @@
         ]
       }
     },
-    "/ienh/fetch": {
+    "/api/ienh/fetch": {
       "post": {
         "operationId": "IenhController_fetch",
         "parameters": [],
@@ -11924,7 +12452,7 @@
         ]
       }
     },
-    "/ienh/sync": {
+    "/api/ienh/sync": {
       "post": {
         "operationId": "IenhController_sync",
         "parameters": [],
@@ -11944,7 +12472,7 @@
         ]
       }
     },
-    "/ienh/snapshots": {
+    "/api/ienh/snapshots": {
       "get": {
         "operationId": "IenhController_listSnapshots",
         "parameters": [],
@@ -11964,7 +12492,7 @@
         ]
       }
     },
-    "/ienh/sync/progress": {
+    "/api/ienh/sync/progress": {
       "get": {
         "operationId": "IenhController_syncProgress",
         "parameters": [],
@@ -11984,7 +12512,7 @@
         ]
       }
     },
-    "/ienh/sync/progress/from-snapshot": {
+    "/api/ienh/sync/progress/from-snapshot": {
       "get": {
         "operationId": "IenhController_syncProgressFromSnapshot",
         "parameters": [],
@@ -12004,7 +12532,7 @@
         ]
       }
     },
-    "/geocoding/autocomplete": {
+    "/api/geocoding/autocomplete": {
       "get": {
         "operationId": "GeocodingController_autocomplete",
         "parameters": [
@@ -12041,7 +12569,7 @@
         ]
       }
     },
-    "/geocoding/geocode": {
+    "/api/geocoding/geocode": {
       "get": {
         "operationId": "GeocodingController_geocode",
         "parameters": [
@@ -12070,7 +12598,7 @@
         ]
       }
     },
-    "/geocoding/reverse": {
+    "/api/geocoding/reverse": {
       "get": {
         "operationId": "GeocodingController_reverse",
         "parameters": [
@@ -12099,7 +12627,7 @@
         ]
       }
     },
-    "/geocoding/lookup": {
+    "/api/geocoding/lookup": {
       "get": {
         "operationId": "GeocodingController_lookup",
         "parameters": [
@@ -12128,7 +12656,7 @@
         ]
       }
     },
-    "/clients/{clientId}/panic-config": {
+    "/api/clients/{clientId}/panic-config": {
       "get": {
         "operationId": "PanicEventsController_getPanicConfig",
         "parameters": [
@@ -12194,7 +12722,7 @@
         ]
       }
     },
-    "/panic-events": {
+    "/api/panic-events": {
       "post": {
         "operationId": "PanicEventsController_create",
         "parameters": [],
@@ -12242,7 +12770,7 @@
         ]
       }
     },
-    "/panic-events/{eventId}": {
+    "/api/panic-events/{eventId}": {
       "get": {
         "operationId": "PanicEventsController_getById",
         "parameters": [
@@ -12271,7 +12799,7 @@
         ]
       }
     },
-    "/panic-events/{eventId}/claim": {
+    "/api/panic-events/{eventId}/claim": {
       "post": {
         "operationId": "PanicEventsController_claim",
         "parameters": [
@@ -12300,7 +12828,7 @@
         ]
       }
     },
-    "/panic-events/{eventId}/release": {
+    "/api/panic-events/{eventId}/release": {
       "post": {
         "operationId": "PanicEventsController_release",
         "parameters": [
@@ -12329,7 +12857,7 @@
         ]
       }
     },
-    "/panic-events/{eventId}/close": {
+    "/api/panic-events/{eventId}/close": {
       "post": {
         "operationId": "PanicEventsController_close",
         "parameters": [
@@ -12368,7 +12896,7 @@
         ]
       }
     },
-    "/clients/{clientId}/presence": {
+    "/api/clients/{clientId}/presence": {
       "get": {
         "operationId": "PresenceController_getClientPresence",
         "parameters": [
@@ -12397,7 +12925,7 @@
         ]
       }
     },
-    "/companies/{companyId}/presence": {
+    "/api/companies/{companyId}/presence": {
       "get": {
         "operationId": "PresenceController_getCompanyPresence",
         "parameters": [
@@ -12426,7 +12954,7 @@
         ]
       }
     },
-    "/clients/{clientId}/emergency-events": {
+    "/api/clients/{clientId}/emergency-events": {
       "post": {
         "operationId": "EmergencyEventsController_activate",
         "parameters": [
@@ -12465,7 +12993,7 @@
         ]
       }
     },
-    "/emergency-events/{eventId}": {
+    "/api/emergency-events/{eventId}": {
       "get": {
         "operationId": "EmergencyEventsController_getById",
         "parameters": [
@@ -12494,7 +13022,7 @@
         ]
       }
     },
-    "/emergency-events/{eventId}/checkins/{checkinId}": {
+    "/api/emergency-events/{eventId}/checkins/{checkinId}": {
       "patch": {
         "operationId": "EmergencyEventsController_updateCheckin",
         "parameters": [
@@ -12541,7 +13069,7 @@
         ]
       }
     },
-    "/emergency-events/{eventId}/checkins": {
+    "/api/emergency-events/{eventId}/checkins": {
       "post": {
         "operationId": "EmergencyEventsController_addCheckin",
         "parameters": [
@@ -12580,7 +13108,7 @@
         ]
       }
     },
-    "/emergency-events/{eventId}/resolve": {
+    "/api/emergency-events/{eventId}/resolve": {
       "patch": {
         "operationId": "EmergencyEventsController_resolve",
         "parameters": [
@@ -12654,6 +13182,7 @@
                   "type": "string",
                   "enum": [
                     "face.person",
+                    "face.remove",
                     "face.reader",
                     "face.school",
                     "lpr.vehicle",
@@ -12808,6 +13337,19 @@
         },
         "required": [
           "canceled"
+        ]
+      },
+      "DeviceSyncClearFailedResultDto": {
+        "type": "object",
+        "properties": {
+          "removed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "removed"
         ]
       },
       "DeviceSyncJobCancelResultDto": {
@@ -13095,6 +13637,184 @@
         "required": [
           "role"
         ]
+      },
+      "CreateClientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "office",
+              "clinic",
+              "condominium",
+              "school",
+              "other"
+            ]
+          },
+          "segment": {
+            "type": "string",
+            "enum": [
+              "condo_market",
+              null
+            ],
+            "nullable": true
+          },
+          "cnpj": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "logoUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryColor": {
+            "type": "string",
+            "nullable": true
+          },
+          "privacyPolicyUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "privacyAlias": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportWhatsapp": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "autoApproveRegistrations": {
+            "default": false,
+            "type": "boolean"
+          },
+          "enableChildApprove": {
+            "default": false,
+            "type": "boolean"
+          },
+          "timezoneOffsetMinutes": {
+            "type": "integer",
+            "minimum": -840,
+            "maximum": 840
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "isActive"
+        ]
+      },
+      "PatchClientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "office",
+              "clinic",
+              "condominium",
+              "school",
+              "other"
+            ]
+          },
+          "segment": {
+            "type": "string",
+            "enum": [
+              "condo_market",
+              null
+            ],
+            "nullable": true
+          },
+          "cnpj": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "logoUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "primaryColor": {
+            "type": "string",
+            "nullable": true
+          },
+          "privacyPolicyUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "privacyAlias": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportPhone": {
+            "type": "string",
+            "nullable": true
+          },
+          "supportWhatsapp": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "autoApproveRegistrations": {
+            "default": false,
+            "type": "boolean"
+          },
+          "enableChildApprove": {
+            "type": "boolean"
+          },
+          "timezoneOffsetMinutes": {
+            "type": "integer",
+            "minimum": -840,
+            "maximum": 840
+          },
+          "ienhFilialCode": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "nullable": true
+          }
+        }
       },
       "CreateClientAddressDto": {
         "type": "object",
@@ -13464,6 +14184,45 @@
           "items"
         ]
       },
+      "MoveLocationPersonDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "registration",
+              "member"
+            ]
+          },
+          "personId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "sourceUnitId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "targetBlockId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "targetUnitId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "kind",
+          "personId",
+          "sourceUnitId",
+          "targetBlockId",
+          "targetUnitId"
+        ]
+      },
       "MoveLocationGroupsDto": {
         "type": "object",
         "properties": {
@@ -13779,6 +14538,330 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "ChildApprovalPreviewDto": {
+        "type": "object",
+        "properties": {
+          "clientName": {
+            "type": "string"
+          },
+          "childName": {
+            "type": "string"
+          },
+          "hasPhoto": {
+            "type": "boolean"
+          },
+          "adultName": {
+            "type": "string"
+          },
+          "block": {
+            "type": "string",
+            "nullable": true
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true
+          },
+          "termVersion": {
+            "type": "string"
+          },
+          "termContent": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "canAccept": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clientName",
+          "childName",
+          "hasPhoto",
+          "adultName",
+          "block",
+          "unit",
+          "termVersion",
+          "termContent",
+          "accepted",
+          "revoked",
+          "canAccept"
+        ]
+      },
+      "AcceptChildApprovalDto": {
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "agreed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "termVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "cpf",
+          "agreed",
+          "termVersion"
+        ]
+      },
+      "ChildApprovalResultDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ]
+      },
+      "ChildApprovalCpfDto": {
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "cpf"
+        ]
+      },
+      "ChildApprovalHistoryDto": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "object",
+            "properties": {
+              "enableChildApprove": {
+                "type": "boolean"
+              },
+              "childApprovalRequired": {
+                "type": "boolean"
+              },
+              "childApprovalStatus": {
+                "type": "string",
+                "enum": [
+                  "not_applicable",
+                  "pending",
+                  "authorized"
+                ]
+              },
+              "childApprovalValidCount": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "childApprovalRequested": {
+                "type": "boolean"
+              },
+              "childApprovalRemovalPending": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "enableChildApprove",
+              "childApprovalRequired",
+              "childApprovalStatus",
+              "childApprovalValidCount",
+              "childApprovalRequested",
+              "childApprovalRemovalPending"
+            ]
+          },
+          "consents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "adultSnapshot": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "registrationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "birthDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "block": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "unit": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "registrationId",
+                    "birthDate",
+                    "block",
+                    "unit"
+                  ]
+                },
+                "childSnapshot": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "registrationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "birthDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "block": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "unit": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "registrationId",
+                    "birthDate",
+                    "block",
+                    "unit"
+                  ]
+                },
+                "termVersion": {
+                  "type": "string"
+                },
+                "termContent": {
+                  "type": "string"
+                },
+                "termHash": {
+                  "type": "string"
+                },
+                "acceptedAt": {
+                  "type": "string"
+                },
+                "revokedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "revokedBy": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "revocationReason": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "adultSnapshot",
+                "childSnapshot",
+                "termVersion",
+                "termContent",
+                "termHash",
+                "acceptedAt",
+                "revokedAt",
+                "revokedBy",
+                "revocationReason"
+              ]
+            }
+          },
+          "requests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "adultName": {
+                  "type": "string"
+                },
+                "emailSentAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "emailError": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "expiresAt": {
+                  "type": "string"
+                },
+                "accepted": {
+                  "type": "boolean"
+                },
+                "canceled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "adultName",
+                "emailSentAt",
+                "emailError",
+                "expiresAt",
+                "accepted",
+                "canceled"
+              ]
+            }
+          }
+        },
+        "required": [
+          "summary",
+          "consents",
+          "requests"
+        ]
+      },
+      "RevokeChildApprovalDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "BlockPersonDto": {
@@ -14154,6 +15237,14 @@
               "other"
             ]
           },
+          "segment": {
+            "type": "string",
+            "enum": [
+              "condo_market",
+              null
+            ],
+            "nullable": true
+          },
           "timezoneOffsetMinutes": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -14314,6 +15405,7 @@
         },
         "required": [
           "clientType",
+          "segment",
           "timezoneOffsetMinutes",
           "registrations",
           "activeRegistrationLinks",

@@ -8,6 +8,7 @@ import {
   generateClientUnitsSchema,
   generateStructureSchema,
   moveLocationGroupsSchema,
+  moveLocationPersonSchema,
   updateClientBlockSchema,
   updateClientUnitSchema,
 } from '../client-blocks.schema';
@@ -42,4 +43,8 @@ export class BindLocationGroupsDto extends createZodDto(
 
 export class MoveLocationGroupsDto extends createZodDto(
   moveLocationGroupsSchema,
+) {}
+
+export class MoveLocationPersonDto extends createZodDto(
+  moveLocationPersonSchema,
 ) {}

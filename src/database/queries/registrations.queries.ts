@@ -178,6 +178,7 @@ export async function insertRegistration(
     additionalData: RegistrationRow['additionalData'];
     unitId?: string | null;
     truthDeclaredAt: Date;
+    childApprovalRequired?: boolean;
   },
 ): Promise<RegistrationRow> {
   const now = new Date();
@@ -196,6 +197,7 @@ export async function insertRegistration(
       additionalData: input.additionalData,
       unitId: input.unitId ?? null,
       status: 'draft',
+      childApprovalRequired: input.childApprovalRequired ?? false,
       submittedAt: now,
       truthDeclaredAt: input.truthDeclaredAt,
       updatedAt: now,

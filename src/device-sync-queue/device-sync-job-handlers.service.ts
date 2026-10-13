@@ -1,3 +1,6 @@
+import * as membersQueries from '../database/queries/members.queries';
+import { ChildApprovalRemovalService } from '../face-sync/child-approval-removal.service';
+import { ChildApprovalPendingError } from '../child-approvals/child-approval-policy.service';
 import { Injectable, Logger } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
@@ -44,10 +47,13 @@ export class DeviceSyncJobHandlersService {
     private readonly lpr: LprPlateSyncService,
     private readonly r2: R2StorageService,
     private readonly database: DatabaseService,
+    private readonly childRemoval: ChildApprovalRemovalService,
   ) {}
 
   async run(job: DeviceSyncJobRow, ctx: JobContext): Promise<void> {
     switch (job.kind) {
+      case 'face.remove':
+        return this.childRemoval.run(job);
       case 'face.person':
         return this.runFacePerson(job);
       case 'face.reader':
@@ -116,24 +122,48 @@ export class DeviceSyncJobHandlersService {
         return;
       }
     }
+    if (payload.entityKind === 'member') {
+      const member = await membersQueries.getMemberById(
+        this.database.db,
+        job.targetId,
+        job.clientId,
+      );
+      if (!member?.isActive || member.faceId !== payload.faceId) {
+        this.faceSync.takePersistHook(job.id);
+        await this.queue.update(job.id, { processed: 1, total: 1 });
+        return;
+      }
+    }
     const { buffer } = await this.r2.getObjectBytes(payload.photoKey);
-    const outcome = await this.faceSync.syncPersonOnReaders({
-      clientId: job.clientId,
-      faceId: payload.faceId,
-      name: payload.name || 'USUARIO',
-      imageBuffer: buffer,
-      photoKey: payload.photoKey,
-      timeSectionIds: payload.timeSectionIds,
-      logContext: payload.logContext,
-      validFrom: payload.validFrom ? new Date(payload.validFrom) : undefined,
-      validUntil: payload.validUntil ? new Date(payload.validUntil) : undefined,
-      photoOnly: payload.photoOnly,
-      blocked: payload.blocked,
-      resetReaderProgress: payload.resetReaderProgress,
-      allowSimilarFace: payload.allowSimilarFace,
-      previousDeviceSyncError: payload.previousDeviceSyncError,
-      readerIds: payload.readerIds,
-    });
+    const outcome = await this.faceSync
+      .syncPersonOnReaders({
+        clientId: job.clientId,
+        faceId: payload.faceId,
+        name: payload.name || 'USUARIO',
+        imageBuffer: buffer,
+        photoKey: payload.photoKey,
+        timeSectionIds: payload.timeSectionIds,
+        logContext: payload.logContext,
+        validFrom: payload.validFrom ? new Date(payload.validFrom) : undefined,
+        validUntil: payload.validUntil
+          ? new Date(payload.validUntil)
+          : undefined,
+        photoOnly: payload.photoOnly,
+        blocked: payload.blocked,
+        resetReaderProgress: payload.resetReaderProgress,
+        allowSimilarFace: payload.allowSimilarFace,
+        previousDeviceSyncError: payload.previousDeviceSyncError,
+        readerIds: payload.readerIds,
+      })
+      .catch((error) => {
+        if (error instanceof ChildApprovalPendingError) return null;
+        throw error;
+      });
+    if (!outcome) {
+      this.faceSync.takePersistHook(job.id);
+      await this.queue.update(job.id, { processed: 1, total: 1 });
+      return;
+    }
     await this.queue.update(job.id, { processed: 1, total: 1 });
     const hook = this.faceSync.takePersistHook(job.id);
     if (hook) await hook(outcome);
@@ -195,21 +225,47 @@ export class DeviceSyncJobHandlersService {
             continue;
           }
         }
+        if (person.entityKind === 'member') {
+          const member = await membersQueries.getMemberById(
+            this.database.db,
+            person.id,
+            job.clientId,
+          );
+          if (
+            !member?.isActive ||
+            member.faceId !== person.faceId ||
+            member.photoKey !== person.photoKey
+          ) {
+            processed += 1;
+            await this.queue.update(job.id, { processed, total });
+            continue;
+          }
+        }
         const { buffer } = await this.r2.getObjectBytes(person.photoKey);
-        const outcome = await this.faceSync.syncPersonOnReaders({
-          clientId: job.clientId,
-          faceId: person.faceId,
-          name: person.name,
-          imageBuffer: buffer,
-          photoKey: person.photoKey,
-          timeSectionIds: person.timeSectionIds,
-          validFrom: person.validFrom,
-          validUntil: person.validUntil,
-          blocked: person.blocked,
-          logContext: `reader-rebuild=${job.targetId}:${person.id}`,
-          readerIds: [job.targetId],
-          resetReaderProgress: false,
-        });
+        const outcome = await this.faceSync
+          .syncPersonOnReaders({
+            clientId: job.clientId,
+            faceId: person.faceId,
+            name: person.name,
+            imageBuffer: buffer,
+            photoKey: person.photoKey,
+            timeSectionIds: person.timeSectionIds,
+            validFrom: person.validFrom,
+            validUntil: person.validUntil,
+            blocked: person.blocked,
+            logContext: `reader-rebuild=${job.targetId}:${person.id}`,
+            readerIds: [job.targetId],
+            resetReaderProgress: false,
+          })
+          .catch((error) => {
+            if (error instanceof ChildApprovalPendingError) return null;
+            throw error;
+          });
+        if (!outcome) {
+          processed += 1;
+          await this.queue.update(job.id, { processed, total });
+          continue;
+        }
         if (outcome.deviceSyncStatus === 'sync_failed') {
           throw new Error(
             outcome.deviceSyncError ??

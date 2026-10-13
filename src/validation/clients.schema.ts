@@ -92,6 +92,7 @@ const baseClientShape = {
   supportWhatsapp: optionalTrimmed,
   isActive: z.boolean(),
   autoApproveRegistrations: z.boolean().default(false),
+  enableChildApprove: z.boolean().default(false),
 };
 
 /** Campo obrigatório no create (omissão/no branco ⇒ 0 = UTC). */
@@ -120,6 +121,14 @@ export const clientSchemaForCreate = z
     timezoneOffsetMinutes: timezoneOffsetCreate,
   })
   .superRefine((data, ctx) => {
+    if (data.enableChildApprove && data.type !== 'condominium') {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Autorização de menores exige um cliente com blocos e unidades.',
+        path: ['enableChildApprove'],
+      });
+    }
     if (data.segment === 'condo_market' && data.type !== 'condominium') {
       ctx.addIssue({
         code: 'custom',
@@ -145,6 +154,7 @@ export const createClientSchema = clientSchemaForCreate;
 export const updateClientSchema = z
   .object({
     ...baseClientShape,
+    enableChildApprove: z.boolean().optional(),
     timezoneOffsetMinutes: timezoneOffsetUpdate,
     ienhFilialCode: z
       .union([z.coerce.number().int().min(1).max(3), z.null()])

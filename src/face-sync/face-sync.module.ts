@@ -1,3 +1,5 @@
+import { ChildApprovalPolicyModule } from '../child-approvals/child-approval-policy.module';
+import { ChildApprovalRemovalService } from './child-approval-removal.service';
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from '../database/database.module';
@@ -21,6 +23,7 @@ import { FaceSyncListener } from './face-sync.listener';
 @Module({
   imports: [
     DatabaseModule,
+    ChildApprovalPolicyModule,
     PermissionsModule,
     StorageModule,
     FaceMatchModule,
@@ -31,12 +34,18 @@ import { FaceSyncListener } from './face-sync.listener';
   controllers: [CompanyFaceSyncController, ClientFaceSyncController],
   providers: [
     FaceSyncService,
+    ChildApprovalRemovalService,
     AccessTimeZoneService,
     FaceReaderRebuildService,
     FaceSyncListener,
     DeviceSyncJobHandlersService,
     DeviceSyncWorkerService,
   ],
-  exports: [FaceSyncService, AccessTimeZoneService, FaceReaderRebuildService],
+  exports: [
+    ChildApprovalRemovalService,
+    FaceSyncService,
+    AccessTimeZoneService,
+    FaceReaderRebuildService,
+  ],
 })
 export class FaceSyncModule {}

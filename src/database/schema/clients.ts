@@ -62,6 +62,10 @@ export const clients = pgTable(
     /** Código curto público para URL do display (ex.: /display/eA1tP). */
     displayShortCode: varchar('display_short_code', { length: 8 }),
     isActive: boolean('is_active').default(true).notNull(),
+    /** Exige aceite de adulto aprovado da mesma unidade para menores. */
+    enableChildApprove: boolean('enable_child_approve')
+      .default(false)
+      .notNull(),
     /** Aprova automaticamente novos cadastros recebidos por link. */
     autoApproveRegistrations: boolean('auto_approve_registrations')
       .default(false)

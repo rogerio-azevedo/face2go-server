@@ -13,6 +13,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CreateClientDto, PatchClientDto } from '../validation/dto/clients.dto';
 import { ClientsService } from './clients.service';
 
 @ApiTags('clients')
@@ -145,7 +146,7 @@ export class ClientsController {
 
   @Post()
   @ApiOperation({ summary: 'Criar cliente (apenas admin da empresa)' })
-  create(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+  create(@CurrentUser() user: JwtPayload, @Body() body: CreateClientDto) {
     return this.clientsService.create(user, body);
   }
 
@@ -154,7 +155,7 @@ export class ClientsController {
   update(
     @CurrentUser() user: JwtPayload,
     @Param('clientId', ParseUUIDPipe) clientId: string,
-    @Body() body: unknown,
+    @Body() body: PatchClientDto,
   ) {
     return this.clientsService.update(user, clientId, body);
   }

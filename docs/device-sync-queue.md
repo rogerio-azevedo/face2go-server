@@ -97,6 +97,14 @@ Foto vem do R2 via `photoKey` no worker — não persistir `imageBuffer` no Post
 
 Teto do worker: 2 jobs globais; 1 write por leitor/câmera (estender o gate atual ao LPR).
 
+Na gestão por cliente, `POST /api/clients/:clientId/device-sync-jobs/cancel-queued`
+cancela somente jobs aguardando execução. Na aba **Falhas**, **Limpar falhas** usa
+`POST /api/clients/:clientId/device-sync-jobs/clear-failed` e retorna `{ removed }`.
+Essa operação exige `company_admin` da empresa do cliente e remove todos os jobs
+`failed` desse cliente (todas as páginas). Ela preserva os jobs dos demais status,
+os cadastros e o estado de sincronização; para tentar novamente após a limpeza,
+é necessário disparar a sincronização pelo cadastro ou pelo dispositivo.
+
 ---
 
 ## 5. Portar para `meuiot-server`

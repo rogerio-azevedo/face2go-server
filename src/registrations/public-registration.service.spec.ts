@@ -1,3 +1,4 @@
+import { ChildApprovalService } from '../child-approvals/child-approval.service';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
@@ -72,6 +73,10 @@ describe('PublicRegistrationService', () => {
     const module = await Test.createTestingModule({
       providers: [
         PublicRegistrationService,
+        {
+          provide: ChildApprovalService,
+          useValue: { requestEmails: jest.fn() },
+        },
         { provide: DatabaseService, useValue: { db: {} } },
         {
           provide: R2StorageService,

@@ -7,6 +7,9 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { ChildApprovalService } from '../child-approvals/child-approval.service';
+import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
+import { ChildApprovalRepository } from '../child-approvals/child-approval.repository';
 
 import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 import type { AppDb } from '../database/database.types';
@@ -73,6 +76,9 @@ export class RegistrationsAdminService {
     private readonly events: RegistrationEventsService,
     private readonly emailService: EmailService,
     private readonly blocks: ClientBlocksRepository,
+    private readonly childApprovals: ChildApprovalService,
+    private readonly childPolicy: ChildApprovalPolicyService,
+    private readonly childRepository: ChildApprovalRepository,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -169,6 +175,8 @@ export class RegistrationsAdminService {
       birthDate,
       age: age != null && Number.isFinite(age) && age >= 0 ? age : null,
       ageAsOf,
+      ...(await this.childPolicy.summary(row.clientId, row.id)),
+      childApprovalRequired: row.childApprovalRequired,
       isMinor:
         age != null && Number.isFinite(age) && age >= 0 ? age < 18 : null,
       additionalData: row.additionalData,
@@ -397,6 +405,17 @@ export class RegistrationsAdminService {
       registrationId,
       clientId,
     );
+    if (
+      await this.childApprovals.deferApproval(
+        clientId,
+        registrationId,
+        decidedByUserId,
+      )
+    ) {
+      return options?.mapResult === false
+        ? existing
+        : this.mapRowForClient(existing!, clientId);
+    }
     if (client.type !== 'school' && existing) {
       const linkedMember = await this.membersService.getByRegistrationId(
         clientId,
@@ -435,12 +454,15 @@ export class RegistrationsAdminService {
       );
     }
 
+    let approvalQueued = !updated.faceImageKey;
     let rowOut = updated;
     if (updated.faceImageKey) {
-      const faceId = await registrationsQueries.bumpClientFaceCounter(
-        this.database.db,
-        clientId,
-      );
+      const faceId =
+        updated.faceId ??
+        (await registrationsQueries.bumpClientFaceCounter(
+          this.database.db,
+          clientId,
+        ));
       const linked = await registrationsQueries.setRegistrationFaceAfterApprove(
         this.database.db,
         registrationId,
@@ -458,6 +480,7 @@ export class RegistrationsAdminService {
           clientId,
           decidedByUserId ?? undefined,
         );
+        approvalQueued = true;
       } catch (err: unknown) {
         const msg =
           err instanceof Error
@@ -499,8 +522,32 @@ export class RegistrationsAdminService {
       }
     }
 
+    if (approvalQueued)
+      await this.childRepository.clearApprovalIntent(clientId, registrationId);
     if (options?.mapResult === false) return rowOut;
     return await this.mapRowForClient(rowOut, clientId);
+  }
+
+  async completeChildApproval(clientId: string, registrationId: string) {
+    const child = await this.childRepository.registration(
+      clientId,
+      registrationId,
+    );
+    if (
+      !child?.childApprovalRequestedAt ||
+      !child.isActive ||
+      !['draft', 'rejected'].includes(child.status)
+    )
+      return;
+    await this.approveShared(
+      clientId,
+      registrationId,
+      child.childApprovalRequestedByUserId,
+      {
+        eventBody: 'Aprovação concluída após autorização do adulto.',
+        mapResult: false,
+      },
+    );
   }
 
   async rejectForCompanyUser(
@@ -549,6 +596,10 @@ export class RegistrationsAdminService {
       );
     }
 
+    if (existing.childApprovalRequired) {
+      await this.childRepository.clearApprovalIntent(clientId, registrationId);
+      await this.childRepository.cancelOpenRequests(clientId, registrationId);
+    }
     if (existing.status === 'approved') {
       const member = await this.membersService.getByRegistrationId(
         clientId,
@@ -682,10 +733,12 @@ export class RegistrationsAdminService {
 
     let rowOut = updated;
     if (rowOut.faceId == null) {
-      const faceId = await registrationsQueries.bumpClientFaceCounter(
-        this.database.db,
-        clientId,
-      );
+      const faceId =
+        updated.faceId ??
+        (await registrationsQueries.bumpClientFaceCounter(
+          this.database.db,
+          clientId,
+        ));
       const linked = await registrationsQueries.setRegistrationFaceAfterApprove(
         this.database.db,
         registrationId,
@@ -934,6 +987,7 @@ export class RegistrationsAdminService {
         clientId,
         client.type,
         client.registrationConfig,
+        client.enableChildApprove ?? false,
       )
     ).fields;
     const isCondominium = client.type === 'condominium';

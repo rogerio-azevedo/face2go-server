@@ -2,6 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 
 import {
   deviceSyncCancelQueuedResultSchema,
+  deviceSyncClearFailedResultSchema,
   deviceSyncJobCancelResultSchema,
   deviceSyncJobDtoSchema,
   deviceSyncJobListSchema,
@@ -28,4 +29,7 @@ export class DeviceSyncJobCancelResultDto extends createZodDto(
 ) {}
 export class DeviceSyncCancelQueuedResultDto extends createZodDto(
   deviceSyncCancelQueuedResultSchema,
+) {}
+export class DeviceSyncClearFailedResultDto extends createZodDto(
+  deviceSyncClearFailedResultSchema,
 ) {}

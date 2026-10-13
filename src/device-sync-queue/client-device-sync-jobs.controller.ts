@@ -20,6 +20,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import {
   DeviceSyncCancelQueuedResultDto,
+  DeviceSyncClearFailedResultDto,
   DeviceSyncJobCancelResultDto,
   DeviceSyncJobDto,
   DeviceSyncJobListDto,
@@ -65,6 +66,17 @@ export class ClientDeviceSyncJobsController {
     @Param('clientId', ParseUUIDPipe) clientId: string,
   ) {
     return this.admin.cancelQueued(user, clientId);
+  }
+
+  @Post('clear-failed')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove o histórico de jobs com falha do cliente' })
+  @ApiOkResponse({ type: DeviceSyncClearFailedResultDto })
+  clearFailed(
+    @CurrentUser() user: JwtPayload,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ) {
+    return this.admin.clearFailed(user, clientId);
   }
 
   @Post(':jobId/cancel')

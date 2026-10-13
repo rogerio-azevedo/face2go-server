@@ -130,6 +130,18 @@ export class DeviceSyncAdminService {
     return { canceled: canceled.length };
   }
 
+  async clearFailed(
+    user: JwtPayload,
+    clientId: string,
+  ): Promise<{ removed: number }> {
+    await this.ensureClient(user, clientId);
+    const removed = await adminQueries.clearFailedDeviceSyncJobs(
+      this.database.db,
+      clientId,
+    );
+    return { removed };
+  }
+
   async retry(user: JwtPayload, clientId: string, jobId: string) {
     await this.ensureClient(user, clientId);
     const job = await this.requireJob(clientId, jobId);

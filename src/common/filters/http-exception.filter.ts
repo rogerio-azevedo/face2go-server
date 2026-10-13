@@ -27,17 +27,30 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.getResponse()
         : 'Erro interno do servidor.';
 
-    const message = this.extractMessage(exceptionResponse);
+    const rawMessage = this.extractMessage(exceptionResponse);
+    const token = /\/child-approvals\/([a-f0-9]{64})(?:[/?]|$)/.exec(
+      request.url,
+    )?.[1];
+    const scrub = (value: string) =>
+      token ? value.replaceAll(token, '[redacted]') : value;
+    const path = scrub(request.url);
+    const message = Array.isArray(rawMessage)
+      ? rawMessage.map(scrub)
+      : scrub(rawMessage);
 
     if (status >= 500) {
       this.logger.error(
-        `${request.method} ${request.url} → ${status}`,
-        exception instanceof Error ? exception.stack : String(exception),
+        `${request.method} ${path} → ${status}`,
+        scrub(
+          exception instanceof Error
+            ? (exception.stack ?? exception.message)
+            : String(exception),
+        ),
       );
     } else if (status >= 400) {
       const messageText = Array.isArray(message) ? message.join(', ') : message;
       this.logger.warn(
-        `${request.method} ${request.url} → ${status}: ${messageText}`,
+        `${request.method} ${path} → ${status}: ${messageText}`,
         'HttpExceptionFilter',
       );
     }
@@ -45,7 +58,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       message,
-      path: request.url,
+      path,
       timestamp: new Date().toISOString(),
     });
   }
