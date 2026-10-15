@@ -13,6 +13,7 @@ import { applyOpenApiEnvDefaults } from '../src/scripts/openapi-env.defaults';
 
 config();
 applyOpenApiEnvDefaults();
+process.env.DEVICE_SIDE_EFFECTS = '0';
 
 async function main(): Promise<void> {
   const { NestFactory } = await import('@nestjs/core');
@@ -23,6 +24,7 @@ async function main(): Promise<void> {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn'],
   });
+  app.setGlobalPrefix('api');
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Face2go API')

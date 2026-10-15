@@ -7,6 +7,7 @@ import {
 import { OnEvent } from '@nestjs/event-emitter';
 
 import { DatabaseService } from '../database/database.service';
+import * as clientUsersQueries from '../database/queries/client-users.queries';
 import * as responsiblesQueries from '../database/queries/responsibles.queries';
 import * as studentsQueries from '../database/queries/students.queries';
 import * as pickupQueries from '../database/queries/pickup-authorizations.queries';
@@ -19,6 +20,7 @@ import {
 } from '../panic-events/panic-events.events';
 import {
   ACCESS_FACIAL_RECORDED,
+  type AccessBlockedAttemptPayload,
   type AccessFacialRecordedPayload,
   INVITE_GUEST_FACE_SUBMITTED,
   INVITE_GUEST_FACE_SYNCED,
@@ -41,6 +43,12 @@ const EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID = 'student_access';
 
 /** Deve coincidir com `ANDROID_PANIC_CHANNEL_ID` no app (Expo Notifications). */
 const EXPO_PUSH_ANDROID_PANIC_CHANNEL_ID = 'panic_high';
+
+/** Deve coincidir com `ANDROID_SECURITY_ALERT_CHANNEL_ID` no app. */
+const EXPO_PUSH_ANDROID_SECURITY_ALERT_CHANNEL_ID = 'blocked_access_v1';
+
+/** Arquivo empacotado pelo plugin expo-notifications (`sounds`). */
+const EXPO_PUSH_BLOCKED_ACCESS_SOUND = 'blocked_access.wav';
 
 @Injectable()
 export class NotificationsService {
@@ -84,6 +92,60 @@ export class NotificationsService {
     if (!row) {
       throw new NotFoundException('Membro não encontrado.');
     }
+  }
+
+  async updateClientUserPushToken(
+    clientUserId: string,
+    pushToken: string,
+  ): Promise<void> {
+    const token = pushToken.trim();
+    if (!token) {
+      throw new BadRequestException('Token de push inválido.');
+    }
+
+    const row = await clientUsersQueries.setClientUserPushToken(
+      this.database.db,
+      clientUserId,
+      token,
+    );
+    if (!row) {
+      throw new NotFoundException('Vínculo com a unidade não encontrado.');
+    }
+  }
+
+  async sendBlockedAttemptPush(
+    payload: AccessBlockedAttemptPayload,
+  ): Promise<void> {
+    const tokens = [
+      ...new Set(
+        await clientUsersQueries.listActiveClientPushTokens(
+          this.database.db,
+          payload.clientId,
+        ),
+      ),
+    ];
+    if (tokens.length === 0) {
+      return;
+    }
+
+    const person = payload.personName?.trim() || `Face ${payload.faceId}`;
+    const reason = payload.blockReason?.trim();
+    const body = reason
+      ? `${person} em ${payload.readerName}: ${reason}`
+      : `${person} em ${payload.readerName}`;
+
+    await this.dispatchExpoPush(
+      tokens,
+      'Tentativa de acesso bloqueada',
+      body,
+      {
+        type: 'access_blocked_attempt',
+        accessId: payload.accessId,
+        clientId: payload.clientId,
+      },
+      EXPO_PUSH_ANDROID_SECURITY_ALERT_CHANNEL_ID,
+      EXPO_PUSH_BLOCKED_ACCESS_SOUND,
+    );
   }
 
   @OnEvent(ACCESS_FACIAL_RECORDED, { async: true })
@@ -547,10 +609,11 @@ export class NotificationsService {
     body: string,
     data: Record<string, string>,
     channelId: string = EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID,
+    sound = 'default',
   ): Promise<void> {
     const messages = expoPushTokens.map((to) => ({
       to,
-      sound: 'default' as const,
+      sound,
       title,
       body,
       data,

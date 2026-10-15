@@ -79,6 +79,13 @@ export class FacialAccess {
 
   @Prop({ type: String, default: null })
   triggeredByName!: string | null;
+
+  /** Tentativa negada de pessoa bloqueada no cadastro (feed de alertas). */
+  @Prop({ type: Boolean, default: false })
+  blockedAttempt!: boolean;
+
+  @Prop({ type: String, default: null })
+  blockReason!: string | null;
 }
 
 export const FacialAccessSchema = SchemaFactory.createForClass(FacialAccess);
@@ -90,4 +97,8 @@ FacialAccessSchema.index({ companyId: 1, clientId: 1, eventDate: -1 });
 FacialAccessSchema.index(
   { readerId: 1, correlationId: 1 },
   { unique: true, sparse: true },
+);
+FacialAccessSchema.index(
+  { companyId: 1, clientId: 1, blockedAttempt: 1, eventDate: -1 },
+  { partialFilterExpression: { blockedAttempt: true } },
 );

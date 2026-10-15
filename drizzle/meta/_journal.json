@@ -645,6 +645,13 @@
       "when": 1791821735386,
       "tag": "0091_location_person_moves",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1791821735387,
+      "tag": "0092_client_users_push_token",
+      "breakpoints": true
     }
   ]
 }

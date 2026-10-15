@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, ne } from 'drizzle-orm';
 
 import type { AppDb } from '../database.types';
 import { clientUsers, companyUsers, users } from '../schema';
@@ -144,6 +144,57 @@ export async function countActiveClientAdmins(
     .where(and(...base));
 
   return rows.length;
+}
+
+export async function setClientUserPushToken(
+  db: AppDb,
+  clientUserId: string,
+  pushToken: string,
+) {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(clientUsers)
+      .set({ pushToken })
+      .where(eq(clientUsers.id, clientUserId))
+      .returning({ id: clientUsers.id });
+    if (!row) return null;
+
+    await tx
+      .update(clientUsers)
+      .set({ pushToken: null })
+      .where(
+        and(
+          eq(clientUsers.pushToken, pushToken),
+          ne(clientUsers.id, clientUserId),
+        ),
+      );
+    return row;
+  });
+}
+
+export async function listActiveClientPushTokens(
+  db: AppDb,
+  clientId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ pushToken: clientUsers.pushToken })
+    .from(clientUsers)
+    .innerJoin(users, eq(clientUsers.userId, users.id))
+    .where(
+      and(
+        eq(clientUsers.clientId, clientId),
+        eq(clientUsers.isActive, true),
+        eq(users.isActive, true),
+        isNotNull(clientUsers.pushToken),
+        ne(clientUsers.pushToken, ''),
+      ),
+    );
+
+  return rows.flatMap((row) =>
+    typeof row.pushToken === 'string' && row.pushToken.length > 0
+      ? [row.pushToken]
+      : [],
+  );
 }
 
 export async function getCompanyUserLink(

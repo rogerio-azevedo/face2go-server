@@ -274,6 +274,8 @@ export class AccessesService {
       snapR2Key,
       readerDirection: ctx.direction ?? null,
       correlationId,
+      blockedAttempt: denied && isBlocked,
+      blockReason: denied && isBlocked ? blockReason : null,
     };
 
     try {

@@ -7,6 +7,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ArrivalsModule } from './arrivals/arrivals.module';
 import { AuthModule } from './auth/auth.module';
 import { AccessesModule } from './accesses/accesses.module';
+import { AlertsModule } from './alerts/alerts.module';
 import { CamerasModule } from './cameras/cameras.module';
 import { ClientsModule } from './clients/clients.module';
 import { ClientAddressesModule } from './client-addresses/client-addresses.module';
@@ -105,6 +106,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ResponsibleDashboardModule,
     FaceEnrollmentModule,
     AccessesModule,
+    AlertsModule,
     LprAccessesModule,
     MeModule,
     DashboardModule,

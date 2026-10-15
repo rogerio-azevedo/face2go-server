@@ -11,6 +11,7 @@ import {
   ACCESS_BLOCKED_ATTEMPT,
   type AccessBlockedAttemptPayload,
 } from './notifications.events';
+import { NotificationsService } from './notifications.service';
 
 @Injectable()
 export class AccessBlockedAttemptListener {
@@ -22,6 +23,7 @@ export class AccessBlockedAttemptListener {
     private readonly monitoringGateway: MonitoringGateway,
     private readonly r2: R2StorageService,
     private readonly telegramAlerts: TelegramAlertsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   @OnEvent(ACCESS_BLOCKED_ATTEMPT, { async: true })
@@ -45,6 +47,15 @@ export class AccessBlockedAttemptListener {
     });
 
     const telegram = this.telegramAlerts.notifyBlockedAttempt(payload, snapUrl);
+    const push = this.notifications
+      .sendBlockedAttemptPush(payload)
+      .catch((err: unknown) => {
+        this.logger.warn(
+          `Falha ao enviar push de tentativa bloqueada (client=${payload.clientId}): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
 
     try {
       const admins = await clientUsersQueries.listActiveClientAdminEmails(
@@ -86,6 +97,6 @@ export class AccessBlockedAttemptListener {
       );
     }
 
-    await telegram;
+    await Promise.all([telegram, push]);
   }
 }

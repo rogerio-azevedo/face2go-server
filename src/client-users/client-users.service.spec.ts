@@ -28,6 +28,7 @@ const clientUserRow = {
   isActive: true,
   createdAt: new Date(),
   notes: null,
+  pushToken: null,
 };
 
 describe('ClientUsersService', () => {

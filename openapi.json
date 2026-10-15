@@ -11893,6 +11893,44 @@
         ]
       }
     },
+    "/api/client/alerts": {
+      "get": {
+        "operationId": "ClientAlertsController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientAlertsListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar tentativas de acesso bloqueadas da unidade atual",
+        "tags": [
+          "client-alerts"
+        ]
+      }
+    },
     "/api/me/navigation": {
       "get": {
         "operationId": "MeController_navigation",
@@ -12090,7 +12128,7 @@
             "bearer": []
           }
         ],
-        "summary": "Registrar token Expo Push do app (responsável ou membro)",
+        "summary": "Registrar token Expo Push do app (responsável, membro ou admin da unidade)",
         "tags": [
           "notifications"
         ]
@@ -15242,6 +15280,88 @@
         },
         "required": [
           "imageBase64"
+        ]
+      },
+      "ClientAlertsListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "personName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "blockReason": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "readerName": {
+                  "type": "string"
+                },
+                "readerDirection": {
+                  "type": "string",
+                  "enum": [
+                    "in",
+                    "out",
+                    null
+                  ],
+                  "nullable": true
+                },
+                "eventDate": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "clientName": {
+                  "type": "string"
+                },
+                "snapUrl": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "personName",
+                "blockReason",
+                "readerName",
+                "readerDirection",
+                "eventDate",
+                "createdAt",
+                "clientName",
+                "snapUrl"
+              ]
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
         ]
       },
       "ClientDashboardDto": {

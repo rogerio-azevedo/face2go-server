@@ -110,4 +110,5 @@ export const clientUsers = pgTable('client_users', {
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   notes: text('notes'),
+  pushToken: text('push_token'),
 });

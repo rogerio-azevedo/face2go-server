@@ -33,6 +33,11 @@ export const envSchema = z.object({
    */
   API_URL: z.string().url().optional(),
   APP_PUBLIC_URL: z.string().url().optional(),
+  /**
+   * `0` não abre stream de leitor nem consome a fila de sync.
+   * Default ligada. Obrigatório no `.env` local que aponta para produção.
+   */
+  DEVICE_SIDE_EFFECTS: z.string().optional(),
   /** Corta snapManager facial Intelbras (POST + probe). Default off. */
   FACIAL_INTELBRAS_SKIP_STREAM: z.string().optional(),
   /** Rollback: reabre GET snapManager nos Intelbras faciais. */

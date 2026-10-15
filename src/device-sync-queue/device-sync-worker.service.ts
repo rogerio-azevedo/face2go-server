@@ -8,6 +8,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 
+import { deviceSideEffectsEnabled } from '../config/device-side-effects';
 import {
   type RecoveredJob,
   SUPERSEDED_JOB_ERROR,
@@ -47,6 +48,10 @@ export class DeviceSyncWorkerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit(): void {
+    if (!deviceSideEffectsEnabled()) {
+      this.log.warn('DEVICE_SIDE_EFFECTS=0 — worker de sync desligado');
+      return;
+    }
     this.running = true;
     void this.maintain().finally(() => {
       if (!this.running) return;

@@ -9,14 +9,15 @@ import { NotificationsService } from './notifications.service';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
-@Roles('responsible', 'member')
+@Roles('responsible', 'member', 'client_admin', 'client_operator')
 @Controller('notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Patch('push-token')
   @ApiOperation({
-    summary: 'Registrar token Expo Push do app (responsável ou membro)',
+    summary:
+      'Registrar token Expo Push do app (responsável, membro ou admin da unidade)',
   })
   async registerPushToken(
     @CurrentUser() user: JwtPayload,
@@ -39,6 +40,20 @@ export class NotificationsController {
         throw new ForbiddenException('Usuário não possui perfil de membro.');
       }
       await this.notifications.updateMemberPushToken(mid, body.pushToken);
+      return { ok: true };
+    }
+
+    if (user.role === 'client_admin' || user.role === 'client_operator') {
+      const clientUserId = user.clientUserId;
+      if (!clientUserId) {
+        throw new ForbiddenException(
+          'Usuário não possui vínculo com a unidade.',
+        );
+      }
+      await this.notifications.updateClientUserPushToken(
+        clientUserId,
+        body.pushToken,
+      );
       return { ok: true };
     }
 

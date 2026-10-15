@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import AxiosDigestAuth from '@mhoc/axios-digest-auth';
 import { Readable } from 'node:stream';
 
+import { deviceSideEffectsEnabled } from '../config/device-side-effects';
 import type { EnvVars } from '../config/env.validation';
 import {
   createReaderCredentialsCipher,
@@ -233,6 +234,12 @@ export class FaceListenerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
+    if (!deviceSideEffectsEnabled()) {
+      this.logger.warn(
+        '[FaceListener] DEVICE_SIDE_EFFECTS=0 — streams e presença desligados',
+      );
+      return;
+    }
     try {
       await this.connectAllStreamReaders();
     } catch (err) {
