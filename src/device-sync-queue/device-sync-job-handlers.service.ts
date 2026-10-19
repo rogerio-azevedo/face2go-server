@@ -9,6 +9,8 @@ import * as readersQueries from '../database/queries/readers.queries';
 import * as registrationsQueries from '../database/queries/registrations.queries';
 import * as vehicleCameraSyncQueries from '../database/queries/vehicle-camera-sync.queries';
 import type { DeviceSyncJobRow } from '../database/schema/device-sync-jobs';
+import { isSimilarFaceReaderMessage } from '../face-match/face-match.util';
+import { isIncompleteDeviceSync } from '../face-sync/aggregate-reader-sync-outcome.util';
 import { FaceReaderRebuildService } from '../face-sync/face-reader-rebuild.service';
 import type { FaceSyncOutcome } from '../face-sync/face-sync.events';
 import { FaceSyncService } from '../face-sync/face-sync.service';
@@ -16,6 +18,7 @@ import { LprPlateSyncService } from '../lpr-plate-sync/lpr-plate-sync.service';
 import { R2StorageService } from '../storage/r2-storage.service';
 import { DeviceSyncPersistService } from './device-sync-persist.service';
 import { DeviceSyncQueueService } from './device-sync-queue.service';
+import { sleep } from './device-sync-sse.util';
 import type {
   FacePersonJobPayload,
   FaceReaderJobPayload,
@@ -24,10 +27,31 @@ import type {
   LprVehicleJobPayload,
 } from './device-sync-queue.types';
 
+/** Pausa curta para o leitor se recuperar antes da segunda passagem. */
+const FACE_SYNC_RETRY_DELAY_MS = 3_000;
+
 export class JobCanceledError extends Error {
   constructor() {
     super('Cancelado.');
   }
+}
+
+function isPermanentFaceSyncError(error: string | null): boolean {
+  if (!error) return false;
+  return (
+    isSimilarFaceReaderMessage(error) ||
+    error.includes('Nenhum leitor ativo com credenciais')
+  );
+}
+
+/** Uma nova passagem só em falha ou parcial transitório. */
+function shouldRetryIncompleteFaceSync(outcome: FaceSyncOutcome): boolean {
+  if (
+    !isIncompleteDeviceSync(outcome.deviceSyncStatus, outcome.deviceSyncError)
+  ) {
+    return false;
+  }
+  return !isPermanentFaceSyncError(outcome.deviceSyncError);
 }
 
 export type JobContext = {
@@ -135,34 +159,43 @@ export class DeviceSyncJobHandlersService {
       }
     }
     const { buffer } = await this.r2.getObjectBytes(payload.photoKey);
-    const outcome = await this.faceSync
-      .syncPersonOnReaders({
-        clientId: job.clientId,
-        faceId: payload.faceId,
-        name: payload.name || 'USUARIO',
-        imageBuffer: buffer,
-        photoKey: payload.photoKey,
-        timeSectionIds: payload.timeSectionIds,
-        logContext: payload.logContext,
-        validFrom: payload.validFrom ? new Date(payload.validFrom) : undefined,
-        validUntil: payload.validUntil
-          ? new Date(payload.validUntil)
-          : undefined,
-        photoOnly: payload.photoOnly,
-        blocked: payload.blocked,
-        resetReaderProgress: payload.resetReaderProgress,
-        allowSimilarFace: payload.allowSimilarFace,
-        previousDeviceSyncError: payload.previousDeviceSyncError,
-        readerIds: payload.readerIds,
-      })
-      .catch((error) => {
-        if (error instanceof ChildApprovalPendingError) return null;
-        throw error;
-      });
+    const syncParams = {
+      clientId: job.clientId,
+      faceId: payload.faceId,
+      name: payload.name || 'USUARIO',
+      imageBuffer: buffer,
+      photoKey: payload.photoKey,
+      timeSectionIds: payload.timeSectionIds,
+      logContext: payload.logContext,
+      validFrom: payload.validFrom ? new Date(payload.validFrom) : undefined,
+      validUntil: payload.validUntil ? new Date(payload.validUntil) : undefined,
+      photoOnly: payload.photoOnly,
+      blocked: payload.blocked,
+      resetReaderProgress: payload.resetReaderProgress,
+      allowSimilarFace: payload.allowSimilarFace,
+      previousDeviceSyncError: payload.previousDeviceSyncError,
+      readerIds: payload.readerIds,
+    };
+    let outcome = await this.syncFaceOnReaders(syncParams);
     if (!outcome) {
       this.faceSync.takePersistHook(job.id);
       await this.queue.update(job.id, { processed: 1, total: 1 });
       return;
+    }
+    if (shouldRetryIncompleteFaceSync(outcome)) {
+      this.log.warn(`job=${job.id} sync incompleto, nova tentativa`);
+      await sleep(FACE_SYNC_RETRY_DELAY_MS);
+      const retried = await this.syncFaceOnReaders({
+        ...syncParams,
+        resetReaderProgress: false,
+        previousDeviceSyncError: outcome.deviceSyncError,
+      });
+      if (!retried) {
+        this.faceSync.takePersistHook(job.id);
+        await this.queue.update(job.id, { processed: 1, total: 1 });
+        return;
+      }
+      outcome = retried;
     }
     await this.queue.update(job.id, { processed: 1, total: 1 });
     const hook = this.faceSync.takePersistHook(job.id);
@@ -175,6 +208,17 @@ export class DeviceSyncJobHandlersService {
         outcome,
       );
     }
+  }
+
+  private syncFaceOnReaders(
+    params: Parameters<FaceSyncService['syncPersonOnReaders']>[0],
+  ): Promise<FaceSyncOutcome | null> {
+    return this.faceSync
+      .syncPersonOnReaders(params)
+      .catch((error: unknown) => {
+        if (error instanceof ChildApprovalPendingError) return null;
+        throw error;
+      });
   }
 
   private async runFaceReader(

@@ -152,4 +152,174 @@ describe('DeviceSyncJobHandlersService', () => {
     expect(r2.getObjectBytes).not.toHaveBeenCalled();
     expect(faceSync.syncPersonOnReaders).not.toHaveBeenCalled();
   });
+
+  it('reenvia uma vez quando a primeira sincronização falha', async () => {
+    const failed = {
+      deviceSyncStatus: 'sync_failed' as const,
+      deviceSyncError:
+        'Não foi possível sincronizar com 9 de 9 leitor(es). timeout',
+    };
+    const synced = {
+      deviceSyncStatus: 'synced' as const,
+      deviceSyncError: null,
+    };
+    const faceSync = {
+      syncPersonOnReaders: jest
+        .fn()
+        .mockResolvedValueOnce(failed)
+        .mockResolvedValueOnce(synced),
+      takePersistHook: jest.fn().mockReturnValue(undefined),
+    };
+    const persist = {
+      persistFacePerson: jest.fn().mockResolvedValue(undefined),
+    };
+    const handler = facePersonHandler(faceSync, persist);
+    const job = facePersonJob();
+
+    jest.useFakeTimers();
+    try {
+      const pending = handler.run(job, {
+        checkpoint: () => Promise.resolve(),
+      });
+      await jest.advanceTimersByTimeAsync(3_000);
+      await pending;
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(faceSync.syncPersonOnReaders).toHaveBeenCalledTimes(2);
+    expect(faceSync.syncPersonOnReaders).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ resetReaderProgress: true }),
+    );
+    expect(faceSync.syncPersonOnReaders).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        resetReaderProgress: false,
+        previousDeviceSyncError: failed.deviceSyncError,
+      }),
+    );
+    expect(persist.persistFacePerson).toHaveBeenCalledWith(
+      'client-1',
+      'resp-1',
+      expect.objectContaining({ entityKind: 'responsible', faceId: 12 }),
+      synced,
+    );
+  });
+
+  it('não reenvia face parecida', async () => {
+    const similar = {
+      deviceSyncStatus: 'sync_failed' as const,
+      deviceSyncError:
+        'Porta: Este rosto já está cadastrado no leitor (foto muito parecida, comum em gêmeos).',
+    };
+    const faceSync = {
+      syncPersonOnReaders: jest.fn().mockResolvedValue(similar),
+      takePersistHook: jest.fn().mockReturnValue(undefined),
+    };
+    const persist = {
+      persistFacePerson: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await facePersonHandler(faceSync, persist).run(facePersonJob(), {
+      checkpoint: () => Promise.resolve(),
+    });
+
+    expect(faceSync.syncPersonOnReaders).toHaveBeenCalledTimes(1);
+    expect(persist.persistFacePerson).toHaveBeenCalledWith(
+      'client-1',
+      'resp-1',
+      expect.anything(),
+      similar,
+    );
+  });
+
+  it('não reenvia quando não há leitor ativo', async () => {
+    const noReaders = {
+      deviceSyncStatus: 'sync_failed' as const,
+      deviceSyncError: 'Nenhum leitor ativo com credenciais para este cliente.',
+    };
+    const faceSync = {
+      syncPersonOnReaders: jest.fn().mockResolvedValue(noReaders),
+      takePersistHook: jest.fn().mockReturnValue(undefined),
+    };
+    const persist = {
+      persistFacePerson: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await facePersonHandler(faceSync, persist).run(facePersonJob(), {
+      checkpoint: () => Promise.resolve(),
+    });
+
+    expect(faceSync.syncPersonOnReaders).toHaveBeenCalledTimes(1);
+    expect(persist.persistFacePerson).toHaveBeenCalledWith(
+      'client-1',
+      'resp-1',
+      expect.anything(),
+      noReaders,
+    );
+  });
+
+  it('não reenvia quando a primeira sincronização já concluiu', async () => {
+    const synced = {
+      deviceSyncStatus: 'synced' as const,
+      deviceSyncError: null,
+    };
+    const faceSync = {
+      syncPersonOnReaders: jest.fn().mockResolvedValue(synced),
+      takePersistHook: jest.fn().mockReturnValue(undefined),
+    };
+    const persist = {
+      persistFacePerson: jest.fn().mockResolvedValue(undefined),
+    };
+
+    await facePersonHandler(faceSync, persist).run(facePersonJob(), {
+      checkpoint: () => Promise.resolve(),
+    });
+
+    expect(faceSync.syncPersonOnReaders).toHaveBeenCalledTimes(1);
+    expect(persist.persistFacePerson).toHaveBeenCalledWith(
+      'client-1',
+      'resp-1',
+      expect.anything(),
+      synced,
+    );
+  });
 });
+
+function facePersonJob(): DeviceSyncJobRow {
+  return {
+    id: 'job-1',
+    kind: 'face.person',
+    clientId: 'client-1',
+    targetId: 'resp-1',
+    payload: {
+      entityKind: 'responsible',
+      faceId: 12,
+      photoKey: 'photo.jpg',
+      name: 'Cerenita',
+      resetReaderProgress: true,
+    },
+  } as DeviceSyncJobRow;
+}
+
+function facePersonHandler(
+  faceSync: {
+    syncPersonOnReaders: jest.Mock;
+    takePersistHook: jest.Mock;
+  },
+  persist: { persistFacePerson: jest.Mock },
+) {
+  return new DeviceSyncJobHandlersService(
+    { update: jest.fn().mockResolvedValue(undefined) } as never,
+    faceSync as never,
+    {} as never,
+    persist as never,
+    {} as never,
+    {
+      getObjectBytes: jest.fn().mockResolvedValue({ buffer: Buffer.from('x') }),
+    } as never,
+    { db: {} } as never,
+    {} as never,
+  );
+}
