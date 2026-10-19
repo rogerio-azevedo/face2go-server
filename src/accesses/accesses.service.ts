@@ -14,6 +14,7 @@ import {
 } from '../common/parse-access-list-datetime';
 import { buildFacialAccessMongoFilter } from './build-facial-access-list-filter';
 import { findAccessPersonIdsByLocation } from './find-access-person-ids-by-location';
+import { findAccessPersonPhones } from './find-access-person-phones';
 import { resolveAccessPersonByFaceId } from './resolve-access-person';
 import {
   ACCESS_BLOCKED_ATTEMPT,
@@ -48,6 +49,7 @@ export type AccessListItemDto = {
   clientName: string;
   userId: number;
   personName: string | null;
+  personPhone: string | null;
   eventCode: string;
   eventAction: string;
   similarity: number | null;
@@ -431,7 +433,9 @@ export class AccessesService {
       timezoneOffsetMinutes = row.timezoneOffsetMinutes ?? 0;
     }
 
-    const wantsLocation = Boolean(options.blockId?.trim() || options.unitId?.trim());
+    const wantsLocation = Boolean(
+      options.blockId?.trim() || options.unitId?.trim(),
+    );
     const locationIds = wantsLocation
       ? await findAccessPersonIdsByLocation(this.database.db, {
           companyId,
@@ -469,14 +473,27 @@ export class AccessesService {
       .lean()
       .exec();
 
+    const phones = await findAccessPersonPhones(
+      this.database.db,
+      companyId,
+      docs.map((doc) => ({
+        id: doc._id.toString(),
+        clientId: doc.clientId,
+        userId: doc.userId,
+        personId: doc.personId ?? null,
+        personType: doc.personType ?? null,
+      })),
+    );
+
     const items: AccessListItemDto[] = docs.map((doc) => {
       const d = doc as FacialAccessDocument & {
         _id: { toString(): string };
         createdAt?: Date;
         eventDate?: Date | null;
       };
+      const id = d._id.toString();
       return {
-        id: d._id.toString(),
+        id,
         companyId: d.companyId,
         readerId: d.readerId,
         readerName: d.readerName,
@@ -484,6 +501,7 @@ export class AccessesService {
         clientName: d.clientName,
         userId: d.userId,
         personName: d.personName ?? null,
+        personPhone: phones.get(id) ?? null,
         eventCode: d.eventCode,
         eventAction: d.eventAction,
         similarity: d.similarity ?? null,
