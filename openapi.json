@@ -4838,6 +4838,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicSubmitRegistrationDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": ""
@@ -4920,6 +4930,31 @@
       "get": {
         "operationId": "ClientRegistrationsController_list",
         "parameters": [
+          {
+            "name": "isVisitor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "visitorApprovalStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "authorized",
+                "not_applicable"
+              ]
+            }
+          },
           {
             "name": "status",
             "required": false,
@@ -5006,6 +5041,31 @@
       "get": {
         "operationId": "ClientRegistrationsController_exportXlsx",
         "parameters": [
+          {
+            "name": "isVisitor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "visitorApprovalStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "authorized",
+                "not_applicable"
+              ]
+            }
+          },
           {
             "name": "status",
             "required": true,
@@ -5371,6 +5431,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRegistrationDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -5384,17 +5454,7 @@
         "summary": "Excluir cadastro aprovado (soft delete) e remover face dos leitores",
         "tags": [
           "client-registrations"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteRegistrationDto"
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/api/client/registrations/{registrationId}/restore": {
@@ -5465,6 +5525,31 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "isVisitor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "visitorApprovalStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "authorized",
+                "not_applicable"
+              ]
             }
           },
           {
@@ -5559,6 +5644,31 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "isVisitor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "visitorApprovalStatus",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "authorized",
+                "not_applicable"
+              ]
             }
           },
           {
@@ -5998,6 +6108,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRegistrationDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -6011,17 +6131,7 @@
         "summary": "Excluir cadastro aprovado (soft delete) e remover face dos leitores",
         "tags": [
           "company-registrations"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteRegistrationDto"
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/api/clients/{clientId}/registrations/{registrationId}/restore": {
@@ -6527,6 +6637,438 @@
         ],
         "tags": [
           "child-approvals"
+        ]
+      }
+    },
+    "/api/visitor-approvals/{token}/photo": {
+      "get": {
+        "operationId": "PublicVisitorApprovalsController_photo",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ver miniatura do visitante pelo link individual válido",
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/visitor-approvals/{token}": {
+      "get": {
+        "operationId": "PublicVisitorApprovalsController_preview",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Consultar termo individual de autorização de visitante",
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/visitor-approvals/{token}/accept": {
+      "post": {
+        "operationId": "PublicVisitorApprovalsController_accept",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptVisitorApprovalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Aceitar termo com confirmação do CPF do destinatário",
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/visitor-approvals/{token}/revoke": {
+      "post": {
+        "operationId": "PublicVisitorApprovalsController_revoke",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorApprovalCpfDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revogar o próprio aceite com confirmação do CPF",
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/visitor-approval": {
+      "get": {
+        "operationId": "ClientVisitorApprovalsController_history",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalHistoryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/visitor-approval/regularize": {
+      "post": {
+        "operationId": "ClientVisitorApprovalsController_regularize",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/visitor-approval/resend": {
+      "post": {
+        "operationId": "ClientVisitorApprovalsController_resend",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/client/registrations/{registrationId}/visitor-approval/consents/{consentId}/revoke": {
+      "post": {
+        "operationId": "ClientVisitorApprovalsController_revoke",
+        "parameters": [
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "consentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeVisitorApprovalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/registrations/{registrationId}/visitor-approval": {
+      "get": {
+        "operationId": "CompanyVisitorApprovalsController_history",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalHistoryDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/registrations/{registrationId}/visitor-approval/regularize": {
+      "post": {
+        "operationId": "CompanyVisitorApprovalsController_regularize",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "visitor-approvals"
+        ]
+      }
+    },
+    "/api/clients/{clientId}/registrations/{registrationId}/visitor-approval/resend": {
+      "post": {
+        "operationId": "CompanyVisitorApprovalsController_resend",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "registrationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorApprovalResultDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "visitor-approvals"
         ]
       }
     },
@@ -13769,6 +14311,10 @@
             "default": false,
             "type": "boolean"
           },
+          "enableVisitorApprove": {
+            "default": false,
+            "type": "boolean"
+          },
           "enableChildApprove": {
             "default": false,
             "type": "boolean"
@@ -13856,6 +14402,9 @@
           },
           "autoApproveRegistrations": {
             "default": false,
+            "type": "boolean"
+          },
+          "enableVisitorApprove": {
             "type": "boolean"
           },
           "enableChildApprove": {
@@ -14484,6 +15033,64 @@
           "document"
         ]
       },
+      "PublicSubmitRegistrationDto": {
+        "type": "object",
+        "properties": {
+          "isVisitor": {
+            "default": false,
+            "type": "boolean"
+          },
+          "registrationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255
+          },
+          "document": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "birthDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "faceImageKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalData": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "unitId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "nullable": true
+          },
+          "truthDeclared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "registrationId",
+          "name",
+          "faceImageKey",
+          "truthDeclared"
+        ]
+      },
       "BlockRegistrationDto": {
         "type": "object",
         "properties": {
@@ -14562,6 +15169,9 @@
       "UpdateRegistrationDto": {
         "type": "object",
         "properties": {
+          "isVisitor": {
+            "type": "boolean"
+          },
           "name": {
             "type": "string",
             "minLength": 2,
@@ -14596,6 +15206,19 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "DeleteRegistrationDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "ChildApprovalPreviewDto": {
@@ -14910,6 +15533,344 @@
         ]
       },
       "RevokeChildApprovalDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "VisitorApprovalPreviewDto": {
+        "type": "object",
+        "properties": {
+          "clientName": {
+            "type": "string"
+          },
+          "visitorName": {
+            "type": "string"
+          },
+          "hasPhoto": {
+            "type": "boolean"
+          },
+          "adultName": {
+            "type": "string"
+          },
+          "block": {
+            "type": "string",
+            "nullable": true
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true
+          },
+          "termVersion": {
+            "type": "string"
+          },
+          "termContent": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "revoked": {
+            "type": "boolean"
+          },
+          "canAccept": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "clientName",
+          "visitorName",
+          "hasPhoto",
+          "adultName",
+          "block",
+          "unit",
+          "termVersion",
+          "termContent",
+          "accepted",
+          "revoked",
+          "canAccept"
+        ]
+      },
+      "AcceptVisitorApprovalDto": {
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "agreed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "termVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "cpf",
+          "agreed",
+          "termVersion"
+        ]
+      },
+      "VisitorApprovalResultDto": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ]
+      },
+      "VisitorApprovalCpfDto": {
+        "type": "object",
+        "properties": {
+          "cpf": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "cpf"
+        ]
+      },
+      "VisitorApprovalHistoryDto": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "object",
+            "properties": {
+              "visitorApprovalPendingReason": {
+                "type": "string",
+                "enum": [
+                  "no_eligible_adult",
+                  "awaiting_consent",
+                  null
+                ],
+                "nullable": true
+              },
+              "isVisitor": {
+                "type": "boolean"
+              },
+              "enableVisitorApprove": {
+                "type": "boolean"
+              },
+              "visitorApprovalRequired": {
+                "type": "boolean"
+              },
+              "visitorApprovalStatus": {
+                "type": "string",
+                "enum": [
+                  "not_applicable",
+                  "pending",
+                  "authorized"
+                ]
+              },
+              "visitorApprovalValidCount": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "visitorApprovalRequested": {
+                "type": "boolean"
+              },
+              "visitorApprovalRemovalPending": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "visitorApprovalPendingReason",
+              "isVisitor",
+              "enableVisitorApprove",
+              "visitorApprovalRequired",
+              "visitorApprovalStatus",
+              "visitorApprovalValidCount",
+              "visitorApprovalRequested",
+              "visitorApprovalRemovalPending"
+            ]
+          },
+          "consents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "adultSnapshot": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "registrationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "birthDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "block": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "unit": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "registrationId",
+                    "birthDate",
+                    "block",
+                    "unit"
+                  ]
+                },
+                "visitorSnapshot": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "registrationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "birthDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "block": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "unit": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "registrationId",
+                    "birthDate",
+                    "block",
+                    "unit"
+                  ]
+                },
+                "termVersion": {
+                  "type": "string"
+                },
+                "termContent": {
+                  "type": "string"
+                },
+                "termHash": {
+                  "type": "string"
+                },
+                "acceptedAt": {
+                  "type": "string"
+                },
+                "revokedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "revokedBy": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "revocationReason": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "adultSnapshot",
+                "visitorSnapshot",
+                "termVersion",
+                "termContent",
+                "termHash",
+                "acceptedAt",
+                "revokedAt",
+                "revokedBy",
+                "revocationReason"
+              ]
+            }
+          },
+          "requests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "adultName": {
+                  "type": "string"
+                },
+                "emailSentAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "emailError": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "expiresAt": {
+                  "type": "string"
+                },
+                "accepted": {
+                  "type": "boolean"
+                },
+                "canceled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "adultName",
+                "emailSentAt",
+                "emailError",
+                "expiresAt",
+                "accepted",
+                "canceled"
+              ]
+            }
+          }
+        },
+        "required": [
+          "summary",
+          "consents",
+          "requests"
+        ]
+      },
+      "RevokeVisitorApprovalDto": {
         "type": "object",
         "properties": {
           "reason": {
@@ -15803,19 +16764,6 @@
             "maxLength": 500
           }
         }
-      },
-      "DeleteRegistrationDto": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "minLength": 3,
-            "maxLength": 2000
-          }
-        },
-        "required": [
-          "reason"
-        ]
       }
     }
   }

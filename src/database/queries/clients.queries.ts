@@ -51,6 +51,7 @@ export type ClientListRow = {
   ienhFilialCode: number | null;
   isActive: boolean;
   autoApproveRegistrations: boolean;
+  enableVisitorApprove: boolean;
   enableChildApprove: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -141,6 +142,7 @@ export async function listClients(
       ienhFilialCode: clients.ienhFilialCode,
       isActive: clients.isActive,
       autoApproveRegistrations: clients.autoApproveRegistrations,
+      enableVisitorApprove: clients.enableVisitorApprove,
       enableChildApprove: clients.enableChildApprove,
       createdAt: clients.createdAt,
       updatedAt: clients.updatedAt,
@@ -196,6 +198,7 @@ export type ClientCreateInput = {
   timezoneOffsetMinutes?: number;
   isActive?: boolean;
   autoApproveRegistrations?: boolean;
+  enableVisitorApprove?: boolean;
   enableChildApprove?: boolean;
 };
 
@@ -224,6 +227,7 @@ export async function createClient(db: AppDb, input: ClientCreateInput) {
       timezoneOffsetMinutes: input.timezoneOffsetMinutes ?? 0,
       isActive: input.isActive ?? true,
       autoApproveRegistrations: input.autoApproveRegistrations ?? false,
+      enableVisitorApprove: input.enableVisitorApprove ?? false,
       enableChildApprove: input.enableChildApprove ?? false,
       updatedAt: now,
     })
@@ -250,6 +254,7 @@ export type ClientUpdateInput = Partial<{
   ienhFilialCode: number | null;
   isActive: boolean;
   autoApproveRegistrations: boolean;
+  enableVisitorApprove: boolean;
   enableChildApprove: boolean;
 }>;
 
@@ -301,6 +306,8 @@ export async function updateClient(
     setPayload.timezoneOffsetMinutes = input.timezoneOffsetMinutes;
   }
   if (input.isActive !== undefined) setPayload.isActive = input.isActive;
+  if (input.enableVisitorApprove !== undefined)
+    setPayload.enableVisitorApprove = input.enableVisitorApprove;
   if (input.enableChildApprove !== undefined)
     setPayload.enableChildApprove = input.enableChildApprove;
   if (input.autoApproveRegistrations !== undefined) {

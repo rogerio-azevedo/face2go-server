@@ -18,6 +18,7 @@ export * from './faces';
 export * from './client-face-embeddings';
 export * from './registrations';
 export * from './child-approvals';
+export * from './visitor-approvals';
 export * from './schools';
 export * from './students';
 export * from './responsibles';

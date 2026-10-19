@@ -74,6 +74,8 @@ export class ChildApprovalRevocationService {
         status: 'rejected',
         rejectionNotes: reason,
         childApprovalRemovalPending: true,
+        visitorApprovalRequestedAt: null,
+        visitorApprovalRequestedByUserId: null,
         childApprovalRequestedAt: null,
         childApprovalRequestedByUserId: null,
         updatedAt: now,

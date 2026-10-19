@@ -73,7 +73,12 @@ export class ChildApprovalInvitationService {
         (r) =>
           r.adultRegistrationId === adult.id && !r.acceptedAt && !r.canceledAt,
       );
-      if (open && open.unitId === child.unitId && open.expiresAt > new Date()) {
+      if (
+        open &&
+        open.unitId === child.unitId &&
+        open.expiresAt > new Date() &&
+        open.email === adult.email
+      ) {
         if (resend)
           await this.repository.updateRequest(clientId, open.id, {
             emailSentAt: null,

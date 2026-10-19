@@ -19,6 +19,8 @@ export type RegistrationExportSource = {
   rejectionNotes: string | null;
   status: 'draft' | 'approved' | 'rejected' | 'blocked';
   isActive: boolean;
+  isVisitor?: boolean;
+  visitorApprovalStatus?: string;
 };
 
 const STATUS_LABEL: Record<RegistrationExportSource['status'], string> = {
@@ -128,6 +130,12 @@ function rowCells(
     formatSubmittedAt(row.submittedAt),
     motivo(row),
     ...(includeTipo ? [tipoLabel(row)] : []),
+    row.isVisitor ? 'Sim' : 'Não',
+    row.visitorApprovalStatus === 'authorized'
+      ? 'Autorizado'
+      : row.visitorApprovalStatus === 'pending'
+        ? 'Pendente'
+        : 'Não aplicável',
   ];
 }
 
@@ -148,6 +156,8 @@ export async function buildRegistrationsXlsx(
     'Enviado',
     'Motivo',
     ...(includeTipo ? ['Tipo'] : []),
+    'Visitante',
+    'Autorização de visitante',
   ];
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Cadastros');

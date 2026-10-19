@@ -178,6 +178,8 @@ export async function insertRegistration(
     additionalData: RegistrationRow['additionalData'];
     unitId?: string | null;
     truthDeclaredAt: Date;
+    isVisitor?: boolean;
+    visitorApprovalRequired?: boolean;
     childApprovalRequired?: boolean;
   },
 ): Promise<RegistrationRow> {
@@ -197,6 +199,8 @@ export async function insertRegistration(
       additionalData: input.additionalData,
       unitId: input.unitId ?? null,
       status: 'draft',
+      isVisitor: input.isVisitor ?? false,
+      visitorApprovalRequired: input.visitorApprovalRequired ?? false,
       childApprovalRequired: input.childApprovalRequired ?? false,
       submittedAt: now,
       truthDeclaredAt: input.truthDeclaredAt,
@@ -234,6 +238,8 @@ export type RegistrationStatusCounts = Record<
 >;
 
 export type RegistrationListQueryOptions = {
+  isVisitor?: 'true' | 'false';
+  visitorApprovalStatus?: 'pending' | 'authorized' | 'not_applicable';
   status?: RegistrationListFilter;
   search?: string;
   blockId?: string;
@@ -245,7 +251,13 @@ export type RegistrationListQueryOptions = {
 
 type RegistrationListFilterOptions = Pick<
   RegistrationListQueryOptions,
-  'status' | 'search' | 'blockId' | 'unitId' | 'room'
+  | 'status'
+  | 'search'
+  | 'blockId'
+  | 'unitId'
+  | 'room'
+  | 'isVisitor'
+  | 'visitorApprovalStatus'
 >;
 
 function registrationSearchCondition(search?: string): SQL | undefined {
@@ -294,6 +306,19 @@ function submittedRegistrationsWhere(
         conds.push(eq(registrations.status, options.status));
       }
     }
+  }
+  if (options.isVisitor)
+    conds.push(eq(registrations.isVisitor, options.isVisitor === 'true'));
+  if (options.visitorApprovalStatus) {
+    const required = sql`(${registrations.isVisitor} AND ${registrations.visitorApprovalRequired} AND EXISTS (SELECT 1 FROM clients cl WHERE cl.id = ${registrations.clientId} AND cl.enable_visitor_approve))`;
+    const authorized = sql`EXISTS (SELECT 1 FROM visitor_approval_consents c JOIN registrations adult ON adult.id = c.adult_registration_id AND adult.client_id = c.client_id JOIN clients cl ON cl.id = c.client_id WHERE c.client_id = ${clientId} AND c.registration_id = ${registrations.id} AND c.revoked_at IS NULL AND c.unit_id = ${registrations.unitId} AND c.unit_id = adult.unit_id AND adult.is_active AND adult.status = 'approved' AND NOT adult.is_visitor AND adult.birth_date <= ((now() AT TIME ZONE 'UTC' + make_interval(mins => cl.timezone_offset_minutes))::date - interval '18 years') AND NOT EXISTS (SELECT 1 FROM client_members m WHERE m.client_id = c.client_id AND m.registration_id = adult.id AND (NOT m.is_active OR m.blocked_at IS NOT NULL)))`;
+    conds.push(
+      options.visitorApprovalStatus === 'not_applicable'
+        ? sql`NOT ${required}`
+        : options.visitorApprovalStatus === 'authorized'
+          ? sql`${required} AND ${authorized}`
+          : sql`${required} AND NOT ${authorized}`,
+    );
   }
   const searchCond = registrationSearchCondition(options.search);
   if (searchCond) conds.push(searchCond);
@@ -561,6 +586,7 @@ export async function updateRegistrationProfile(
   registrationId: string,
   clientId: string,
   patch: {
+    isVisitor?: boolean;
     name: string;
     document: string | null;
     phone: string | null;
@@ -574,6 +600,7 @@ export async function updateRegistrationProfile(
   const [row] = await db
     .update(registrations)
     .set({
+      ...(patch.isVisitor !== undefined ? { isVisitor: patch.isVisitor } : {}),
       name: patch.name,
       document: patch.document,
       phone: patch.phone,

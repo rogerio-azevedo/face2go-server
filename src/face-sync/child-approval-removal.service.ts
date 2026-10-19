@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { VisitorApprovalRepository } from '../visitor-approvals/visitor-approval.repository';
+import { Injectable, Optional } from '@nestjs/common';
 import { ChildApprovalRepository } from '../child-approvals/child-approval.repository';
 import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
 import type { DeviceSyncJobRow } from '../database/schema/device-sync-jobs';
@@ -12,11 +13,15 @@ export class ChildApprovalRemovalService {
     private readonly policy: ChildApprovalPolicyService,
     private readonly queue: DeviceSyncQueueService,
     private readonly faceSync: FaceSyncService,
+    @Optional() private readonly visitors?: VisitorApprovalRepository,
   ) {}
 
   async enqueue(clientId: string, registrationId: string) {
     const child = await this.repository.registration(clientId, registrationId);
-    if (!child?.childApprovalRemovalPending) return;
+    if (!(
+      child?.childApprovalRemovalPending || child?.visitorApprovalRemovalPending
+    ))
+      return;
     await this.queue.enqueue({
       kind: 'face.remove',
       clientId,
@@ -35,12 +40,24 @@ export class ChildApprovalRemovalService {
         db,
         true,
       );
-      if (!locked?.childApprovalRemovalPending) return;
+      if (!(
+        locked?.childApprovalRemovalPending ||
+        locked?.visitorApprovalRemovalPending
+      ))
+        return;
       const faces = await this.repository.faceIds(
         job.clientId,
         job.targetId,
         db,
       );
+      if (this.visitors)
+        for (const id of await this.visitors.faceIds(
+          job.clientId,
+          job.targetId,
+          db,
+        ))
+          if (!faces.includes(id)) faces.push(id);
+      faces.sort((a, b) => a - b);
       for (const faceId of faces)
         await this.repository.lockFace(db, job.clientId, faceId);
       const child = await this.repository.registration(
@@ -48,7 +65,11 @@ export class ChildApprovalRemovalService {
         job.targetId,
         db,
       );
-      if (!child?.childApprovalRemovalPending) return;
+      if (!(
+        child?.childApprovalRemovalPending ||
+        child?.visitorApprovalRemovalPending
+      ))
+        return;
       let removed = false;
       for (const faceId of faces) {
         // Outro adulto ainda pode autorizar; nunca remover um acesso válido.
@@ -73,6 +94,7 @@ export class ChildApprovalRemovalService {
         job.targetId,
         {
           childApprovalRemovalPending: false,
+          visitorApprovalRemovalPending: false,
           ...(removed
             ? {
                 deviceSyncStatus: null,

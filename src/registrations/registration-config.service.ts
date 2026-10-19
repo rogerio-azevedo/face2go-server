@@ -118,7 +118,7 @@ export class RegistrationConfigService {
       client.id,
       client.type,
       client.registrationConfig,
-      client.enableChildApprove,
+      client.enableChildApprove || client.enableVisitorApprove,
     );
   }
 
@@ -133,7 +133,7 @@ export class RegistrationConfigService {
       client.id,
       client.type,
       client.registrationConfig,
-      client.enableChildApprove,
+      client.enableChildApprove || client.enableVisitorApprove,
     );
   }
 
@@ -189,7 +189,7 @@ export class RegistrationConfigService {
       updated.id,
       updated.type,
       updated.registrationConfig,
-      updated.enableChildApprove,
+      updated.enableChildApprove || updated.enableVisitorApprove,
     );
   }
 
@@ -204,7 +204,7 @@ export class RegistrationConfigService {
       client.type,
       client.registrationConfig,
       patch,
-      client.enableChildApprove,
+      client.enableChildApprove || client.enableVisitorApprove,
     );
   }
 
@@ -223,7 +223,7 @@ export class RegistrationConfigService {
       client.type,
       client.registrationConfig,
       patch,
-      client.enableChildApprove,
+      client.enableChildApprove || client.enableVisitorApprove,
     );
   }
 }

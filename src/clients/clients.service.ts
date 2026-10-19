@@ -303,6 +303,7 @@ export class ClientsService {
       timezoneOffsetMinutes: parsed.data.timezoneOffsetMinutes,
       isActive: parsed.data.isActive,
       autoApproveRegistrations: parsed.data.autoApproveRegistrations,
+      enableVisitorApprove: parsed.data.enableVisitorApprove,
       enableChildApprove: parsed.data.enableChildApprove,
     });
     await membersQueries.seedDefaultRolesForClient(
@@ -340,6 +341,7 @@ export class ClientsService {
       d.timezoneOffsetMinutes === undefined &&
       d.isActive === undefined &&
       d.autoApproveRegistrations === undefined &&
+      d.enableVisitorApprove === undefined &&
       d.enableChildApprove === undefined &&
       d.ienhFilialCode === undefined
     ) {
@@ -348,7 +350,8 @@ export class ClientsService {
     if (
       d.type !== undefined ||
       d.segment !== undefined ||
-      d.enableChildApprove !== undefined
+      d.enableChildApprove !== undefined ||
+      d.enableVisitorApprove !== undefined
     ) {
       const current = await clientsQueries.getClientById(
         this.database.db,
@@ -357,6 +360,13 @@ export class ClientsService {
       );
       if (!current) throw new NotFoundException('Cliente não encontrado.');
       const nextType = d.type ?? current.type;
+      if (
+        (d.enableVisitorApprove ?? current.enableVisitorApprove) &&
+        nextType !== 'condominium'
+      )
+        throw new BadRequestException(
+          'Autorização de visitantes exige um cliente com blocos e unidades.',
+        );
       if (
         (d.enableChildApprove ?? current.enableChildApprove) &&
         nextType !== 'condominium'
@@ -414,6 +424,9 @@ export class ClientsService {
           ? { timezoneOffsetMinutes: d.timezoneOffsetMinutes }
           : {}),
         ...(d.isActive !== undefined ? { isActive: d.isActive } : {}),
+        ...(d.enableVisitorApprove !== undefined
+          ? { enableVisitorApprove: d.enableVisitorApprove }
+          : {}),
         ...(d.enableChildApprove !== undefined
           ? { enableChildApprove: d.enableChildApprove }
           : {}),

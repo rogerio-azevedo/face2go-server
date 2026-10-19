@@ -1,4 +1,6 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { VisitorApprovalPolicyService } from '../visitor-approvals/visitor-approval-policy.service';
+import { VisitorApprovalRepository } from '../visitor-approvals/visitor-approval.repository';
+import { ConflictException, Injectable, Optional } from '@nestjs/common';
 import {
   ChildApprovalRepository,
   type ApprovalDb,
@@ -16,10 +18,17 @@ export class ChildApprovalPendingError extends ConflictException {
 
 @Injectable()
 export class ChildApprovalPolicyService {
-  constructor(private readonly repository: ChildApprovalRepository) {}
+  constructor(
+    private readonly repository: ChildApprovalRepository,
+    @Optional() private readonly visitorPolicy?: VisitorApprovalPolicyService,
+    @Optional() private readonly visitorRepository?: VisitorApprovalRepository,
+  ) {}
 
   trackedFaces(clientId: string) {
-    return this.repository.trackedFaces(clientId);
+    return Promise.all([
+      this.repository.trackedFaces(clientId),
+      this.visitorRepository?.trackedFaces(clientId) ?? [],
+    ]).then((rows) => [...new Set(rows.flat())]);
   }
 
   async summary(clientId: string, registrationId: string) {
@@ -47,8 +56,19 @@ export class ChildApprovalPolicyService {
   }
 
   async faceAllowed(clientId: string, faceId: number, db?: ApprovalDb) {
+    if (
+      this.visitorPolicy &&
+      !(await this.visitorPolicy.faceAllowed(clientId, faceId, db))
+    )
+      return false;
     const rows = await this.repository.registrationByFace(clientId, faceId, db);
     for (const { client, registration } of rows) {
+      if (
+        (registration.childApprovalRemovalPending ||
+          registration.visitorApprovalRemovalPending) &&
+        (!registration.isActive || registration.status === 'rejected')
+      )
+        return false;
       if (!needsChildApproval(client, registration)) continue;
       if (
         !registration.isActive ||
@@ -89,10 +109,25 @@ export class ChildApprovalPolicyService {
     work: () => Promise<T>,
   ) {
     const rows = await this.repository.registrationByFace(clientId, faceId);
-    if (!rows.some(({ client }) => client.enableChildApprove)) return work();
+    if (
+      !rows.some(
+        ({ client, registration }) =>
+          client.enableChildApprove ||
+          client.enableVisitorApprove ||
+          registration.childApprovalRequired ||
+          registration.visitorApprovalRequired ||
+          registration.childApprovalRemovalPending ||
+          registration.visitorApprovalRemovalPending,
+      )
+    )
+      return work();
     for (const { client, registration } of rows) {
       if (client.enableChildApprove && registration.childApprovalRequired)
         await this.repository.rememberFaces(clientId, registration.id);
+    }
+    for (const { client, registration } of rows) {
+      if (client.enableVisitorApprove && registration.visitorApprovalRequired)
+        await this.visitorRepository?.rememberFaces(clientId, registration.id);
     }
     return this.repository.transaction(async (db) => {
       await this.repository.lockFace(db, clientId, faceId);

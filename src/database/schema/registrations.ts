@@ -95,6 +95,17 @@ export const registrations = pgTable(
     unitId: uuid('unit_id').references(() => clientUnits.id, {
       onDelete: 'restrict',
     }),
+    isVisitor: boolean('is_visitor').default(false).notNull(),
+    visitorApprovalRequired: boolean('visitor_approval_required')
+      .default(false)
+      .notNull(),
+    visitorApprovalRemovalPending: boolean('visitor_approval_removal_pending')
+      .default(false)
+      .notNull(),
+    visitorApprovalRequestedAt: timestamp('visitor_approval_requested_at'),
+    visitorApprovalRequestedByUserId: text(
+      'visitor_approval_requested_by_user_id',
+    ).references(() => users.id, { onDelete: 'set null' }),
     childApprovalRequired: boolean('child_approval_required')
       .default(false)
       .notNull(),

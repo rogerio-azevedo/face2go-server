@@ -63,6 +63,9 @@ export const clients = pgTable(
     displayShortCode: varchar('display_short_code', { length: 8 }),
     isActive: boolean('is_active').default(true).notNull(),
     /** Exige aceite de adulto aprovado da mesma unidade para menores. */
+    enableVisitorApprove: boolean('enable_visitor_approve')
+      .default(false)
+      .notNull(),
     enableChildApprove: boolean('enable_child_approve')
       .default(false)
       .notNull(),

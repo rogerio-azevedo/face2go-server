@@ -31,13 +31,16 @@ export class ChildApprovalPublicService {
       client.id,
       request.id,
     );
+    const adultAvailable = await this.repository.adultAvailable(
+      client.id,
+      adult.id,
+    );
     return {
       clientName: client.name,
       childName: child.name ?? 'Menor',
-      hasPhoto: canViewChildApprovalPhoto(
-        { request, client, child, adult },
-        consent,
-      ),
+      hasPhoto:
+        adultAvailable &&
+        canViewChildApprovalPhoto({ request, client, child, adult }, consent),
       adultName: adult.name ?? 'Morador',
       block: child.additionalData?.block ?? null,
       unit: child.additionalData?.unit ?? null,
@@ -46,6 +49,7 @@ export class ChildApprovalPublicService {
       accepted: Boolean(consent),
       revoked: Boolean(consent?.revokedAt),
       canAccept:
+        adultAvailable &&
         client.enableChildApprove &&
         needsChildApproval(client, child) &&
         (ageForApproval(adult.birthDate, client.timezoneOffsetMinutes) ?? -1) >=
@@ -53,6 +57,7 @@ export class ChildApprovalPublicService {
         child.isActive &&
         adult.isActive &&
         adult.status === 'approved' &&
+        !adult.isVisitor &&
         adult.unitId === request.unitId &&
         child.unitId === request.unitId &&
         request.expiresAt > new Date() &&
@@ -81,6 +86,7 @@ export class ChildApprovalPublicService {
         bundle.client.id,
         bundle.adult.id,
         db,
+        true,
       );
       const client = await this.repository.client(bundle.client.id, db);
       if (
@@ -88,7 +94,8 @@ export class ChildApprovalPublicService {
         request.canceledAt ||
         !child ||
         !adult ||
-        !client?.enableChildApprove
+        !client?.enableChildApprove ||
+        !client.isActive
       )
         return 'Solicitação indisponível.';
       const cpfError = await this.invitations.verifyCpf(
@@ -111,8 +118,11 @@ export class ChildApprovalPublicService {
       if (
         !needsChildApproval(client, child) ||
         !child.isActive ||
+        (child.status === 'rejected' && !child.childApprovalRequestedAt) ||
+        !(await this.repository.adultAvailable(client.id, adult.id, db)) ||
         !adult.isActive ||
         adult.status !== 'approved' ||
+        adult.isVisitor ||
         adult.unitId !== child.unitId ||
         child.unitId !== request.unitId ||
         (ageForApproval(adult.birthDate, client.timezoneOffsetMinutes) ?? -1) <
@@ -161,7 +171,7 @@ export class ChildApprovalPublicService {
     return {
       success: true as const,
       message:
-        'Autorização registrada. O acesso será liberado após a aprovação e a sincronização nos leitores.',
+        'Autorização registrada. O acesso depende das demais autorizações, da aprovação do cadastro e da sincronização nos leitores.',
     };
   }
 

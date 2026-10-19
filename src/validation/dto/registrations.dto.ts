@@ -8,6 +8,7 @@ import {
   exportRegistrationsQuerySchema,
   listRegistrationsQuerySchema,
   publicCheckDocumentSchema,
+  publicSubmitRegistrationSchema,
   registrationEventSchema,
   unblockRegistrationSchema,
   updateRegistrationSchema,
@@ -86,4 +87,8 @@ export class RegistrationEventDto extends createZodDto(
 
 export class PublicCheckDocumentDto extends createZodDto(
   publicCheckDocumentSchema,
+) {}
+
+export class PublicSubmitRegistrationDto extends createZodDto(
+  publicSubmitRegistrationSchema,
 ) {}

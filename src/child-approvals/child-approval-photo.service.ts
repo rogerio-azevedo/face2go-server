@@ -18,6 +18,7 @@ export function canViewChildApprovalPhoto(bundle: Bundle, consent: Consent) {
     child.isActive &&
     adult.isActive &&
     adult.status === 'approved' &&
+    !adult.isVisitor &&
     (ageForApproval(adult.birthDate, client.timezoneOffsetMinutes) ?? -1) >=
       18 &&
     adult.unitId === request.unitId &&
@@ -42,7 +43,10 @@ export class ChildApprovalPhotoService {
       bundle.client.id,
       bundle.request.id,
     );
-    if (!canViewChildApprovalPhoto(bundle, consent))
+    if (
+      !canViewChildApprovalPhoto(bundle, consent) ||
+      !(await this.repository.adultAvailable(bundle.client.id, bundle.adult.id))
+    )
       throw new NotFoundException('Foto indisponível para esta autorização.');
     try {
       const { buffer } = await this.storage.getObjectBytes(

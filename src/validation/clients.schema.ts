@@ -92,6 +92,7 @@ const baseClientShape = {
   supportWhatsapp: optionalTrimmed,
   isActive: z.boolean(),
   autoApproveRegistrations: z.boolean().default(false),
+  enableVisitorApprove: z.boolean().default(false),
   enableChildApprove: z.boolean().default(false),
 };
 
@@ -121,6 +122,13 @@ export const clientSchemaForCreate = z
     timezoneOffsetMinutes: timezoneOffsetCreate,
   })
   .superRefine((data, ctx) => {
+    if (data.enableVisitorApprove && data.type !== 'condominium')
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Autorização de visitantes exige um cliente com blocos e unidades.',
+        path: ['enableVisitorApprove'],
+      });
     if (data.enableChildApprove && data.type !== 'condominium') {
       ctx.addIssue({
         code: 'custom',
@@ -154,6 +162,7 @@ export const createClientSchema = clientSchemaForCreate;
 export const updateClientSchema = z
   .object({
     ...baseClientShape,
+    enableVisitorApprove: z.boolean().optional(),
     enableChildApprove: z.boolean().optional(),
     timezoneOffsetMinutes: timezoneOffsetUpdate,
     ienhFilialCode: z

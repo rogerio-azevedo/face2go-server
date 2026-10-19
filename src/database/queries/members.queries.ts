@@ -48,6 +48,7 @@ export const SCHOOL_DEFAULT_ROLES = [
 
 export const CONDOMINIUM_DEFAULT_ROLES = [
   { slug: 'morador', name: 'Morador' },
+  { slug: 'visitante', name: 'Visitante' },
   { slug: 'funcionario', name: 'Funcionário' },
 ] as const;
 
@@ -810,4 +811,13 @@ export async function unlinkNonSchoolMemberLogins(db: AppDb) {
     );
 
   return rows.length;
+}
+
+/** Lazy, tenant-scoped seed for existing clients; unique slug makes concurrent approvals safe. */
+export async function ensureVisitorRole(db: AppDb, clientId: string) {
+  await db
+    .insert(clientRoles)
+    .values({ clientId, slug: 'visitante', name: 'Visitante' })
+    .onConflictDoNothing();
+  return getClientRoleBySlug(db, clientId, 'visitante');
 }

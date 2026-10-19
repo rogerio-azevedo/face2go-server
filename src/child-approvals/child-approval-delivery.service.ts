@@ -41,9 +41,12 @@ export class ChildApprovalDeliveryService {
           (ageForApproval(adult?.birthDate, client.timezoneOffsetMinutes) ??
             -1) < 18 ||
           !adult?.isActive ||
+          adult.isVisitor ||
           adult.status !== 'approved' ||
+          adult.isVisitor ||
           child.unitId !== request.unitId ||
           adult.unitId !== request.unitId ||
+          adult.email !== request.email ||
           request.expiresAt < new Date()
         ) {
           await this.repository.updateRequest(request.clientId, request.id, {

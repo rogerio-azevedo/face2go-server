@@ -57,6 +57,7 @@ export class ChildApprovalMaintenanceService
               child.unitId !== consent.unitId ||
               adult?.unitId !== consent.unitId ||
               !adult?.isActive ||
+              adult.isVisitor ||
               adult.status !== 'approved'
             ) {
               await this.repository.transaction(async (db) => {
@@ -75,7 +76,8 @@ export class ChildApprovalMaintenanceService
                   freshChild?.unitId === consent.unitId &&
                   freshAdult?.unitId === consent.unitId &&
                   freshAdult?.isActive &&
-                  freshAdult.status === 'approved'
+                  freshAdult.status === 'approved' &&
+                  !freshAdult.isVisitor
                 )
                   return;
                 for (const faceId of await this.repository.faceIds(

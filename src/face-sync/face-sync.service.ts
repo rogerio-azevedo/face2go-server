@@ -922,7 +922,11 @@ export class FaceSyncService {
       this.database.db,
       clientId,
     );
-    if (reader.minimumAccessAge == null && !client?.enableChildApprove)
+    if (
+      reader.minimumAccessAge == null &&
+      !client?.enableChildApprove &&
+      !client?.enableVisitorApprove
+    )
       return 0;
 
     const [synced, known] = await Promise.all([

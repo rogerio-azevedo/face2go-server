@@ -1,3 +1,5 @@
+import { VisitorApprovalsModule } from '../visitor-approvals/visitor-approvals.module';
+import { VisitorApprovalRegistrationListener } from './visitor-approval-registration.listener';
 import { ChildApprovalsModule } from '../child-approvals/child-approvals.module';
 import { ChildApprovalRegistrationListener } from './child-approval-registration.listener';
 import { Module } from '@nestjs/common';
@@ -31,6 +33,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
   imports: [
     DatabaseModule,
     ChildApprovalsModule,
+    VisitorApprovalsModule,
     ClientBlocksModule,
     EmailModule,
     PermissionsModule,
@@ -51,6 +54,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
   ],
   providers: [
     ChildApprovalRegistrationListener,
+    VisitorApprovalRegistrationListener,
     RegistrationLinksService,
     RegistrationConfigService,
     PublicRegistrationService,
@@ -62,6 +66,7 @@ import { RegistrationsAdminService } from './registrations-admin.service';
   ],
   exports: [
     ChildApprovalRegistrationListener,
+    VisitorApprovalRegistrationListener,
     RegistrationLinksService,
     RegistrationConfigService,
     RegistrationsAdminService,

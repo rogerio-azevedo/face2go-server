@@ -6,6 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { VisitorApprovalService } from '../visitor-approvals/visitor-approval.service';
+import { Optional } from '@nestjs/common';
 import { ChildApprovalService } from '../child-approvals/child-approval.service';
 import { ageForApproval } from '../child-approvals/child-approval.util';
 
@@ -72,6 +74,7 @@ export class PublicRegistrationService {
     private readonly blocks: ClientBlocksRepository,
     private readonly registrationsAdmin: RegistrationsAdminService,
     private readonly childApprovals: ChildApprovalService,
+    @Optional() private readonly visitorApprovals?: VisitorApprovalService,
   ) {}
 
   async getPreview(code: string) {
@@ -86,6 +89,7 @@ export class PublicRegistrationService {
     return {
       clientName: bundle.client.name,
       clientType: bundle.client.type,
+      enableVisitorApprove: bundle.client.enableVisitorApprove,
       logoUrl: bundle.client.logoUrl,
       supportPhone: bundle.client.supportPhone?.trim() || null,
       supportWhatsapp: bundle.client.supportWhatsapp?.trim() || null,
@@ -96,7 +100,9 @@ export class PublicRegistrationService {
           bundle.client.id,
           bundle.client.type,
           bundle.client.registrationConfig,
-          bundle.client.enableChildApprove ?? false,
+          (bundle.client.enableChildApprove ||
+            bundle.client.enableVisitorApprove) ??
+            false,
         )
       ).fields,
       blocks:
@@ -223,6 +229,7 @@ export class PublicRegistrationService {
       faceImageKey,
       additionalData,
       unitId,
+      isVisitor,
     } = parsed.data;
     const truthDeclaredAt = new Date();
 
@@ -232,9 +239,19 @@ export class PublicRegistrationService {
         bundle.client.id,
         bundle.client.type,
         bundle.client.registrationConfig,
-        bundle.client.enableChildApprove ?? false,
+        (bundle.client.enableChildApprove ||
+          bundle.client.enableVisitorApprove) ??
+          false,
       )
     ).fields;
+    if (isVisitor && bundle.client.type !== 'condominium')
+      throw new BadRequestException(
+        'Visitantes por unidade exigem tipo Condomínio.',
+      );
+    if (isVisitor) {
+      fieldsConfig.block = 'required';
+      fieldsConfig.unit = 'required';
+    }
     const isCondominium = bundle.client.type === 'condominium';
     const normalized = normalizeRegistrationFields(
       fieldsConfig,
@@ -307,6 +324,10 @@ export class PublicRegistrationService {
         additionalData: location.additionalData,
         unitId: location.unitId,
         truthDeclaredAt,
+        isVisitor,
+        visitorApprovalRequired: Boolean(
+          isVisitor && bundle.client.enableVisitorApprove,
+        ),
         childApprovalRequired:
           bundle.client.enableChildApprove &&
           (ageForApproval(
@@ -323,6 +344,8 @@ export class PublicRegistrationService {
       throw e;
     }
 
+    if (row.visitorApprovalRequired)
+      await this.visitorApprovals?.requestEmails(bundle.client.id, row.id);
     if (row.childApprovalRequired)
       await this.childApprovals.requestEmails(bundle.client.id, row.id);
 
@@ -345,7 +368,9 @@ export class PublicRegistrationService {
       success: true as const,
       registrationId: row.id,
       message:
-        'Cadastro recebido. Aguarde a aprovação do administrador do cliente.',
+        row.visitorApprovalRequired || row.childApprovalRequired
+          ? 'Cadastro recebido. Aguarde as autorizações da unidade e a aprovação do cadastro.'
+          : 'Cadastro recebido. Aguarde a aprovação do administrador do cliente.',
     };
   }
 }

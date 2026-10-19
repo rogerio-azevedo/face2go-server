@@ -71,6 +71,10 @@ const optionalUuidFilter = z
   });
 
 export const listRegistrationsQuerySchema = z.object({
+  isVisitor: z.enum(['true', 'false']).optional(),
+  visitorApprovalStatus: z
+    .enum(['pending', 'authorized', 'not_applicable'])
+    .optional(),
   status: registrationListFilterSchema.optional(),
   page: z.string().optional(),
   pageSize: z.string().optional(),
@@ -104,6 +108,9 @@ export const registrationExportStatusSchema = z.enum([
 ]);
 
 export const exportRegistrationsQuerySchema = z.object({
+  isVisitor: listRegistrationsQuerySchema.shape.isVisitor,
+  visitorApprovalStatus:
+    listRegistrationsQuerySchema.shape.visitorApprovalStatus,
   status: registrationExportStatusSchema,
   search: listRegistrationsQuerySchema.shape.search,
   blockId: listRegistrationsQuerySchema.shape.blockId,
@@ -145,6 +152,7 @@ const optionalDocument = z
   });
 
 export const updateRegistrationSchema = z.object({
+  isVisitor: z.boolean().optional(),
   name: z.string().trim().min(2).max(255),
   document: optionalDocument,
   phone: z.string().trim().max(32).optional(),
@@ -167,6 +175,7 @@ export const publicCheckDocumentSchema = z.object({
 });
 
 export const publicSubmitRegistrationSchema = z.object({
+  isVisitor: z.boolean().default(false),
   registrationId: z.string().uuid(),
   name: z.string().min(2).max(255),
   document: optionalDocument,

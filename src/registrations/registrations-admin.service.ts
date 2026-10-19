@@ -7,6 +7,10 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { VisitorApprovalService } from '../visitor-approvals/visitor-approval.service';
+import { VisitorApprovalPolicyService } from '../visitor-approvals/visitor-approval-policy.service';
+import { VisitorApprovalRepository } from '../visitor-approvals/visitor-approval.repository';
+import { Optional } from '@nestjs/common';
 import { ChildApprovalService } from '../child-approvals/child-approval.service';
 import { ChildApprovalPolicyService } from '../child-approvals/child-approval-policy.service';
 import { ChildApprovalRepository } from '../child-approvals/child-approval.repository';
@@ -80,6 +84,9 @@ export class RegistrationsAdminService {
     private readonly childApprovals: ChildApprovalService,
     private readonly childPolicy: ChildApprovalPolicyService,
     private readonly childRepository: ChildApprovalRepository,
+    @Optional() private readonly visitorApprovals?: VisitorApprovalService,
+    @Optional() private readonly visitorPolicy?: VisitorApprovalPolicyService,
+    @Optional() private readonly visitorRepository?: VisitorApprovalRepository,
   ) {}
 
   private ensureCompany(user: JwtPayload): string {
@@ -178,6 +185,8 @@ export class RegistrationsAdminService {
       ageAsOf,
       ...(await this.childPolicy.summary(row.clientId, row.id)),
       childApprovalRequired: row.childApprovalRequired,
+      isVisitor: row.isVisitor,
+      ...(await this.visitorPolicy?.summary(row.clientId, row.id)),
       isMinor:
         age != null && Number.isFinite(age) && age >= 0 ? age < 18 : null,
       additionalData: row.additionalData,
@@ -270,6 +279,8 @@ export class RegistrationsAdminService {
       this.database.db,
       clientId,
       {
+        isVisitor: query.isVisitor,
+        visitorApprovalStatus: query.visitorApprovalStatus,
         status: query.status,
         search: query.search,
         blockId: query.blockId,
@@ -277,7 +288,16 @@ export class RegistrationsAdminService {
         room: query.room,
       },
     );
-    const xlsx = await buildRegistrationsXlsx(rows, query.status === 'all');
+    const exportRows = await Promise.all(
+      rows.map(async (row) => ({
+        ...row,
+        ...(await this.visitorPolicy?.summary(clientId, row.id)),
+      })),
+    );
+    const xlsx = await buildRegistrationsXlsx(
+      exportRows,
+      query.status === 'all',
+    );
     return new StreamableFile(xlsx, {
       type: REGISTRATIONS_XLSX_TYPE,
       disposition: `attachment; filename="${registrationsExportFilename(query.status)}"`,
@@ -291,6 +311,8 @@ export class RegistrationsAdminService {
       query.search,
     );
     const listOpts = {
+      isVisitor: query.isVisitor,
+      visitorApprovalStatus: query.visitorApprovalStatus,
       status: query.status,
       search,
       blockId: query.blockId,
@@ -310,6 +332,8 @@ export class RegistrationsAdminService {
         this.database.db,
         clientId,
         {
+          isVisitor: query.isVisitor,
+          visitorApprovalStatus: query.visitorApprovalStatus,
           status: query.status,
           search,
           blockId: query.blockId,
@@ -406,13 +430,17 @@ export class RegistrationsAdminService {
       registrationId,
       clientId,
     );
-    if (
-      await this.childApprovals.deferApproval(
-        clientId,
-        registrationId,
-        decidedByUserId,
-      )
-    ) {
+    const childDeferred = await this.childApprovals.deferApproval(
+      clientId,
+      registrationId,
+      decidedByUserId,
+    );
+    const visitorDeferred = await this.visitorApprovals?.deferApproval(
+      clientId,
+      registrationId,
+      decidedByUserId,
+    );
+    if (childDeferred || visitorDeferred) {
       return options?.mapResult === false
         ? existing
         : this.mapRowForClient(existing!, clientId);
@@ -523,8 +551,13 @@ export class RegistrationsAdminService {
       }
     }
 
-    if (approvalQueued)
+    if (approvalQueued) {
       await this.childRepository.clearApprovalIntent(clientId, registrationId);
+      await this.visitorRepository?.clearApprovalIntent(
+        clientId,
+        registrationId,
+      );
+    }
     if (options?.mapResult === false) return rowOut;
     return await this.mapRowForClient(rowOut, clientId);
   }
@@ -546,6 +579,28 @@ export class RegistrationsAdminService {
       child.childApprovalRequestedByUserId,
       {
         eventBody: 'Aprovação concluída após autorização do adulto.',
+        mapResult: false,
+      },
+    );
+  }
+
+  async completeVisitorApproval(clientId: string, registrationId: string) {
+    const row = await this.visitorRepository?.registration(
+      clientId,
+      registrationId,
+    );
+    if (
+      !row?.visitorApprovalRequestedAt ||
+      !row.isActive ||
+      !['draft', 'rejected'].includes(row.status)
+    )
+      return;
+    await this.approveShared(
+      clientId,
+      registrationId,
+      row.visitorApprovalRequestedByUserId,
+      {
+        eventBody: 'Aprovação concluída após as autorizações da unidade.',
         mapResult: false,
       },
     );
@@ -597,6 +652,8 @@ export class RegistrationsAdminService {
       );
     }
 
+    await this.visitorRepository?.clearApprovalIntent(clientId, registrationId);
+    await this.visitorRepository?.cancelOpenRequests(clientId, registrationId);
     if (existing.childApprovalRequired) {
       await this.childRepository.clearApprovalIntent(clientId, registrationId);
       await this.childRepository.cancelOpenRequests(clientId, registrationId);
@@ -938,7 +995,7 @@ export class RegistrationsAdminService {
     body: unknown,
   ) {
     await this.ensureCompanyCanAccessClient(user, clientId);
-    return this.updateShared(clientId, registrationId, body);
+    return this.updateShared(clientId, registrationId, body, user);
   }
 
   async updateForClientTenant(
@@ -947,13 +1004,14 @@ export class RegistrationsAdminService {
     body: unknown,
   ) {
     const clientId = this.ensureClientTenant(user);
-    return this.updateShared(clientId, registrationId, body);
+    return this.updateShared(clientId, registrationId, body, user);
   }
 
   private async updateShared(
     clientId: string,
     registrationId: string,
     body: unknown,
+    user: JwtPayload,
   ) {
     const parsed = updateRegistrationSchema.safeParse(body);
     if (!parsed.success) {
@@ -988,9 +1046,26 @@ export class RegistrationsAdminService {
         clientId,
         client.type,
         client.registrationConfig,
-        client.enableChildApprove ?? false,
+        (client.enableChildApprove || client.enableVisitorApprove) ?? false,
       )
     ).fields;
+    const nextVisitor = parsed.data.isVisitor ?? row.isVisitor;
+    if (
+      parsed.data.isVisitor !== undefined &&
+      parsed.data.isVisitor !== row.isVisitor &&
+      !['client_admin', 'company_admin'].includes(user.role)
+    )
+      throw new ForbiddenException(
+        'Somente um administrador pode alterar a classificação de visitante.',
+      );
+    if (nextVisitor && client.type !== 'condominium')
+      throw new BadRequestException(
+        'Visitantes por unidade exigem tipo Condomínio.',
+      );
+    if (nextVisitor) {
+      fieldsConfig.block = 'required';
+      fieldsConfig.unit = 'required';
+    }
     const isCondominium = client.type === 'condominium';
     const normalized = normalizeRegistrationFields(
       fieldsConfig,
@@ -1018,7 +1093,13 @@ export class RegistrationsAdminService {
       existingUnitId: row.unitId,
       existingAdditionalData: row.additionalData,
       catalog: {
-        loadActiveUnit: (id) => this.blocks.getActiveUnitLocation(clientId, id),
+        loadActiveUnit: async (id) => {
+          const location = await this.blocks.getActiveUnitLocation(
+            clientId,
+            id,
+          );
+          return nextVisitor && location?.isAdministrative ? null : location;
+        },
         countActiveUnits: () => this.blocks.countActiveUnits(clientId),
       },
     });
@@ -1042,6 +1123,7 @@ export class RegistrationsAdminService {
       registrationId,
       clientId,
       {
+        isVisitor: nextVisitor,
         name: parsed.data.name,
         document: merged.document,
         phone: merged.phone,
@@ -1055,6 +1137,15 @@ export class RegistrationsAdminService {
       throw new NotFoundException('Cadastro não encontrado.');
     }
 
+    if (row.isVisitor !== nextVisitor)
+      await this.events.addNote(
+        clientId,
+        registrationId,
+        user.sub,
+        nextVisitor
+          ? 'Cadastro classificado como visitante.'
+          : 'Cadastro convertido de visitante para morador.',
+      );
     try {
       await this.membersService.syncProfileFromRegistration(updated);
     } catch (err: unknown) {

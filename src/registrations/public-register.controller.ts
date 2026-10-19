@@ -1,5 +1,7 @@
+import { VisitorApprovalRateLimitGuard } from '../visitor-approvals/visitor-approval-rate-limit.guard';
 import {
   Body,
+  UseGuards,
   Controller,
   Get,
   Param,
@@ -11,7 +13,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { Public } from '../common/decorators/public.decorator';
-import { PublicCheckDocumentDto } from '../validation/dto/registrations.dto';
+import {
+  PublicCheckDocumentDto,
+  PublicSubmitRegistrationDto,
+} from '../validation/dto/registrations.dto';
 import { PublicRegistrationService } from './public-registration.service';
 
 const UPLOAD_PHOTO_LIMIT_BYTES = 10 * 1024 * 1024;
@@ -79,9 +84,13 @@ export class PublicRegisterController {
   }
 
   @Public()
+  @UseGuards(VisitorApprovalRateLimitGuard)
   @Post(':code/submit')
   @ApiOperation({ summary: 'Enviar cadastro (aguarda aprovação)' })
-  submit(@Param('code') code: string, @Body() body: unknown) {
+  submit(
+    @Param('code') code: string,
+    @Body() body: PublicSubmitRegistrationDto,
+  ) {
     return this.publicRegistrationService.submit(code, body);
   }
 }

@@ -1,3 +1,4 @@
+import { retryTransaction } from '../common/utils/retry-transaction';
 import { ChildApprovalRequestsRepository } from './child-approval-requests.repository';
 import { Injectable } from '@nestjs/common';
 import { and, eq, isNotNull, or, sql } from 'drizzle-orm';
@@ -21,7 +22,7 @@ export class ChildApprovalRepository extends ChildApprovalRequestsRepository {
   }
 
   transaction<T>(work: (db: ApprovalDb) => Promise<T>) {
-    return this.database.db.transaction(work);
+    return retryTransaction(() => this.database.db.transaction(work));
   }
 
   async client(clientId: string, db: ApprovalDb = this.database.db) {
@@ -71,6 +72,7 @@ export class ChildApprovalRepository extends ChildApprovalRequestsRepository {
           eq(registrations.clientId, clientId),
           or(
             eq(registrations.faceId, faceId),
+            sql`EXISTS (SELECT 1 FROM visitor_approval_faces f WHERE f.client_id = ${clientId} AND f.registration_id = ${registrations.id} AND f.face_id = ${faceId})`,
             sql`EXISTS (SELECT 1 FROM ${childApprovalFaces} WHERE ${childApprovalFaces.clientId} = ${clientId} AND ${childApprovalFaces.registrationId} = ${registrations.id} AND ${childApprovalFaces.faceId} = ${faceId})`,
             sql`EXISTS (SELECT 1 FROM ${clientMembers} WHERE ${clientMembers.clientId} = ${clientId} AND ${clientMembers.registrationId} = ${registrations.id} AND ${clientMembers.faceId} = ${faceId})`,
           ),
@@ -92,12 +94,45 @@ export class ChildApprovalRepository extends ChildApprovalRequestsRepository {
       JOIN clients cl ON cl.id = c.client_id
       WHERE c.client_id = ${clientId} AND c.registration_id = ${registrationId} AND c.revoked_at IS NULL
         AND c.unit_id = child.unit_id AND c.unit_id = adult.unit_id
-        AND adult.is_active = true AND adult.status = 'approved'
+        AND adult.is_active = true AND adult.status = 'approved' AND adult.is_visitor = false
+        AND NOT EXISTS (SELECT 1 FROM client_members m WHERE m.client_id = c.client_id AND m.registration_id = adult.id AND (m.is_active = false OR m.blocked_at IS NOT NULL))
         AND adult.birth_date <= ((now() AT TIME ZONE 'UTC' + make_interval(mins => cl.timezone_offset_minutes))::date - interval '18 years')
     `,
       )
       .then((r) => r.rows);
     return Number(result?.total ?? 0);
+  }
+
+  async adultAvailable(
+    clientId: string,
+    adultId: string,
+    db: ApprovalDb = this.database.db,
+  ) {
+    await db
+      .select({ id: clientMembers.id })
+      .from(clientMembers)
+      .where(
+        and(
+          eq(clientMembers.clientId, clientId),
+          eq(clientMembers.registrationId, adultId),
+        ),
+      )
+      .for('share');
+    const [row] = await db
+      .select({ id: registrations.id })
+      .from(registrations)
+      .where(
+        and(
+          eq(registrations.clientId, clientId),
+          eq(registrations.id, adultId),
+          eq(registrations.isActive, true),
+          eq(registrations.status, 'approved'),
+          eq(registrations.isVisitor, false),
+          sql`NOT EXISTS (SELECT 1 FROM client_members m WHERE m.client_id = ${clientId} AND m.registration_id = ${adultId} AND (m.is_active = false OR m.blocked_at IS NOT NULL))`,
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
   }
 
   async adultsInUnit(clientId: string, unitId: string) {
@@ -109,6 +144,8 @@ export class ChildApprovalRepository extends ChildApprovalRequestsRepository {
           eq(registrations.clientId, clientId),
           eq(registrations.unitId, unitId),
           eq(registrations.status, 'approved'),
+          eq(registrations.isVisitor, false),
+          sql`NOT EXISTS (SELECT 1 FROM client_members m WHERE m.client_id = ${clientId} AND m.registration_id = ${registrations.id} AND (m.is_active = false OR m.blocked_at IS NOT NULL))`,
           eq(registrations.isActive, true),
         ),
       );

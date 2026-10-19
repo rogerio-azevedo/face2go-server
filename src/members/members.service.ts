@@ -1038,6 +1038,12 @@ export class MembersService {
       this.database.db,
       registration.id,
     );
+    const visitorRole = registration.isVisitor
+      ? await membersQueries.ensureVisitorRole(
+          this.database.db,
+          registration.clientId,
+        )
+      : null;
     if (existingByReg) {
       return membersQueries.updateMember(
         this.database.db,
@@ -1045,6 +1051,7 @@ export class MembersService {
         registration.clientId,
         {
           isActive: true,
+          ...(visitorRole ? { roleId: visitorRole.id } : {}),
           name: registration.name?.trim() || existingByReg.name,
           email: registration.email,
           phone: registration.phone,
@@ -1074,8 +1081,9 @@ export class MembersService {
       clientType,
     );
 
-    const roleSlug =
-      clientType === 'condominium'
+    const roleSlug = registration.isVisitor
+      ? 'visitante'
+      : clientType === 'condominium'
         ? 'morador'
         : clientType === 'school'
           ? 'funcionario'

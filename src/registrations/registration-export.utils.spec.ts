@@ -63,6 +63,8 @@ describe('registration-export.utils', () => {
       'Link',
       'Enviado',
       'Motivo',
+      'Visitante',
+      'Autorização de visitante',
     ]);
     const line = lineOf(sheet, 2);
     expect(line).toContain('Ana, Silva');
@@ -101,6 +103,8 @@ describe('registration-export.utils', () => {
       'Enviado',
       'Motivo',
       'Tipo',
+      'Visitante',
+      'Autorização de visitante',
     ]);
     const excluded = lineOf(sheet, 2).join('|');
     expect(excluded).toContain('Excluído');
@@ -119,5 +123,12 @@ describe('registration-export.utils', () => {
       'cadastros-excluidos.xlsx',
     );
     expect(registrationsExportFilename('all')).toBe('cadastros-todos.xlsx');
+  });
+  it('exporta classificação e estado de autorização do visitante', async () => {
+    const sheet = await sheetOf(
+      [row({ isVisitor: true, visitorApprovalStatus: 'pending' })],
+      false,
+    );
+    expect(lineOf(sheet, 2).slice(-2)).toEqual(['Sim', 'Pendente']);
   });
 });

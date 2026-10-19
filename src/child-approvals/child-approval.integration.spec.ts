@@ -1,3 +1,12 @@
+import { VisitorApprovalRepository } from '../visitor-approvals/visitor-approval.repository';
+import { VisitorApprovalPolicyService } from '../visitor-approvals/visitor-approval-policy.service';
+import { VisitorApprovalRevocationService } from '../visitor-approvals/visitor-approval-revocation.service';
+import { VisitorApprovalInvitationService } from '../visitor-approvals/visitor-approval-invitation.service';
+import { VisitorApprovalDeliveryRepository } from '../visitor-approvals/visitor-approval-delivery.repository';
+import { VisitorApprovalDeliveryService } from '../visitor-approvals/visitor-approval-delivery.service';
+import { VisitorApprovalPublicService } from '../visitor-approvals/visitor-approval-public.service';
+import { VisitorApprovalService } from '../visitor-approvals/visitor-approval.service';
+import { VisitorApprovalRegistrationListener } from '../registrations/visitor-approval-registration.listener';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -51,13 +60,24 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
   const db = drizzle(pool, { schema });
   const database = { db } as DatabaseService;
   const repository = new ChildApprovalRepository(database);
-  const policy = new ChildApprovalPolicyService(repository);
+  const visitorRepository = new VisitorApprovalRepository(database);
+  const visitorPolicy = new VisitorApprovalPolicyService(visitorRepository);
+  const visitorRevocations = new VisitorApprovalRevocationService(
+    visitorRepository,
+  );
+  const policy = new ChildApprovalPolicyService(
+    repository,
+    visitorPolicy,
+    visitorRepository,
+  );
   const revocations = new ChildApprovalRevocationService(repository);
   const key = '0123456789abcdef'.repeat(4);
   const config = new ConfigService({
     READER_ENCRYPTION_KEY: key,
   });
+  const visitorEmails: { to: string; token: string }[] = [];
   const emails: { to: string; token: string }[] = [];
+  const registrationApprovedEmail = jest.fn();
   const email = {
     sendChildApprovalRequestEmail: jest.fn(
       (input: { to: string; token: string }) => {
@@ -65,7 +85,13 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
         return Promise.resolve();
       },
     ),
-    sendRegistrationApprovedEmail: jest.fn(),
+    sendVisitorApprovalRequestEmail: jest.fn(
+      (input: { to: string; token: string }) => {
+        visitorEmails.push(input);
+        return Promise.resolve();
+      },
+    ),
+    sendRegistrationApprovedEmail: registrationApprovedEmail,
   } as unknown as EmailService;
   const delivery = new ChildApprovalDeliveryService(
     new ChildApprovalDeliveryRepository(database),
@@ -94,6 +120,32 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     publicApproval,
     revocations,
   );
+  const visitorDelivery = new VisitorApprovalDeliveryService(
+    new VisitorApprovalDeliveryRepository(database),
+    visitorRepository,
+    email,
+    config,
+  );
+  const visitorInvitations = new VisitorApprovalInvitationService(
+    visitorRepository,
+    config,
+    visitorDelivery,
+  );
+  const visitorPublic = new VisitorApprovalPublicService(
+    visitorRepository,
+    visitorInvitations,
+    events,
+    visitorRevocations,
+  );
+  const visitorApprovals = new VisitorApprovalService(
+    visitorRepository,
+    visitorPolicy,
+    events,
+    {} as never,
+    visitorInvitations,
+    visitorPublic,
+    visitorRevocations,
+  );
   const faceSync = {
     enqueueApprovedRegistrationJob: jest.fn(),
     removePersonFromReaders: jest
@@ -110,6 +162,7 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     policy,
     queue as never,
     faceSync as never,
+    visitorRepository,
   );
   const removalWorker = (durableQueue: DeviceSyncQueueService) =>
     new DeviceSyncWorkerService(
@@ -147,10 +200,20 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
     approvals,
     policy,
     repository,
+    visitorApprovals,
+    visitorPolicy,
+    visitorRepository,
   );
   const listener = new ChildApprovalRegistrationListener(
     admin,
     repository,
+    policy,
+    removal,
+    faceSync as never,
+  );
+  const visitorListener = new VisitorApprovalRegistrationListener(
+    admin,
+    visitorRepository,
     policy,
     removal,
     faceSync as never,
@@ -202,6 +265,12 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
         'utf8',
       ),
     );
+    await pool.query(
+      readFileSync(
+        join(__dirname, '../../drizzle/0093_visitor_approvals.sql'),
+        'utf8',
+      ),
+    );
     // EventEmitter2's on() types declare void; emitAsync awaits promises.
     const onAsync = events.on.bind(events) as unknown as (
       event: string,
@@ -210,6 +279,12 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
         registrationId: string;
       }) => Promise<void>,
     ) => void;
+    onAsync('visitor-approval.accepted', (change) =>
+      visitorListener.accepted(change),
+    );
+    onAsync('visitor-approval.changed', (change) =>
+      visitorListener.changed(change),
+    );
     onAsync(
       CHILD_APPROVAL_ACCEPTED,
       (change: { clientId: string; registrationId: string }) =>
@@ -232,6 +307,7 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
   beforeEach(async () => {
     await pool.query('TRUNCATE companies, "user" CASCADE');
     emails.length = 0;
+    visitorEmails.length = 0;
     jest.clearAllMocks();
     queue.enqueue.mockReset();
     queue.update.mockReset();
@@ -373,6 +449,7 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
         approvals,
       );
       emails.length = 0;
+      visitorEmails.length = 0;
 
       await registration.submit(link.code, {
         registrationId,
@@ -707,7 +784,8 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
       .update(schema.clients)
       .set({ enableChildApprove: false })
       .where(eq(schema.clients.id, clientId));
-    expect(await policy.faceAllowed(clientId, 52)).toBe(true);
+    // Desativar a exigência não desfaz a rejeição nem a retirada já solicitada.
+    expect(await policy.faceAllowed(clientId, 52)).toBe(false);
   });
   it('escopo de cliente, papel e cadastro no caminho impedem revogação indevida', async () => {
     await accept();
@@ -756,5 +834,397 @@ run('Child approvals — PostgreSQL transactions and migration', () => {
       'Aguardando',
     );
     expect(hardware).not.toHaveBeenCalled();
+  });
+  async function configureVisitor(minor = false) {
+    await db
+      .update(schema.clients)
+      .set({ enableVisitorApprove: true })
+      .where(eq(schema.clients.id, clientId));
+    await db
+      .update(schema.registrations)
+      .set({
+        isVisitor: true,
+        visitorApprovalRequired: true,
+        childApprovalRequired: minor,
+        email: 'visitor@example.test',
+        birthDate: minor ? '2012-01-01' : '1990-01-01',
+      })
+      .where(eq(schema.registrations.id, childId));
+    await visitorApprovals.requestEmails(clientId, childId);
+  }
+  async function acceptVisitor(address = 'adult1@example.test', cpf = cpf1) {
+    const token = [...visitorEmails]
+      .reverse()
+      .find((e) => e.to === address)!.token;
+    return visitorApprovals.accept(token, {
+      cpf,
+      agreed: true,
+      termVersion: (await visitorApprovals.preview(token)).termVersion,
+    });
+  }
+  it('visitante adulto espera aceite, conclui autoaprovação e preserva faceId', async () => {
+    await configureVisitor();
+    await admin.approveAutomatically(clientId, childId);
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'draft',
+    );
+    await acceptVisitor();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'approved',
+    );
+    expect((await repository.registration(clientId, childId))?.faceId).toBe(52);
+    expect(await policy.faceAllowed(clientId, 52)).toBe(true);
+  });
+  it('visitante menor precisa dos dois aceites, em qualquer ordem', async () => {
+    await configureVisitor(true);
+    await admin.approveAutomatically(clientId, childId);
+    await acceptVisitor();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'draft',
+    );
+    expect(await policy.faceAllowed(clientId, 52)).toBe(false);
+    await accept();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'approved',
+    );
+    expect(await policy.faceAllowed(clientId, 52)).toBe(true);
+  });
+  it('aceite de menor sozinho não aprova visitante pendente', async () => {
+    await configureVisitor(true);
+    await admin.approveAutomatically(clientId, childId);
+    await accept();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'draft',
+    );
+    await acceptVisitor();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'approved',
+    );
+  });
+  it('aceite de visitante anterior à análise não aprova cadastro sozinho', async () => {
+    await configureVisitor();
+    await acceptVisitor();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'draft',
+    );
+    expect(
+      (await visitorPolicy.summary(clientId, childId)).visitorApprovalStatus,
+    ).toBe('authorized');
+  });
+  it('visitante não confirma com CPF de outro adulto e POST repetido é idempotente', async () => {
+    await configureVisitor();
+    await expect(acceptVisitor('adult1@example.test', cpf2)).rejects.toThrow(
+      'CPF',
+    );
+    await acceptVisitor();
+    await acceptVisitor();
+    expect(await visitorRepository.history(clientId, childId)).toHaveLength(1);
+  });
+  it('dois adultos visitantes aceitam simultaneamente sem duplicar aprovação', async () => {
+    await configureVisitor();
+    await admin.approveAutomatically(clientId, childId);
+    await Promise.all([
+      acceptVisitor(),
+      acceptVisitor('adult2@example.test', cpf2),
+    ]);
+    expect(await visitorRepository.activeConsentCount(clientId, childId)).toBe(
+      2,
+    );
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'approved',
+    );
+    expect(registrationApprovedEmail).toHaveBeenCalledTimes(1);
+  });
+  it('última revogação de visitante remove de forma durável usando handler comum', async () => {
+    await configureVisitor();
+    await admin.approveAutomatically(clientId, childId);
+    await acceptVisitor();
+    await acceptVisitor('adult2@example.test', cpf2);
+    const t1 = visitorEmails.find((e) => e.to === 'adult1@example.test')!.token;
+    const t2 = visitorEmails.find((e) => e.to === 'adult2@example.test')!.token;
+    await visitorApprovals.revokeOwn(t1, cpf1);
+    expect(await policy.faceAllowed(clientId, 52)).toBe(true);
+    await visitorApprovals.revokeOwn(t2, cpf2);
+    const row = await repository.registration(clientId, childId);
+    expect(row?.status).toBe('rejected');
+    expect(row?.visitorApprovalRemovalPending).toBe(true);
+    expect(await policy.faceAllowed(clientId, 52)).toBe(false);
+    await removal.run({
+      id: randomUUID(),
+      clientId,
+      targetId: childId,
+    } as never);
+    expect(faceSync.removePersonFromReaders).toHaveBeenCalled();
+    expect(
+      (await repository.registration(clientId, childId))
+        ?.visitorApprovalRemovalPending,
+    ).toBe(false);
+  });
+  it('mudar unidade e voltar não reativa autorização de visitante', async () => {
+    await configureVisitor();
+    await acceptVisitor();
+    await db
+      .update(schema.registrations)
+      .set({ unitId: unit2Id })
+      .where(eq(schema.registrations.id, adult1Id));
+    await db
+      .update(schema.registrations)
+      .set({ unitId })
+      .where(eq(schema.registrations.id, adult1Id));
+    expect(await visitorRepository.activeConsentCount(clientId, childId)).toBe(
+      0,
+    );
+    expect(
+      (await visitorRepository.history(clientId, childId))[0].revokedAt,
+    ).not.toBeNull();
+  });
+  it('converter adulto em visitante invalida aceites de menores e visitantes permanentemente', async () => {
+    await configureVisitor(true);
+    await admin.approveAutomatically(clientId, childId);
+    await accept();
+    await acceptVisitor();
+    await db
+      .update(schema.registrations)
+      .set({ isVisitor: true })
+      .where(eq(schema.registrations.id, adult1Id));
+    expect(await visitorRepository.activeConsentCount(clientId, childId)).toBe(
+      0,
+    );
+    expect(await repository.activeConsentCount(clientId, childId)).toBe(0);
+    await db
+      .update(schema.registrations)
+      .set({ isVisitor: false })
+      .where(eq(schema.registrations.id, adult1Id));
+    expect(await repository.activeConsentCount(clientId, childId)).toBe(0);
+    expect(await visitorRepository.activeConsentCount(clientId, childId)).toBe(
+      0,
+    );
+  });
+  it('não envia solicitação a outro visitante nem aceita link após bloqueio do adulto', async () => {
+    await db
+      .update(schema.registrations)
+      .set({ isVisitor: true })
+      .where(eq(schema.registrations.id, adult2Id));
+    await configureVisitor();
+    expect(visitorEmails.map((e) => e.to)).toEqual(['adult1@example.test']);
+    await db
+      .update(schema.registrations)
+      .set({ status: 'blocked' })
+      .where(eq(schema.registrations.id, adult1Id));
+    await expect(acceptVisitor()).rejects.toThrow();
+  });
+  it('regularização converte cadastro legado em visitante com reaprovação e retirada pendente', async () => {
+    await db
+      .update(schema.clients)
+      .set({ enableVisitorApprove: true })
+      .where(eq(schema.clients.id, clientId));
+    await db
+      .update(schema.registrations)
+      .set({
+        childApprovalRequired: false,
+        birthDate: '1990-01-01',
+        status: 'approved',
+      })
+      .where(eq(schema.registrations.id, childId));
+    await visitorApprovals.regularize(actor(), clientId, childId);
+    const row = await repository.registration(clientId, childId);
+    expect(row?.isVisitor).toBe(true);
+    expect(row?.visitorApprovalRequired).toBe(true);
+    expect(row?.status).toBe('rejected');
+    await admin.approveAutomatically(clientId, childId);
+    await acceptVisitor();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'approved',
+    );
+  });
+  it('desligar flag suspende exigência sem restaurar rejeitado e mantém retirada', async () => {
+    await configureVisitor();
+    await admin.approveAutomatically(clientId, childId);
+    await acceptVisitor();
+    await visitorApprovals.revokeOwn(visitorEmails[0].token, cpf1);
+    await db
+      .update(schema.clients)
+      .set({ enableVisitorApprove: false })
+      .where(eq(schema.clients.id, clientId));
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'rejected',
+    );
+    expect(await policy.faceAllowed(clientId, 52)).toBe(false);
+    await removal.run({
+      id: randomUUID(),
+      clientId,
+      targetId: childId,
+    } as never);
+    expect(faceSync.removePersonFromReaders).toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'cadastro público visitante com enableVisitorApprove=%s',
+    async (enabled) => {
+      await db
+        .update(schema.clients)
+        .set({
+          enableVisitorApprove: enabled,
+          enableChildApprove: false,
+          autoApproveRegistrations: true,
+        })
+        .where(eq(schema.clients.id, clientId));
+      const client = await repository.client(clientId);
+      const [link] = await db
+        .select()
+        .from(schema.registrationLinks)
+        .where(eq(schema.registrationLinks.clientId, clientId));
+      const id = randomUUID();
+      const publicRegistration = new PublicRegistrationService(
+        database,
+        { assertObjectExists: jest.fn() } as never,
+        new ClientBlocksRepository(database),
+        admin,
+        approvals,
+        visitorApprovals,
+      );
+      await publicRegistration.submit(link.code, {
+        registrationId: id,
+        isVisitor: true,
+        name: 'Visitante público',
+        document: '39053344705',
+        phone: '65999998888',
+        email: 'visit@example.test',
+        birthDate: '1990-01-01',
+        unitId,
+        faceImageKey: `${client.companyId}/${clientId}/${id}/face.jpg`,
+        truthDeclared: true,
+      });
+      const saved = await repository.registration(clientId, id);
+      expect(saved?.isVisitor).toBe(true);
+      expect(saved?.visitorApprovalRequired).toBe(enabled);
+      expect(saved?.status).toBe(enabled ? 'draft' : 'approved');
+      expect(visitorEmails).toHaveLength(enabled ? 2 : 0);
+      if (enabled) {
+        const sent = visitorEmails[0];
+        await visitorApprovals.accept(sent.token, {
+          cpf: cpf1,
+          agreed: true,
+          termVersion: (await visitorApprovals.preview(sent.token)).termVersion,
+        });
+        expect((await repository.registration(clientId, id))?.status).toBe(
+          'approved',
+        );
+      }
+    },
+  );
+  it('visitante exige unidade mesmo com configuração de localização oculta e flag desligada', async () => {
+    await db
+      .update(schema.clients)
+      .set({
+        enableChildApprove: false,
+        enableVisitorApprove: false,
+        registrationConfig: { block: 'hidden', unit: 'hidden' },
+      })
+      .where(eq(schema.clients.id, clientId));
+    const client = await repository.client(clientId);
+    const [link] = await db
+      .select()
+      .from(schema.registrationLinks)
+      .where(eq(schema.registrationLinks.clientId, clientId));
+    const id = randomUUID();
+    const publicRegistration = new PublicRegistrationService(
+      database,
+      { assertObjectExists: jest.fn() } as never,
+      new ClientBlocksRepository(database),
+      admin,
+      approvals,
+      visitorApprovals,
+    );
+    await expect(
+      publicRegistration.submit(link.code, {
+        registrationId: id,
+        isVisitor: true,
+        name: 'Visitante público',
+        document: '39053344705',
+        phone: '65999998888',
+        email: 'visit@example.test',
+        birthDate: '1990-01-01',
+        faceImageKey: `${client.companyId}/${clientId}/${id}/face.jpg`,
+        truthDeclared: true,
+      }),
+    ).rejects.toThrow('unidade');
+  });
+  it('bloquear e desbloquear membro autorizador não restaura o aceite', async () => {
+    await configureVisitor();
+    await acceptVisitor();
+    const [role] = await db
+      .select()
+      .from(schema.clientRoles)
+      .where(eq(schema.clientRoles.clientId, clientId));
+    const memberId = randomUUID();
+    await db.insert(schema.clientMembers).values({
+      id: memberId,
+      clientId,
+      roleId: role.id,
+      registrationId: adult1Id,
+      name: 'Adulto 1',
+      unitId,
+      birthDate: '1990-01-01',
+    });
+    await db
+      .update(schema.clientMembers)
+      .set({ blockedAt: new Date() })
+      .where(eq(schema.clientMembers.id, memberId));
+    await db
+      .update(schema.clientMembers)
+      .set({ blockedAt: null })
+      .where(eq(schema.clientMembers.id, memberId));
+    expect(await visitorRepository.activeConsentCount(clientId, childId)).toBe(
+      0,
+    );
+  });
+  it('e-mail alterado cancela token anterior e emite novo segredo', async () => {
+    await configureVisitor();
+    const old = visitorEmails[0].token;
+    await db
+      .update(schema.registrations)
+      .set({ email: 'new-adult@example.test' })
+      .where(eq(schema.registrations.id, adult1Id));
+    await visitorApprovals.requestEmails(clientId, childId, true);
+    expect(
+      visitorEmails.find((e) => e.to === 'new-adult@example.test')?.token,
+    ).not.toBe(old);
+    await expect(visitorApprovals.preview(old)).rejects.toThrow();
+  });
+  it('concorrência entre mudança de unidade e aceite não deixa autorização inválida ativa', async () => {
+    await configureVisitor();
+    await Promise.allSettled([
+      acceptVisitor(),
+      db
+        .update(schema.registrations)
+        .set({ unitId: unit2Id })
+        .where(eq(schema.registrations.id, adult1Id)),
+    ]);
+    expect(await visitorRepository.activeConsentCount(clientId, childId)).toBe(
+      0,
+    );
+  });
+  it('rejeição administrativa cancela link e não pode ser revertida pelo aceite antigo', async () => {
+    await configureVisitor();
+    await admin.rejectForClientTenant(actor(), childId, {
+      notes: 'Dados não conferem',
+    });
+    await expect(acceptVisitor()).rejects.toThrow();
+    expect((await repository.registration(clientId, childId))?.status).toBe(
+      'rejected',
+    );
+  });
+  it('aliases antigos de menores continuam protegidos pela autorização de visitante após maioridade', async () => {
+    await configureVisitor();
+    await db
+      .insert(schema.childApprovalFaces)
+      .values({ clientId, registrationId: childId, faceId: 77 });
+    expect(await policy.faceAllowed(clientId, 77)).toBe(false);
+    await admin.approveAutomatically(clientId, childId);
+    await acceptVisitor();
+    expect(await policy.faceAllowed(clientId, 77)).toBe(true);
+    await visitorApprovals.revokeOwn(visitorEmails[0].token, cpf1);
+    expect(await policy.faceAllowed(clientId, 77)).toBe(false);
   });
 });

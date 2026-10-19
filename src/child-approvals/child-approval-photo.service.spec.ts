@@ -5,7 +5,7 @@ import { ChildApprovalPhotoService } from './child-approval-photo.service';
 describe('ChildApprovalPhotoService', () => {
   const token = 'a'.repeat(64);
   const invitations = { bundle: jest.fn() };
-  const repository = { consentByRequest: jest.fn() };
+  const repository = { consentByRequest: jest.fn(), adultAvailable: jest.fn() };
   const storage = { getObjectBytes: jest.fn() };
   const service = new ChildApprovalPhotoService(
     invitations as never,
@@ -43,6 +43,7 @@ describe('ChildApprovalPhotoService', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    repository.adultAvailable.mockResolvedValue(true);
     bundle = {
       request: {
         id: 'request',
