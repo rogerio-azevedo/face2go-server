@@ -42,13 +42,24 @@ const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID = 'student_access';
 
 /** Deve coincidir com `ANDROID_PANIC_CHANNEL_ID` no app (Expo Notifications). */
-const EXPO_PUSH_ANDROID_PANIC_CHANNEL_ID = 'panic_high';
+const EXPO_PUSH_ANDROID_PANIC_CHANNEL_ID = 'panic_critical_v1';
 
 /** Deve coincidir com `ANDROID_SECURITY_ALERT_CHANNEL_ID` no app. */
-const EXPO_PUSH_ANDROID_SECURITY_ALERT_CHANNEL_ID = 'blocked_access_v1';
+const EXPO_PUSH_ANDROID_SECURITY_ALERT_CHANNEL_ID =
+  'blocked_access_critical_v1';
 
-/** Arquivo empacotado pelo plugin expo-notifications (`sounds`). */
-const EXPO_PUSH_BLOCKED_ACCESS_SOUND = 'blocked_access.wav';
+/** Arquivos empacotados pelo plugin expo-notifications (`sounds`), sem extensão. */
+const EXPO_PUSH_BLOCKED_ACCESS_SOUND = 'blocked_access';
+const EXPO_PUSH_PANIC_SOUND = 'panic_alarm';
+
+type ExpoPushOptions = {
+  channelId?: string;
+  /**
+   * Alerta crítico: no iOS toca no silencioso/Foco (marca com entitlement; nas
+   * demais vira alerta normal). No Android o app toca `criticalSound` no fluxo de alarme.
+   */
+  criticalSound?: string;
+};
 
 @Injectable()
 export class NotificationsService {
@@ -143,8 +154,10 @@ export class NotificationsService {
         accessId: payload.accessId,
         clientId: payload.clientId,
       },
-      EXPO_PUSH_ANDROID_SECURITY_ALERT_CHANNEL_ID,
-      EXPO_PUSH_BLOCKED_ACCESS_SOUND,
+      {
+        channelId: EXPO_PUSH_ANDROID_SECURITY_ALERT_CHANNEL_ID,
+        criticalSound: EXPO_PUSH_BLOCKED_ACCESS_SOUND,
+      },
     );
   }
 
@@ -563,7 +576,10 @@ export class NotificationsService {
         longitude: String(event.location.longitude),
         receivedAt: event.receivedAt,
       },
-      EXPO_PUSH_ANDROID_PANIC_CHANNEL_ID,
+      {
+        channelId: EXPO_PUSH_ANDROID_PANIC_CHANNEL_ID,
+        criticalSound: EXPO_PUSH_PANIC_SOUND,
+      },
     );
   }
 
@@ -608,18 +624,27 @@ export class NotificationsService {
     title: string,
     body: string,
     data: Record<string, string>,
-    channelId: string = EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID,
-    sound = 'default',
+    {
+      channelId = EXPO_PUSH_ANDROID_ACCESS_CHANNEL_ID,
+      criticalSound,
+    }: ExpoPushOptions = {},
   ): Promise<void> {
+    const critical = criticalSound
+      ? {
+          interruptionLevel: 'critical' as const,
+          sound: { critical: true, name: `${criticalSound}.wav`, volume: 1 },
+          data: { ...data, critical: 'true', criticalSound },
+        }
+      : { sound: 'default' as const, data };
+
     const messages = expoPushTokens.map((to) => ({
       to,
-      sound,
       title,
       body,
-      data,
       priority: 'high' as const,
       channelId,
       ttl: 60,
+      ...critical,
     }));
 
     const res = await fetch(EXPO_PUSH_URL, {
